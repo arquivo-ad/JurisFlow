@@ -1,0 +1,6 @@
+{
+  "name": "JurisFlow — SaaS Jurídico Multi-Tenant",
+  "description": "Plataforma SaaS jurídica completa para escritórios de advocacia com CRM, gestão de processos e clientes, agenda de prazos e audiências, gestão de documentos e minutas, módulo financeiro com Mercado Pago e AI Gateway jurídico inteligente.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
