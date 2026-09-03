@@ -40,8 +40,26 @@ import {
   getSupabase,
   checkSupabaseHealth,
   hydrateFromSupabase,
-  syncToSupabase,
+  syncAllLocalToSupabase,
+  syncTenantToSupabase,
+  syncBranchToSupabase,
+  syncUserToSupabase,
+  syncRoleToSupabase,
+  syncMembershipToSupabase,
+  syncPersonToSupabase,
+  syncClientToSupabase,
+  syncCaseToSupabase,
+  syncDeadlineToSupabase,
+  syncHearingToSupabase,
+  syncContractToSupabase,
+  syncReceivableToSupabase,
+  syncDocumentToSupabase,
+  syncCaseMovementToSupabase,
+  syncNotificationToSupabase,
+  syncAuditLogToSupabase,
+  syncLgpdConsentToSupabase,
   deleteFromSupabase,
+  syncToSupabase,
 } from './server/supabase.ts';
 
 import {
@@ -69,6 +87,7 @@ import {
   LGPDConsent,
   AIGatewayLog,
   GlobalSearchResult,
+  UserBranchAffiliation,
 } from './src/types/index.ts';
 
 dotenv.config();
@@ -137,15 +156,10 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Hydrate data from Supabase if credentials and tables are available
-  try {
-    const hyd = await hydrateFromSupabase(db);
-    if (hyd.success) {
-      console.log('[Supabase] Startup hydration finished:', hyd.counts);
-    }
-  } catch (err) {
-    console.warn('[Supabase] Startup hydration skipped:', err);
-  }
+  // Fast health check endpoint for Cloud Run and platform ingress probes
+  app.get('/api/health', (req: Request, res: Response) => {
+    res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+  });
 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -193,18 +207,7 @@ async function startServer() {
     db.auditLogs.unshift(newLog);
 
     // Sync audit log to Supabase in background
-    syncToSupabase('audit_logs', {
-      id: newLog.id,
-      tenant_id: newLog.tenantId,
-      user_id: newLog.userId,
-      user_name: newLog.userName,
-      action: newLog.action,
-      entity: newLog.entityType,
-      entity_id: newLog.entityId,
-      details: newLog.details,
-      ip_address: newLog.ip,
-      created_at: newLog.timestamp,
-    });
+    syncAuditLogToSupabase(newLog);
   }
 
   // ==========================================
@@ -233,12 +236,18 @@ async function startServer() {
   });
 
   app.post('/api/supabase/sync', async (req: Request, res: Response) => {
-    const result = await hydrateFromSupabase(db);
+    // 1. Push all local records to Supabase
+    const pushResult = await syncAllLocalToSupabase(db);
+    // 2. Hydrate from Supabase
+    const hydrateResult = await hydrateFromSupabase(db);
+    const success = pushResult.success || hydrateResult.success;
     res.json({
-      ...result,
-      message: result.success
-        ? 'Sincronização com Supabase PostgreSQL executada com sucesso!'
-        : 'Não foi possível sincronizar com Supabase (verifique as tabelas e credenciais).',
+      success,
+      pushCounts: pushResult.counts,
+      hydrateCounts: hydrateResult.counts,
+      message: success
+        ? 'Sincronização bidirecional com Supabase PostgreSQL executada com sucesso!'
+        : 'Não foi possível sincronizar com Supabase (verifique as credenciais no .env).',
     });
   });
 
@@ -514,7 +523,7 @@ async function startServer() {
     res.json(db.tenants);
   });
 
-  app.post('/api/tenants', (req: Request, res: Response) => {
+  app.post('/api/tenants', async (req: Request, res: Response) => {
     const rawSlug = req.body.slug || req.body.name || `escritorio-${Date.now()}`;
     const cleanSlug = rawSlug
       .toString()
@@ -630,17 +639,30 @@ async function startServer() {
     db.memberships.push(superAdminMem);
 
     // Add initial Welcome Notification
-    db.notifications.unshift({
+    const welcomeNotification: Notification = {
       id: `notif-welcome-${newTenant.id}`,
       tenantId: newTenant.id,
-      userId: adminUser.id,
+      userId: adminUser?.id || 'u-superadmin',
       type: 'SYSTEM',
       title: 'Ambiente Institucional Provisionado!',
       message: `O escritório "${newTenant.name}" foi ativado com sucesso no plano ${newTenant.plan}. Configure a equipe e modelos de documentos.`,
       createdAt: new Date().toISOString(),
       read: false,
       link: 'settings',
-    });
+    };
+    db.notifications.unshift(welcomeNotification);
+
+    // Persist all created entities to Supabase PostgreSQL immediately
+    await syncTenantToSupabase(newTenant);
+    await syncBranchToSupabase(mainBranch);
+    await syncRoleToSupabase(socioAdminRole);
+    if (adminUser) {
+      await syncUserToSupabase(adminUser);
+      const adminMem = db.memberships.find((m) => m.userId === adminUser!.id && m.tenantId === newTenant.id);
+      if (adminMem) await syncMembershipToSupabase(adminMem);
+    }
+    await syncMembershipToSupabase(superAdminMem);
+    await syncNotificationToSupabase(welcomeNotification);
 
     logAudit(req, 'AUTH', newTenant.id, 'CREATE', `Provisionou novo escritório SaaS (Tenant): ${newTenant.name} com sede em ${mainBranch.city}/${mainBranch.state}`);
     res.status(201).json({
@@ -650,7 +672,7 @@ async function startServer() {
     });
   });
 
-  app.put('/api/tenants/:id', (req: Request, res: Response) => {
+  app.put('/api/tenants/:id', async (req: Request, res: Response) => {
     const tenantIndex = db.tenants.findIndex((t) => t.id === req.params.id);
     if (tenantIndex === -1) {
       return res.status(404).json({ error: 'Escritório/Tenant não encontrado' });
@@ -665,6 +687,7 @@ async function startServer() {
       },
     };
     db.tenants[tenantIndex] = updated;
+    await syncTenantToSupabase(updated);
     logAudit(req, 'AUTH', updated.id, 'UPDATE', `Atualizou dados cadastrais e governança do escritório: ${updated.name}`);
     res.json(updated);
   });
@@ -676,7 +699,7 @@ async function startServer() {
     res.json(branches);
   });
 
-  app.post('/api/branches', (req: Request, res: Response) => {
+  app.post('/api/branches', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     if (req.body.isMain) {
       db.branches.forEach((b) => {
@@ -696,11 +719,12 @@ async function startServer() {
       email: req.body.email || '',
     };
     db.branches.push(newBranch);
+    await syncBranchToSupabase(newBranch);
     logAudit(req, 'AUTH', newBranch.id, 'CREATE', `Cadastrou nova unidade/filial: ${newBranch.name} (${newBranch.city}/${newBranch.state})`);
     res.status(201).json(newBranch);
   });
 
-  app.put('/api/branches/:id', (req: Request, res: Response) => {
+  app.put('/api/branches/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const index = db.branches.findIndex((b) => b.id === req.params.id && b.tenantId === tenantId);
     if (index === -1) {
@@ -715,11 +739,12 @@ async function startServer() {
     }
     const updated = { ...db.branches[index], ...req.body };
     db.branches[index] = updated;
+    await syncBranchToSupabase(updated);
     logAudit(req, 'AUTH', updated.id, 'UPDATE', `Atualizou dados da unidade: ${updated.name}`);
     res.json(updated);
   });
 
-  app.delete('/api/branches/:id', (req: Request, res: Response) => {
+  app.delete('/api/branches/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const branch = db.branches.find((b) => b.id === req.params.id && b.tenantId === tenantId);
     if (!branch) {
@@ -730,6 +755,7 @@ async function startServer() {
       return res.status(400).json({ error: 'Não é possível remover a única unidade do escritório.' });
     }
     db.branches = db.branches.filter((b) => b.id !== req.params.id);
+    await deleteFromSupabase('branches', 'id', req.params.id);
     logAudit(req, 'AUTH', branch.id, 'DELETE', `Excluiu filial/unidade: ${branch.name}`);
     res.json({ success: true });
   });
@@ -741,7 +767,7 @@ async function startServer() {
     res.json(roles);
   });
 
-  app.post('/api/roles', (req: Request, res: Response) => {
+  app.post('/api/roles', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const newRole: Role = {
       id: `role-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -753,11 +779,12 @@ async function startServer() {
       permissions: req.body.permissions || [],
     };
     db.roles.push(newRole);
+    await syncRoleToSupabase(newRole);
     logAudit(req, 'AUTH', newRole.id, 'CREATE', `Cadastrou nova função RBAC: ${newRole.name} (${newRole.permissions.length} permissões)`);
     res.status(201).json(newRole);
   });
 
-  app.put('/api/roles/:id', (req: Request, res: Response) => {
+  app.put('/api/roles/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const index = db.roles.findIndex((r) => r.id === req.params.id && (r.tenantId === tenantId || r.isSystem));
     if (index === -1) {
@@ -770,11 +797,12 @@ async function startServer() {
       isSystem: db.roles[index].isSystem,
     };
     db.roles[index] = updated;
+    await syncRoleToSupabase(updated);
     logAudit(req, 'AUTH', updated.id, 'UPDATE', `Atualizou matriz de permissões da função: ${updated.name}`);
     res.json(updated);
   });
 
-  app.delete('/api/roles/:id', (req: Request, res: Response) => {
+  app.delete('/api/roles/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const role = db.roles.find((r) => r.id === req.params.id && r.tenantId === tenantId);
     if (!role) {
@@ -784,6 +812,7 @@ async function startServer() {
       return res.status(400).json({ error: 'Perfis nativos do sistema não podem ser excluídos.' });
     }
     db.roles = db.roles.filter((r) => r.id !== req.params.id);
+    await deleteFromSupabase('roles', 'id', req.params.id);
     logAudit(req, 'AUTH', role.id, 'DELETE', `Excluiu função RBAC personalizada: ${role.name}`);
     res.json({ success: true });
   });
@@ -795,124 +824,284 @@ async function startServer() {
     const tenantUsers = db.users
       .filter((u) => tenantMemberships.some((m) => m.userId === u.id))
       .map((u) => {
-        const mem = tenantMemberships.find((m) => m.userId === u.id);
-        const role = db.roles.find((r) => r.id === mem?.roleId);
-        const branch = db.branches.find((b) => b.id === mem?.branchId);
+        const userMems = tenantMemberships.filter((m) => m.userId === u.id);
+        const primaryMem = userMems.find((m) => m.isPrimary) || userMems[0];
+        const role = db.roles.find((r) => r.id === primaryMem?.roleId);
+        const branch = db.branches.find((b) => b.id === primaryMem?.branchId);
+
+        const branchAffiliations: UserBranchAffiliation[] = userMems.map((m) => {
+          const mRole = db.roles.find((r) => r.id === m.roleId);
+          const mBranch = db.branches.find((b) => b.id === m.branchId);
+          return {
+            id: m.id,
+            branchId: m.branchId,
+            branchName: mBranch ? `${mBranch.name} (${mBranch.city}/${mBranch.state})` : 'Filial',
+            roleId: m.roleId,
+            roleName: mRole?.name || 'Membro',
+            roleCode: mRole?.code,
+            email: m.email || u.email,
+            phone: m.phone || u.phone || '',
+            status: (m.status as any) || 'ACTIVE',
+            isPrimary: Boolean(m.isPrimary || (primaryMem && m.id === primaryMem.id)),
+          };
+        });
+
         return {
           ...u,
-          roleId: mem?.roleId,
+          roleId: primaryMem?.roleId,
           roleName: role?.name || 'Membro',
           roleCode: role?.code,
-          branchId: mem?.branchId,
+          branchId: primaryMem?.branchId,
           branchName: branch?.name,
-          status: mem?.status || 'ACTIVE',
+          status: primaryMem?.status || (u.active ? 'ACTIVE' : 'SUSPENDED'),
+          branchAffiliations,
+          memberships: branchAffiliations,
         };
       });
     res.json(tenantUsers.length > 0 ? tenantUsers : db.users);
   });
 
-  app.post('/api/users', (req: Request, res: Response) => {
+  app.post('/api/users', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
-    const branchId = req.body.branchId || db.branches.find((b) => b.tenantId === tenantId)?.id || db.branches[0]?.id;
-    const roleId = req.body.roleId || db.roles.find((r) => r.tenantId === tenantId || r.isSystem)?.id;
+    const defaultBranchId = db.branches.find((b) => b.tenantId === tenantId)?.id || db.branches[0]?.id;
+    const defaultRoleId = db.roles.find((r) => r.tenantId === tenantId || r.isSystem)?.id || db.roles[0]?.id;
+
+    const rawAffiliations = Array.isArray(req.body.branchAffiliations) && req.body.branchAffiliations.length > 0
+      ? req.body.branchAffiliations
+      : [
+          {
+            branchId: req.body.branchId || defaultBranchId,
+            roleId: req.body.roleId || defaultRoleId,
+            email: req.body.email || '',
+            phone: req.body.phone || '',
+            status: req.body.status || 'ACTIVE',
+            isPrimary: true,
+          },
+        ];
+
+    // Ensure at least one has isPrimary true
+    const hasPrimary = rawAffiliations.some((a: any) => Boolean(a.isPrimary));
+    if (!hasPrimary && rawAffiliations.length > 0) {
+      rawAffiliations[0].isPrimary = true;
+    }
+
+    const primaryAff = rawAffiliations.find((a: any) => Boolean(a.isPrimary)) || rawAffiliations[0];
 
     const newUser: User = {
       id: `u-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: req.body.name || 'Novo Advogado / Colaborador',
-      email: req.body.email || `usuario-${Date.now()}@escritorio.adv.br`,
-      phone: req.body.phone || '',
+      email: req.body.email || primaryAff.email || `usuario-${Date.now()}@escritorio.adv.br`,
+      phone: req.body.phone || primaryAff.phone || '',
       oabNumber: req.body.oabNumber || '',
       oabUf: req.body.oabUf || 'SP',
       avatarUrl: req.body.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      active: req.body.active !== false,
+      active: req.body.active !== false && primaryAff.status !== 'SUSPENDED',
       createdAt: new Date().toISOString(),
     };
     db.users.push(newUser);
 
-    const newMembership: Membership = {
-      id: `m-${Date.now()}`,
-      tenantId,
-      userId: newUser.id,
-      roleId,
-      branchId,
-      status: (req.body.status as any) || 'ACTIVE',
-      scopes: ['*'],
-    };
-    db.memberships.push(newMembership);
+    const createdMemberships: Membership[] = rawAffiliations.map((aff: any, idx: number) => {
+      const mem: Membership = {
+        id: `m-${newUser.id}-${aff.branchId || idx}`,
+        tenantId,
+        userId: newUser.id,
+        roleId: aff.roleId || defaultRoleId,
+        branchId: aff.branchId || defaultBranchId,
+        status: (aff.status as any) || 'ACTIVE',
+        email: aff.email || newUser.email,
+        phone: aff.phone || newUser.phone || '',
+        isPrimary: Boolean(aff.isPrimary),
+        scopes: ['*'],
+      };
+      db.memberships.push(mem);
+      return mem;
+    });
 
-    const role = db.roles.find((r) => r.id === roleId);
-    const branch = db.branches.find((b) => b.id === branchId);
+    // Supabase sync
+    await syncUserToSupabase(newUser);
+    const primaryMembership = createdMemberships.find((m) => m.isPrimary) || createdMemberships[0];
+    if (primaryMembership) {
+      await syncMembershipToSupabase(primaryMembership, rawAffiliations);
+    }
+
+    const primaryRole = db.roles.find((r) => r.id === primaryMembership?.roleId);
+    const primaryBranch = db.branches.find((b) => b.id === primaryMembership?.branchId);
+
+    const branchAffiliations: UserBranchAffiliation[] = createdMemberships.map((m) => {
+      const mRole = db.roles.find((r) => r.id === m.roleId);
+      const mBranch = db.branches.find((b) => b.id === m.branchId);
+      return {
+        id: m.id,
+        branchId: m.branchId,
+        branchName: mBranch ? `${mBranch.name} (${mBranch.city}/${mBranch.state})` : 'Filial',
+        roleId: m.roleId,
+        roleName: mRole?.name || 'Membro',
+        roleCode: mRole?.code,
+        email: m.email || newUser.email,
+        phone: m.phone || newUser.phone || '',
+        status: m.status,
+        isPrimary: m.isPrimary,
+      };
+    });
 
     const returnUser = {
       ...newUser,
-      roleId,
-      roleName: role?.name || 'Membro',
-      roleCode: role?.code,
-      branchId,
-      branchName: branch?.name,
-      status: newMembership.status,
+      roleId: primaryMembership?.roleId,
+      roleName: primaryRole?.name || 'Membro',
+      roleCode: primaryRole?.code,
+      branchId: primaryMembership?.branchId,
+      branchName: primaryBranch?.name,
+      status: primaryMembership?.status || 'ACTIVE',
+      branchAffiliations,
+      memberships: branchAffiliations,
     };
 
-    logAudit(req, 'AUTH', newUser.id, 'CREATE', `Cadastrou novo membro na equipe: ${newUser.name} (${newUser.email}) - Função: ${role?.name}`);
+    logAudit(
+      req,
+      'AUTH',
+      newUser.id,
+      'CREATE',
+      `Cadastrou novo membro na equipe: ${newUser.name} (${newUser.email}) com ${branchAffiliations.length} filial(is) vinculada(s)`
+    );
     res.status(201).json(returnUser);
   });
 
-  app.put('/api/users/:id', (req: Request, res: Response) => {
+  app.put('/api/users/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const userIndex = db.users.findIndex((u) => u.id === req.params.id);
     if (userIndex === -1) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     const current = db.users[userIndex];
-    const updatedUser = {
+    const updatedUser: User = {
       ...current,
       ...req.body,
     };
     db.users[userIndex] = updatedUser;
 
-    let memIndex = db.memberships.findIndex((m) => m.userId === req.params.id && m.tenantId === tenantId);
-    if (memIndex !== -1) {
-      if (req.body.roleId) db.memberships[memIndex].roleId = req.body.roleId;
-      if (req.body.branchId) db.memberships[memIndex].branchId = req.body.branchId;
-      if (req.body.status) db.memberships[memIndex].status = req.body.status;
-    } else {
-      db.memberships.push({
-        id: `m-${Date.now()}`,
-        tenantId,
-        userId: updatedUser.id,
-        roleId: req.body.roleId || db.roles[0]?.id,
-        branchId: req.body.branchId || db.branches[0]?.id,
-        status: req.body.status || 'ACTIVE',
-        scopes: ['*'],
+    let branchAffiliations: UserBranchAffiliation[] = [];
+
+    if (Array.isArray(req.body.branchAffiliations) && req.body.branchAffiliations.length > 0) {
+      // Remove old memberships for this user in this tenant
+      db.memberships = db.memberships.filter((m) => !(m.userId === req.params.id && m.tenantId === tenantId));
+
+      const hasPrimary = req.body.branchAffiliations.some((a: any) => Boolean(a.isPrimary));
+      if (!hasPrimary && req.body.branchAffiliations.length > 0) {
+        req.body.branchAffiliations[0].isPrimary = true;
+      }
+
+      const newMems: Membership[] = req.body.branchAffiliations.map((aff: any, idx: number) => {
+        const mem: Membership = {
+          id: aff.id || `m-${req.params.id}-${aff.branchId || idx}`,
+          tenantId,
+          userId: req.params.id,
+          roleId: aff.roleId,
+          branchId: aff.branchId,
+          status: (aff.status as any) || 'ACTIVE',
+          email: aff.email || updatedUser.email,
+          phone: aff.phone || updatedUser.phone || '',
+          isPrimary: Boolean(aff.isPrimary),
+          scopes: ['*'],
+        };
+        db.memberships.push(mem);
+        return mem;
       });
-      memIndex = db.memberships.length - 1;
+
+      const primaryMem = newMems.find((m) => m.isPrimary) || newMems[0];
+      await syncUserToSupabase(updatedUser);
+      if (primaryMem) {
+        await syncMembershipToSupabase(primaryMem, req.body.branchAffiliations);
+      }
+
+      branchAffiliations = newMems.map((m) => {
+        const mRole = db.roles.find((r) => r.id === m.roleId);
+        const mBranch = db.branches.find((b) => b.id === m.branchId);
+        return {
+          id: m.id,
+          branchId: m.branchId,
+          branchName: mBranch ? `${mBranch.name} (${mBranch.city}/${mBranch.state})` : 'Filial',
+          roleId: m.roleId,
+          roleName: mRole?.name || 'Membro',
+          roleCode: mRole?.code,
+          email: m.email || updatedUser.email,
+          phone: m.phone || updatedUser.phone || '',
+          status: m.status,
+          isPrimary: m.isPrimary,
+        };
+      });
+    } else {
+      let memIndex = db.memberships.findIndex((m) => m.userId === req.params.id && m.tenantId === tenantId);
+      if (memIndex !== -1) {
+        if (req.body.roleId) db.memberships[memIndex].roleId = req.body.roleId;
+        if (req.body.branchId) db.memberships[memIndex].branchId = req.body.branchId;
+        if (req.body.status) db.memberships[memIndex].status = req.body.status;
+      } else {
+        db.memberships.push({
+          id: `m-${Date.now()}`,
+          tenantId,
+          userId: updatedUser.id,
+          roleId: req.body.roleId || db.roles[0]?.id,
+          branchId: req.body.branchId || db.branches[0]?.id,
+          status: req.body.status || 'ACTIVE',
+          scopes: ['*'],
+        });
+        memIndex = db.memberships.length - 1;
+      }
+      const mem = db.memberships[memIndex];
+      await syncUserToSupabase(updatedUser);
+      if (mem) await syncMembershipToSupabase(mem);
+      const role = db.roles.find((r) => r.id === mem?.roleId);
+      const branch = db.branches.find((b) => b.id === mem?.branchId);
+      branchAffiliations = [
+        {
+          id: mem?.id,
+          branchId: mem?.branchId,
+          branchName: branch?.name,
+          roleId: mem?.roleId,
+          roleName: role?.name || 'Membro',
+          roleCode: role?.code,
+          email: mem?.email || updatedUser.email,
+          phone: mem?.phone || updatedUser.phone || '',
+          status: mem?.status || 'ACTIVE',
+          isPrimary: true,
+        },
+      ];
     }
 
-    const mem = db.memberships[memIndex];
-    const role = db.roles.find((r) => r.id === mem?.roleId);
-    const branch = db.branches.find((b) => b.id === mem?.branchId);
+    const primaryAff = branchAffiliations.find((a) => a.isPrimary) || branchAffiliations[0];
+    const role = db.roles.find((r) => r.id === primaryAff?.roleId);
+    const branch = db.branches.find((b) => b.id === primaryAff?.branchId);
 
     const returnUser = {
       ...updatedUser,
-      roleId: mem?.roleId,
-      roleName: role?.name || 'Membro',
-      roleCode: role?.code,
-      branchId: mem?.branchId,
-      branchName: branch?.name,
-      status: mem?.status || 'ACTIVE',
+      roleId: primaryAff?.roleId,
+      roleName: role?.name || primaryAff?.roleName || 'Membro',
+      roleCode: role?.code || primaryAff?.roleCode,
+      branchId: primaryAff?.branchId,
+      branchName: branch?.name || primaryAff?.branchName,
+      status: primaryAff?.status || 'ACTIVE',
+      branchAffiliations,
+      memberships: branchAffiliations,
     };
 
-    logAudit(req, 'AUTH', updatedUser.id, 'UPDATE', `Atualizou perfil/permissões do membro da equipe: ${updatedUser.name}`);
+    logAudit(
+      req,
+      'AUTH',
+      updatedUser.id,
+      'UPDATE',
+      `Atualizou perfil/permissões do membro da equipe: ${updatedUser.name} (${branchAffiliations.length} filial(is) vinculada(s))`
+    );
     res.json(returnUser);
   });
 
-  app.delete('/api/users/:id', (req: Request, res: Response) => {
+  app.delete('/api/users/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const user = db.users.find((u) => u.id === req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     db.memberships = db.memberships.filter((m) => !(m.userId === req.params.id && m.tenantId === tenantId));
+    await deleteFromSupabase('memberships', 'user_id', req.params.id);
     logAudit(req, 'AUTH', user.id, 'DELETE', `Removeu membro da equipe do escritório: ${user.name}`);
     res.json({ success: true });
   });
@@ -924,7 +1113,7 @@ async function startServer() {
     res.json(items);
   });
 
-  app.post('/api/persons', (req: Request, res: Response) => {
+  app.post('/api/persons', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const newPerson: Person = {
       ...req.body,
@@ -935,27 +1124,13 @@ async function startServer() {
     db.persons.unshift(newPerson);
 
     // Supabase Persistence
-    syncToSupabase('persons', {
-      id: newPerson.id,
-      tenant_id: newPerson.tenantId,
-      type: newPerson.type,
-      name: newPerson.name,
-      trade_name: newPerson.tradeName,
-      document: newPerson.document,
-      rg_ie: newPerson.stateRegOrRg,
-      email: newPerson.email,
-      phone: newPerson.phone,
-      whatsapp: newPerson.mobilePhone,
-      address: newPerson.address,
-      notes: newPerson.notes,
-      created_at: newPerson.createdAt,
-    });
+    await syncPersonToSupabase(newPerson);
 
     logAudit(req, 'PERSON', newPerson.id, 'CREATE', `Cadastrou pessoa: ${newPerson.name} (${newPerson.document})`);
     res.status(201).json(newPerson);
   });
 
-  app.put('/api/persons/:id', (req: Request, res: Response) => {
+  app.put('/api/persons/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const index = db.persons.findIndex((p) => p.id === req.params.id && p.tenantId === tenantId);
     if (index === -1) {
@@ -965,24 +1140,13 @@ async function startServer() {
     db.persons[index] = updated;
 
     // Supabase Persistence
-    syncToSupabase('persons', {
-      id: updated.id,
-      tenant_id: updated.tenantId,
-      name: updated.name,
-      trade_name: updated.tradeName,
-      document: updated.document,
-      email: updated.email,
-      phone: updated.phone,
-      address: updated.address,
-      notes: updated.notes,
-      updated_at: new Date().toISOString(),
-    });
+    await syncPersonToSupabase(updated);
 
     logAudit(req, 'PERSON', updated.id, 'UPDATE', `Atualizou dados cadastrais de: ${updated.name}`);
     res.json(updated);
   });
 
-  app.delete('/api/persons/:id', (req: Request, res: Response) => {
+  app.delete('/api/persons/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const person = db.persons.find((p) => p.id === req.params.id && p.tenantId === tenantId);
     if (!person) return res.status(404).json({ error: 'Pessoa não encontrada' });
@@ -1001,8 +1165,8 @@ async function startServer() {
     db.clients = db.clients.filter((c) => c.personId !== req.params.id);
 
     // Supabase Delete
-    deleteFromSupabase('persons', 'id', req.params.id);
-    deleteFromSupabase('clients', 'person_id', req.params.id);
+    await deleteFromSupabase('persons', 'id', req.params.id);
+    await deleteFromSupabase('clients', 'person_id', req.params.id);
 
     logAudit(req, 'PERSON', person.id, 'DELETE', `Excluiu cadastro de: ${person.name}`);
     res.json({ success: true });
@@ -1020,7 +1184,7 @@ async function startServer() {
     res.json(clients);
   });
 
-  app.post('/api/clients', (req: Request, res: Response) => {
+  app.post('/api/clients', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     let personId = req.body.personId;
 
@@ -1035,16 +1199,7 @@ async function startServer() {
       db.persons.unshift(newPerson);
       personId = newPerson.id;
 
-      syncToSupabase('persons', {
-        id: newPerson.id,
-        tenant_id: newPerson.tenantId,
-        type: newPerson.type,
-        name: newPerson.name,
-        document: newPerson.document,
-        email: newPerson.email,
-        phone: newPerson.phone,
-        created_at: newPerson.createdAt,
-      });
+      await syncPersonToSupabase(newPerson);
     }
 
     const newClient: Client = {
@@ -1064,26 +1219,21 @@ async function startServer() {
     db.clients.unshift(newClient);
 
     // Supabase Persistence
-    syncToSupabase('clients', {
-      id: newClient.id,
-      tenant_id: newClient.tenantId,
-      person_id: newClient.personId,
-      category: 'CORPORATE',
-      status: newClient.status,
-      created_at: new Date().toISOString(),
-    });
+    await syncClientToSupabase(newClient);
 
     const person = db.persons.find((p) => p.id === personId);
     logAudit(req, 'CLIENT', newClient.id, 'CREATE', `Cadastrou novo cliente: ${person?.name || newClient.clientCode}`);
     res.status(201).json({ ...newClient, person });
   });
 
-  app.put('/api/clients/:id', (req: Request, res: Response) => {
+  app.put('/api/clients/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const idx = db.clients.findIndex((c) => c.id === req.params.id && c.tenantId === tenantId);
     if (idx === -1) return res.status(404).json({ error: 'Cliente não encontrado' });
 
     db.clients[idx] = { ...db.clients[idx], ...req.body };
+    await syncClientToSupabase(db.clients[idx]);
+
     const person = db.persons.find((p) => p.id === db.clients[idx].personId);
     logAudit(req, 'CLIENT', db.clients[idx].id, 'UPDATE', `Atualizou cliente: ${person?.name || db.clients[idx].clientCode}`);
     res.json({ ...db.clients[idx], person });
@@ -1133,7 +1283,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/cases', (req: Request, res: Response) => {
+  app.post('/api/cases', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const branchId = req.body.branchId || (req as any).branchId;
     const lawyerId = req.body.responsibleLawyerId || (req as any).userId;
@@ -1189,38 +1339,14 @@ async function startServer() {
     });
 
     // Supabase Persistence
-    syncToSupabase('cases', {
-      id: newCase.id,
-      tenant_id: newCase.tenantId,
-      branch_id: newCase.branchId,
-      cnj: newCase.caseNumber,
-      title: newCase.title,
-      area: newCase.legalArea,
-      phase: newCase.phase,
-      status: newCase.status,
-      court: newCase.court,
-      judge_or_organ: newCase.judgeName,
-      client_id: newCase.parties[0]?.personId ? (db.clients.find(c => c.personId === newCase.parties[0].personId)?.id || 'cli-01') : 'cli-01',
-      client_role: newCase.parties[0]?.role || 'AUTOR',
-      opposing_party: (() => {
-        const opposingParty = newCase.parties.find(p => p.role === 'REU');
-        if (!opposingParty) return 'Parte Contrária';
-        const person = db.persons.find(p => p.id === opposingParty.personId);
-        return person?.name || 'Parte Contrária';
-      })(),
-      economic_value: newCase.claimValue,
-      expected_risk: newCase.contingencyRisk,
-      responsible_user_id: newCase.responsibleLawyerId,
-      distribution_date: newCase.distributionDate,
-      created_at: newCase.createdAt,
-      updated_at: newCase.updatedAt,
-    });
+    await syncCaseToSupabase(newCase, db.clients, db.persons);
+    await syncCaseMovementToSupabase(initMovement);
 
     logAudit(req, 'CASE', newCase.id, 'CREATE', `Cadastrou novo processo: ${newCase.title} (${newCase.caseNumber})`);
     res.status(201).json(newCase);
   });
 
-  app.put('/api/cases/:id', (req: Request, res: Response) => {
+  app.put('/api/cases/:id', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const idx = db.cases.findIndex((c) => c.id === req.params.id && c.tenantId === tenantId);
     if (idx === -1) return res.status(404).json({ error: 'Caso não encontrado' });
@@ -1232,20 +1358,7 @@ async function startServer() {
     };
 
     // Supabase Persistence
-    syncToSupabase('cases', {
-      id: db.cases[idx].id,
-      tenant_id: db.cases[idx].tenantId,
-      cnj: db.cases[idx].caseNumber,
-      title: db.cases[idx].title,
-      area: db.cases[idx].legalArea,
-      phase: db.cases[idx].phase,
-      status: db.cases[idx].status,
-      court: db.cases[idx].court,
-      economic_value: db.cases[idx].claimValue,
-      expected_risk: db.cases[idx].contingencyRisk,
-      responsible_user_id: db.cases[idx].responsibleLawyerId,
-      updated_at: db.cases[idx].updatedAt,
-    });
+    await syncCaseToSupabase(db.cases[idx], db.clients, db.persons);
 
     logAudit(req, 'CASE', db.cases[idx].id, 'UPDATE', `Atualizou caso: ${db.cases[idx].caseNumber}`);
     res.json(db.cases[idx]);
@@ -1260,7 +1373,7 @@ async function startServer() {
     res.json(list);
   });
 
-  app.post('/api/cases/:id/movements', (req: Request, res: Response) => {
+  app.post('/api/cases/:id/movements', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const theCase = db.cases.find((c) => c.id === req.params.id && c.tenantId === tenantId);
     if (!theCase) return res.status(404).json({ error: 'Processo não encontrado' });
@@ -1280,6 +1393,7 @@ async function startServer() {
 
     db.movements.unshift(newMov);
     theCase.movementsCount++;
+    await syncCaseMovementToSupabase(newMov);
     logAudit(req, 'CASE', theCase.id, 'UPDATE', `Adicionou andamento: ${newMov.title}`);
     res.status(201).json(newMov);
   });
@@ -1304,7 +1418,7 @@ async function startServer() {
     res.json(result);
   });
 
-  app.post('/api/deadlines', (req: Request, res: Response) => {
+  app.post('/api/deadlines', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const calc = calculateLegalDeadline(
       req.body.publishDate || formatDateToYMD(new Date()),
@@ -1343,27 +1457,13 @@ async function startServer() {
     }
 
     // Supabase Persistence
-    syncToSupabase('deadlines', {
-      id: newDl.id,
-      tenant_id: newDl.tenantId,
-      case_id: newDl.caseId || (db.cases[0]?.id || 'case-01'),
-      assigned_user_id: newDl.responsibleUserId,
-      title: newDl.title,
-      description: newDl.description,
-      publication_date: newDl.publishDate,
-      due_date: newDl.dueDate,
-      days_count: newDl.daysCount,
-      counting_type: newDl.calculationType === 'DIAS_UTEIS_CPC' ? 'BUSINESS_DAYS' : 'CALENDAR_DAYS',
-      priority: 'HIGH',
-      status: newDl.status,
-      created_at: newDl.createdAt,
-    });
+    await syncDeadlineToSupabase(newDl);
 
     logAudit(req, 'DEADLINE', newDl.id, 'CREATE', `Cadastrou prazo fatal: ${newDl.title} com vencimento em ${newDl.dueDate}`);
     res.status(201).json(newDl);
   });
 
-  app.put('/api/deadlines/:id/status', (req: Request, res: Response) => {
+  app.put('/api/deadlines/:id/status', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const idx = db.deadlines.findIndex((d) => d.id === req.params.id && d.tenantId === tenantId);
     if (idx === -1) return res.status(404).json({ error: 'Prazo não encontrado' });
@@ -1375,13 +1475,7 @@ async function startServer() {
     }
 
     // Supabase Persistence
-    syncToSupabase('deadlines', {
-      id: db.deadlines[idx].id,
-      tenant_id: db.deadlines[idx].tenantId,
-      status: db.deadlines[idx].status,
-      completed_at: db.deadlines[idx].completedAt || null,
-      updated_at: new Date().toISOString(),
-    });
+    await syncDeadlineToSupabase(db.deadlines[idx]);
 
     logAudit(req, 'DEADLINE', db.deadlines[idx].id, 'UPDATE', `Alterou status do prazo para: ${req.body.status}`);
     res.json(db.deadlines[idx]);
@@ -1393,7 +1487,7 @@ async function startServer() {
     res.json(db.hearings.filter((h) => h.tenantId === tenantId));
   });
 
-  app.post('/api/hearings', (req: Request, res: Response) => {
+  app.post('/api/hearings', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const lawyer = db.users.find((u) => u.id === req.body.responsibleLawyerId);
     const newHearing: Hearing = {
@@ -1415,6 +1509,7 @@ async function startServer() {
       createdAt: new Date().toISOString(),
     };
     db.hearings.unshift(newHearing);
+    await syncHearingToSupabase(newHearing);
     logAudit(req, 'CASE', newHearing.caseId, 'UPDATE', `Agendou audiência: ${newHearing.title} para ${newHearing.dateTime}`);
     res.status(201).json(newHearing);
   });
@@ -1485,7 +1580,7 @@ async function startServer() {
     res.json(db.documents.filter((d) => d.tenantId === tenantId));
   });
 
-  app.post('/api/documents', (req: Request, res: Response) => {
+  app.post('/api/documents', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const newDoc: DocumentItem = {
       id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -1508,6 +1603,7 @@ async function startServer() {
       updatedAt: new Date().toISOString(),
     };
     db.documents.unshift(newDoc);
+    await syncDocumentToSupabase(newDoc);
     logAudit(req, 'DOCUMENT', newDoc.id, 'CREATE', `Criou documento: ${newDoc.title}`);
     res.status(201).json(newDoc);
   });
@@ -1576,7 +1672,7 @@ async function startServer() {
     res.json(db.feeContracts.filter((fc) => fc.tenantId === tenantId));
   });
 
-  app.post('/api/financial/contracts', (req: Request, res: Response) => {
+  app.post('/api/financial/contracts', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const client = db.clients.find((c) => c.id === req.body.clientId);
     const person = client ? db.persons.find((p) => p.id === client.personId) : undefined;
@@ -1602,6 +1698,7 @@ async function startServer() {
     };
 
     db.feeContracts.unshift(newFc);
+    await syncContractToSupabase(newFc);
 
     // Auto-generate installments and receivables
     const numInstallments = newFc.installmentsCount;
@@ -1638,6 +1735,7 @@ async function startServer() {
         status: 'OPEN',
       };
       db.receivables.unshift(rec);
+      await syncReceivableToSupabase(rec);
     }
 
     logAudit(req, 'PAYMENT', newFc.id, 'CREATE', `Criou contrato de honorários: ${newFc.title} no valor de R$ ${newFc.totalValue}`);
@@ -1650,7 +1748,7 @@ async function startServer() {
   });
 
   // Mercado Pago Charge Generation Adapter
-  app.post('/api/financial/charges/mercadopago', (req: Request, res: Response) => {
+  app.post('/api/financial/charges/mercadopago', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const { accountReceivableId, method } = req.body;
 
@@ -1678,12 +1776,13 @@ async function startServer() {
     };
 
     receivable.charge = charge;
+    await syncReceivableToSupabase(receivable);
     logAudit(req, 'PAYMENT', charge.id, 'SIMULATE_PAYMENT', `Gerou cobrança Mercado Pago (${charge.method}) no valor de R$ ${charge.amount}`);
     res.status(201).json(charge);
   });
 
   // Mercado Pago Simulated Instant Payment & Reconciliation
-  app.post('/api/financial/charges/:id/simulate-payment', (req: Request, res: Response) => {
+  app.post('/api/financial/charges/:id/simulate-payment', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const receivable = db.receivables.find((r) => r.charge?.id === req.params.id && r.tenantId === tenantId);
     if (!receivable || !receivable.charge) {
@@ -1719,6 +1818,7 @@ async function startServer() {
     };
 
     db.payments.unshift(payment);
+    await syncReceivableToSupabase(receivable);
     logAudit(req, 'PAYMENT', payment.id, 'SIMULATE_PAYMENT', `Pagamento de R$ ${payment.amountPaid} confirmado via Mercado Pago Webhook.`);
 
     res.json({ success: true, payment, charge, receivable });
@@ -2194,7 +2294,7 @@ Contexto do Caso Atual do Usuário: ${caseContext || 'Nenhum processo específic
     res.json(db.lgpdConsents.filter((c) => c.tenantId === tenantId));
   });
 
-  app.post('/api/lgpd/consent', (req: Request, res: Response) => {
+  app.post('/api/lgpd/consent', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const newConsent: LGPDConsent = {
       id: `lgpd-${Date.now()}`,
@@ -2208,6 +2308,7 @@ Contexto do Caso Atual do Usuário: ${caseContext || 'Nenhum processo específic
       ip: req.ip || '127.0.0.1',
     };
     db.lgpdConsents.unshift(newConsent);
+    await syncLgpdConsentToSupabase(newConsent);
     logAudit(req, 'PERSON', newConsent.personId, 'UPDATE', `Registrou consentimento LGPD (${newConsent.consentType}) para ${newConsent.personName}`);
     res.status(201).json(newConsent);
   });
@@ -2218,9 +2319,12 @@ Contexto do Caso Atual do Usuário: ${caseContext || 'Nenhum processo específic
     res.json(db.notifications.filter((n) => n.tenantId === tenantId));
   });
 
-  app.put('/api/notifications/:id/read', (req: Request, res: Response) => {
+  app.put('/api/notifications/:id/read', async (req: Request, res: Response) => {
     const notif = db.notifications.find((n) => n.id === req.params.id);
-    if (notif) notif.read = true;
+    if (notif) {
+      notif.read = true;
+      await syncNotificationToSupabase(notif);
+    }
     res.json({ success: true });
   });
 
@@ -2339,6 +2443,22 @@ Contexto do Caso Atual do Usuário: ${caseContext || 'Nenhum processo específic
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`JurisFlow SaaS Backend running on http://0.0.0.0:${PORT}`);
+
+    // Asynchronously hydrate & sync in background without blocking startup TCP probe
+    (async () => {
+      try {
+        const hyd = await hydrateFromSupabase(db);
+        if (hyd.success) {
+          console.log('[Supabase] Startup hydration finished:', hyd.counts);
+        }
+        const pushResult = await syncAllLocalToSupabase(db);
+        if (pushResult.success) {
+          console.log('[Supabase] Startup syncAll finished:', pushResult.counts);
+        }
+      } catch (err) {
+        console.warn('[Supabase] Startup background hydration/sync skipped:', err);
+      }
+    })();
   });
 }
 

@@ -102,9 +102,9 @@ export const api = {
   deleteBranch: (id: string) => request<{ success: boolean }>(`/api/branches/${id}`, { method: 'DELETE' }),
 
   getUsers: () => request<User[]>('/api/users'),
-  createUser: (data: Partial<User> & { roleId?: string; branchId?: string; status?: string }) =>
+  createUser: (data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) =>
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(data) }),
-  updateUser: (id: string, data: Partial<User> & { roleId?: string; branchId?: string; status?: string }) =>
+  updateUser: (id: string, data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) =>
     request<User>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: string) => request<{ success: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
 

@@ -57,6 +57,19 @@ export interface Team {
   leaderId?: UUID;
 }
 
+export interface UserBranchAffiliation {
+  id?: UUID;
+  branchId: UUID;
+  branchName?: string;
+  roleId: UUID;
+  roleName?: string;
+  roleCode?: string;
+  email: string;
+  phone?: string;
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+  isPrimary?: boolean;
+}
+
 export interface User {
   id: UUID;
   name: string;
@@ -67,6 +80,16 @@ export interface User {
   oabUf?: string;
   active: boolean;
   createdAt: string;
+  // Role & Branch info (Primary affiliation)
+  roleId?: UUID;
+  roleName?: string;
+  roleCode?: string;
+  branchId?: UUID;
+  branchName?: string;
+  status?: string;
+  // Multi-branch affiliations
+  branchAffiliations?: UserBranchAffiliation[];
+  memberships?: UserBranchAffiliation[];
 }
 
 export type RoleCode = 
@@ -108,6 +131,9 @@ export interface Membership {
   departmentId?: UUID;
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   scopes: string[];
+  email?: string;
+  phone?: string;
+  isPrimary?: boolean;
 }
 
 // --- AUDIT & LGPD ---

@@ -351,7 +351,7 @@ export default function App() {
     showToast('Função RBAC removida com sucesso');
   };
 
-  const handleSaveUser = async (data: Partial<User> & { roleId?: string; branchId?: string; status?: string }) => {
+  const handleSaveUser = async (data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) => {
     if (data.id && users.some((u) => u.id === data.id)) {
       const updated = await api.updateUser(data.id, data);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));

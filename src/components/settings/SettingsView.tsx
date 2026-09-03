@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Server,
   CheckCircle,
+  Star,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import {
@@ -41,6 +42,7 @@ import {
   LGPDConsent,
   Person,
   Permission,
+  UserBranchAffiliation,
 } from '../../types';
 
 interface SettingsViewProps {
@@ -59,7 +61,7 @@ interface SettingsViewProps {
   onDeleteBranch?: (id: string) => Promise<void>;
   onSaveRole?: (data: Partial<Role>) => Promise<void>;
   onDeleteRole?: (id: string) => Promise<void>;
-  onSaveUser?: (data: Partial<User> & { roleId?: string; branchId?: string; status?: string }) => Promise<void>;
+  onSaveUser?: (data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) => Promise<void>;
   onDeleteUser?: (id: string) => Promise<void>;
   onSaveLgpdConsent: (data: Partial<LGPDConsent>) => Promise<void>;
   onSwitchTenant?: (tenantId: string) => void;
@@ -219,17 +221,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [userSearchFilter, setUserSearchFilter] = useState('');
   const [userBranchFilter, setUserBranchFilter] = useState('ALL');
   const [userRoleFilter, setUserRoleFilter] = useState('ALL');
-  const [userFormData, setUserFormData] = useState({
+  const [userFormData, setUserFormData] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    isLawyer: boolean;
+    oabNumber: string;
+    oabUf: string;
+    avatarUrl: string;
+    branchAffiliations: {
+      id?: string;
+      branchId: string;
+      roleId: string;
+      email: string;
+      phone: string;
+      status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+      isPrimary: boolean;
+    }[];
+  }>({
     name: '',
     email: '',
     phone: '',
     isLawyer: true,
     oabNumber: '',
     oabUf: 'SP',
-    roleId: '',
-    branchId: '',
-    status: 'ACTIVE' as 'ACTIVE' | 'INVITED' | 'SUSPENDED',
     avatarUrl: '',
+    branchAffiliations: [],
   });
 
   // Role Modal State
@@ -371,6 +388,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // --- Handlers for User ---
   const handleOpenNewUserModal = () => {
     setEditingUser(null);
+    const initialBranchId = branches[0]?.id || '';
+    const initialRoleId = roles[0]?.id || '';
     setUserFormData({
       name: '',
       email: '',
@@ -378,16 +397,61 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       isLawyer: true,
       oabNumber: '',
       oabUf: 'SP',
-      roleId: roles[0]?.id || '',
-      branchId: branches[0]?.id || '',
-      status: 'ACTIVE',
       avatarUrl: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 1000)}?w=150&auto=format&fit=crop&q=80`,
+      branchAffiliations: [
+        {
+          branchId: initialBranchId,
+          roleId: initialRoleId,
+          email: '',
+          phone: '',
+          status: 'ACTIVE',
+          isPrimary: true,
+        },
+      ],
     });
     setIsUserModalOpen(true);
   };
 
   const handleOpenEditUserModal = (u: any) => {
     setEditingUser(u);
+    let affiliations: any[] = [];
+    if (Array.isArray(u.branchAffiliations) && u.branchAffiliations.length > 0) {
+      affiliations = u.branchAffiliations.map((a: any) => ({
+        id: a.id,
+        branchId: a.branchId,
+        roleId: a.roleId,
+        email: a.email || u.email || '',
+        phone: a.phone || u.phone || '',
+        status: (a.status as any) || 'ACTIVE',
+        isPrimary: Boolean(a.isPrimary),
+      }));
+    } else if (Array.isArray(u.memberships) && u.memberships.length > 0) {
+      affiliations = u.memberships.map((m: any) => ({
+        id: m.id,
+        branchId: m.branchId,
+        roleId: m.roleId,
+        email: m.email || u.email || '',
+        phone: m.phone || u.phone || '',
+        status: (m.status as any) || 'ACTIVE',
+        isPrimary: Boolean(m.isPrimary),
+      }));
+    } else {
+      affiliations = [
+        {
+          branchId: u.branchId || branches[0]?.id || '',
+          roleId: u.roleId || roles[0]?.id || '',
+          email: u.email || '',
+          phone: u.phone || '',
+          status: (u.status as any) || 'ACTIVE',
+          isPrimary: true,
+        },
+      ];
+    }
+
+    if (!affiliations.some((a) => a.isPrimary) && affiliations.length > 0) {
+      affiliations[0].isPrimary = true;
+    }
+
     setUserFormData({
       name: u.name || '',
       email: u.email || '',
@@ -395,30 +459,92 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       isLawyer: Boolean(u.oabNumber),
       oabNumber: u.oabNumber || '',
       oabUf: u.oabUf || 'SP',
-      roleId: u.roleId || roles[0]?.id || '',
-      branchId: u.branchId || branches[0]?.id || '',
-      status: (u.status as any) || 'ACTIVE',
       avatarUrl: u.avatarUrl || '',
+      branchAffiliations: affiliations,
     });
     setIsUserModalOpen(true);
+  };
+
+  const handleAddBranchAffiliation = () => {
+    const usedBranchIds = new Set(userFormData.branchAffiliations.map((a) => a.branchId));
+    const availableBranch = branches.find((b) => !usedBranchIds.has(b.id)) || branches[0];
+    if (!availableBranch) return;
+
+    setUserFormData((prev) => ({
+      ...prev,
+      branchAffiliations: [
+        ...prev.branchAffiliations,
+        {
+          branchId: availableBranch.id,
+          roleId: roles[0]?.id || '',
+          email: prev.email || '',
+          phone: prev.phone || '',
+          status: 'ACTIVE',
+          isPrimary: prev.branchAffiliations.length === 0,
+        },
+      ],
+    }));
+  };
+
+  const handleRemoveBranchAffiliation = (index: number) => {
+    if (userFormData.branchAffiliations.length <= 1) return;
+    setUserFormData((prev) => {
+      const updated = prev.branchAffiliations.filter((_, i) => i !== index);
+      if (!updated.some((a) => a.isPrimary) && updated.length > 0) {
+        updated[0].isPrimary = true;
+      }
+      return { ...prev, branchAffiliations: updated };
+    });
+  };
+
+  const handleSetPrimaryBranch = (index: number) => {
+    setUserFormData((prev) => ({
+      ...prev,
+      branchAffiliations: prev.branchAffiliations.map((a, i) => ({
+        ...a,
+        isPrimary: i === index,
+      })),
+    }));
+  };
+
+  const handleUpdateAffiliation = (index: number, field: string, value: any) => {
+    setUserFormData((prev) => {
+      const updated = [...prev.branchAffiliations];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, branchAffiliations: updated };
+    });
   };
 
   const handleSaveUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
+      if (userFormData.branchAffiliations.length === 0) {
+        alert('É necessário vincular o membro a pelo menos uma filial.');
+        setSubmitting(false);
+        return;
+      }
+
+      const affiliations = [...userFormData.branchAffiliations];
+      if (!affiliations.some((a) => a.isPrimary)) {
+        affiliations[0].isPrimary = true;
+      }
+
+      const primary = affiliations.find((a) => a.isPrimary) || affiliations[0];
+
       await onSaveUser({
         ...(editingUser ? { id: editingUser.id } : {}),
         name: userFormData.name,
-        email: userFormData.email,
-        phone: userFormData.phone,
+        email: userFormData.email || primary.email,
+        phone: userFormData.phone || primary.phone,
         oabNumber: userFormData.isLawyer ? userFormData.oabNumber : '',
         oabUf: userFormData.isLawyer ? userFormData.oabUf : '',
-        roleId: userFormData.roleId,
-        branchId: userFormData.branchId,
-        status: userFormData.status,
         avatarUrl: userFormData.avatarUrl || undefined,
-        active: userFormData.status === 'ACTIVE',
+        active: primary.status === 'ACTIVE',
+        roleId: primary.roleId,
+        branchId: primary.branchId,
+        status: primary.status,
+        branchAffiliations: affiliations,
       });
       setIsUserModalOpen(false);
     } catch (err) {
@@ -561,13 +687,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Filtered Users
   const filteredUsers = users.filter((u: any) => {
+    const affiliations: any[] = Array.isArray(u.branchAffiliations) && u.branchAffiliations.length > 0
+      ? u.branchAffiliations
+      : Array.isArray(u.memberships) && u.memberships.length > 0
+      ? u.memberships
+      : [];
+
+    const searchLower = userSearchFilter.toLowerCase();
     const matchesSearch =
       !userSearchFilter ||
-      u.name?.toLowerCase().includes(userSearchFilter.toLowerCase()) ||
-      u.email?.toLowerCase().includes(userSearchFilter.toLowerCase()) ||
-      u.oabNumber?.toLowerCase().includes(userSearchFilter.toLowerCase());
-    const matchesBranch = userBranchFilter === 'ALL' || u.branchId === userBranchFilter;
-    const matchesRole = userRoleFilter === 'ALL' || u.roleId === userRoleFilter;
+      u.name?.toLowerCase().includes(searchLower) ||
+      u.email?.toLowerCase().includes(searchLower) ||
+      u.oabNumber?.toLowerCase().includes(searchLower) ||
+      affiliations.some((a: any) => a.email?.toLowerCase().includes(searchLower) || a.phone?.includes(userSearchFilter));
+
+    const matchesBranch =
+      userBranchFilter === 'ALL' ||
+      u.branchId === userBranchFilter ||
+      affiliations.some((a: any) => a.branchId === userBranchFilter);
+
+    const matchesRole =
+      userRoleFilter === 'ALL' ||
+      u.roleId === userRoleFilter ||
+      affiliations.some((a: any) => a.roleId === userRoleFilter);
+
     return matchesSearch && matchesBranch && matchesRole;
   });
 
@@ -1061,8 +1204,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {/* Users Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredUsers.map((u: any) => {
-              const userBranch = branches.find((b) => b.id === u.branchId);
-              const userRole = roles.find((r) => r.id === u.roleId);
+              const affiliations: any[] = Array.isArray(u.branchAffiliations) && u.branchAffiliations.length > 0
+                ? u.branchAffiliations
+                : Array.isArray(u.memberships) && u.memberships.length > 0
+                ? u.memberships
+                : [
+                    {
+                      branchId: u.branchId,
+                      roleId: u.roleId,
+                      email: u.email,
+                      phone: u.phone,
+                      status: u.status || 'ACTIVE',
+                      isPrimary: true,
+                    },
+                  ];
+
+              const primaryAff = affiliations.find((a: any) => a.isPrimary) || affiliations[0];
 
               return (
                 <div
@@ -1081,12 +1238,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <h3 className="font-bold text-slate-900 text-sm truncate">{u.name}</h3>
                           <span
                             className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-semibold ${
-                              u.status === 'ACTIVE' || u.active !== false
+                              primaryAff?.status === 'ACTIVE' || u.status === 'ACTIVE' || u.active !== false
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : 'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}
                           >
-                            {u.status === 'ACTIVE' || u.active !== false ? 'Ativo' : u.status || 'Inativo'}
+                            {primaryAff?.status === 'ACTIVE' || u.status === 'ACTIVE' || u.active !== false ? 'Ativo' : 'Inativo'}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 truncate mt-0.5">{u.email}</p>
@@ -1098,25 +1255,83 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 pt-2.5 border-t border-slate-100 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Função RBAC:</span>
-                        <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                          {userRole?.name || u.roleName || 'Membro'}
+                    {/* Multi-Branch Affiliations List */}
+                    <div className="pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                          Filiais Vinculadas
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {affiliations.length} {affiliations.length === 1 ? 'filial' : 'filiais'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Lotação / Filial:</span>
-                        <span className="font-medium text-slate-700 text-[11px]">
-                          {userBranch?.name || u.branchName || 'Matriz'}
-                        </span>
+
+                      <div className="space-y-1.5">
+                        {affiliations.map((aff: any, idx: number) => {
+                          const affBranch = branches.find((b) => b.id === aff.branchId);
+                          const affRole = roles.find((r) => r.id === aff.roleId);
+                          return (
+                            <div
+                              key={aff.id || idx}
+                              className={`p-2.5 rounded-xl border text-xs space-y-1.5 ${
+                                aff.isPrimary
+                                  ? 'bg-amber-50/40 border-amber-200'
+                                  : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-slate-900 flex items-center gap-1 text-[11px] truncate">
+                                  {affBranch ? `${affBranch.name} (${affBranch.city}/${affBranch.state})` : aff.branchName || 'Filial'}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {aff.isPrimary && (
+                                    <span className="text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                      <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
+                                      Principal
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-semibold ${
+                                      aff.status === 'ACTIVE'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : aff.status === 'INVITED'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-slate-200 text-slate-700'
+                                    }`}
+                                  >
+                                    {aff.status === 'ACTIVE' ? 'Ativo' : aff.status === 'INVITED' ? 'Convidado' : 'Suspenso'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-slate-500">Função RBAC:</span>
+                                <span className="font-semibold text-indigo-700 bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px]">
+                                  {affRole?.name || aff.roleName || 'Membro'}
+                                </span>
+                              </div>
+
+                              {(aff.email || aff.phone) && (
+                                <div className="pt-1 border-t border-slate-200/60 flex flex-col gap-0.5 text-[10px] text-slate-600 font-mono">
+                                  {aff.email && (
+                                    <div className="flex items-center gap-1 truncate">
+                                      <Mail className="w-3 h-3 text-slate-400 shrink-0 font-sans" />
+                                      <span className="truncate">{aff.email}</span>
+                                    </div>
+                                  )}
+                                  {aff.phone && (
+                                    <div className="flex items-center gap-1">
+                                      <Phone className="w-3 h-3 text-slate-400 shrink-0 font-sans" />
+                                      <span>{aff.phone}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      {u.phone && (
-                        <div className="flex items-center justify-between font-mono text-[11px]">
-                          <span className="text-slate-500 font-sans">Telefone:</span>
-                          <span className="text-slate-700">{u.phone}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -1126,7 +1341,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center gap-1.5"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
-                      <span>Editar</span>
+                      <span>Editar e Vincular</span>
                     </button>
                     <button
                       onClick={() => handleDeleteUserClick(u)}
@@ -1823,148 +2038,287 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* MODAL 3: USER CREATE / EDIT */}
       {isUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-indigo-600" />
-                {editingUser ? 'Editar Usuário / Membro da Equipe' : 'Cadastrar Novo Usuário na Equipe'}
-              </h2>
-              <button onClick={() => setIsUserModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    {editingUser ? 'Editar Usuário / Membro da Equipe' : 'Cadastrar Novo Usuário na Equipe'}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Gerencie os dados cadastrais e as lotações individualizadas em filiais
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setIsUserModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveUserSubmit} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-slate-700 mb-1 font-semibold">Nome Completo *</label>
-                <input
-                  type="text"
-                  required
-                  value={userFormData.name}
-                  onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
-                  placeholder="Ex: Dra. Mariana Costa Silveira"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                />
-              </div>
+            <form onSubmit={handleSaveUserSubmit} className="space-y-4 text-xs">
+              {/* Informações Gerais */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-600" />
+                  Dados Pessoais do Usuário
+                </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">E-mail Institucional *</label>
-                  <input
-                    type="email"
-                    required
-                    value={userFormData.email}
-                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
-                    placeholder="mariana@escritorio.adv.br"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Telefone / WhatsApp</label>
+                  <label className="block text-slate-700 mb-1 font-semibold">Nome Completo *</label>
                   <input
                     type="text"
-                    value={userFormData.phone}
-                    onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
-                    placeholder="(11) 98765-4321"
+                    required
+                    value={userFormData.name}
+                    onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
+                    placeholder="Ex: Dra. Mariana Costa Silveira"
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
                   />
                 </div>
-              </div>
 
-              {/* OAB Checkbox & Inputs */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isLawyerCheck"
-                    checked={userFormData.isLawyer}
-                    onChange={(e) => setUserFormData({ ...userFormData, isLawyer: e.target.checked })}
-                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <label htmlFor="isLawyerCheck" className="text-slate-800 font-semibold cursor-pointer">
-                    Possui inscrição nos quadros da OAB (Advogado/Advogada)
-                  </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 mb-1 font-semibold">E-mail Principal / Pessoal</label>
+                    <input
+                      type="email"
+                      value={userFormData.email}
+                      onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                      placeholder="mariana@pessoal.com ou corporativo"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 mb-1 font-semibold">Telefone Principal / WhatsApp</label>
+                    <input
+                      type="text"
+                      value={userFormData.phone}
+                      onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
+                      placeholder="(11) 98765-4321"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
+                    />
+                  </div>
                 </div>
 
-                {userFormData.isLawyer && (
-                  <div className="grid grid-cols-3 gap-3 pt-1">
-                    <div className="col-span-2">
-                      <label className="block text-slate-700 mb-1 font-medium">Número de Inscrição OAB *</label>
-                      <input
-                        type="text"
-                        required={userFormData.isLawyer}
-                        value={userFormData.oabNumber}
-                        onChange={(e) => setUserFormData({ ...userFormData, oabNumber: e.target.value })}
-                        placeholder="Ex: 234.567"
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                      />
+                {/* OAB Checkbox & Inputs */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isLawyerCheck"
+                      checked={userFormData.isLawyer}
+                      onChange={(e) => setUserFormData({ ...userFormData, isLawyer: e.target.checked })}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <label htmlFor="isLawyerCheck" className="text-slate-800 font-semibold cursor-pointer">
+                      Possui inscrição nos quadros da OAB (Advogado/Advogada)
+                    </label>
+                  </div>
+
+                  {userFormData.isLawyer && (
+                    <div className="grid grid-cols-3 gap-3 pt-1">
+                      <div className="col-span-2">
+                        <label className="block text-slate-700 mb-1 font-medium">Número de Inscrição OAB *</label>
+                        <input
+                          type="text"
+                          required={userFormData.isLawyer}
+                          value={userFormData.oabNumber}
+                          onChange={(e) => setUserFormData({ ...userFormData, oabNumber: e.target.value })}
+                          placeholder="Ex: 234.567"
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-medium">Seccional (UF)</label>
+                        <select
+                          value={userFormData.oabUf}
+                          onChange={(e) => setUserFormData({ ...userFormData, oabUf: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        >
+                          {['SP', 'RJ', 'DF', 'MG', 'RS', 'PR', 'SC', 'BA', 'PE', 'CE', 'GO', 'ES', 'AM', 'PA', 'MT', 'MS'].map((uf) => (
+                            <option key={uf} value={uf}>
+                              {uf}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-slate-700 mb-1 font-medium">Seccional (UF)</label>
-                      <select
-                        value={userFormData.oabUf}
-                        onChange={(e) => setUserFormData({ ...userFormData, oabUf: e.target.value })}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                      >
-                        {['SP', 'RJ', 'DF', 'MG', 'RS', 'PR', 'SC', 'BA', 'PE', 'CE', 'GO', 'ES', 'AM', 'PA', 'MT', 'MS'].map((uf) => (
-                          <option key={uf} value={uf}>
-                            {uf}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Lotações e Vínculos Multi-Filiais */}
+              <div className="pt-3 border-t border-slate-200 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                      Lotações em Filiais & Perfil RBAC Individualizado *
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Vincule uma ou mais filiais com Função RBAC, e-mail, telefone e status específicos para cada unidade.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddBranchAffiliation}
+                    disabled={branches.length > 0 && userFormData.branchAffiliations.length >= branches.length}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-200 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={branches.length > 0 && userFormData.branchAffiliations.length >= branches.length ? 'Todas as filiais já foram vinculadas' : 'Vincular a outra filial'}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Vincular a Outra Filial</span>
+                  </button>
+                </div>
+
+                {userFormData.branchAffiliations.length === 0 ? (
+                  <div className="p-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 text-center text-amber-800">
+                    <p className="font-semibold">Nenhuma filial vinculada.</p>
+                    <p className="text-[11px] mt-1">Clique no botão acima para vincular o membro a ao menos uma filial.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {userFormData.branchAffiliations.map((aff, index) => {
+                      return (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-xl border transition-all space-y-3 ${
+                            aff.isPrimary
+                              ? 'bg-amber-50/30 border-amber-300 ring-1 ring-amber-200/50'
+                              : 'bg-slate-50/80 border-slate-200'
+                          }`}
+                        >
+                          {/* Top Affiliation Bar */}
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px]">
+                                {index + 1}
+                              </span>
+                              <span className="font-bold text-slate-800 text-xs">
+                                Vínculo Filial #{index + 1}
+                              </span>
+                              {aff.isPrimary ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                                  Lotação Principal
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetPrimaryBranch(index)}
+                                  className="text-[10px] font-medium text-slate-500 hover:text-amber-700 flex items-center gap-1 border border-dashed border-slate-300 hover:border-amber-400 px-2 py-0.5 rounded-full bg-white hover:bg-amber-50 transition-colors"
+                                >
+                                  Definir como Principal
+                                </button>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={userFormData.branchAffiliations.length <= 1}
+                              onClick={() => handleRemoveBranchAffiliation(index)}
+                              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              title={
+                                userFormData.branchAffiliations.length <= 1
+                                  ? 'O membro precisa estar vinculado a pelo menos uma filial'
+                                  : 'Desvincular esta filial'
+                              }
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Branch & Role Selection */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-slate-700 mb-1 font-semibold">
+                                Unidade de Lotação (Filial) *
+                              </label>
+                              <select
+                                required
+                                value={aff.branchId}
+                                onChange={(e) => handleUpdateAffiliation(index, 'branchId', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                              >
+                                {branches.map((b) => (
+                                  <option key={b.id} value={b.id}>
+                                    {b.name} ({b.city}/{b.state})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-slate-700 mb-1 font-semibold">
+                                Função / Perfil RBAC nesta Filial *
+                              </label>
+                              <select
+                                required
+                                value={aff.roleId}
+                                onChange={(e) => handleUpdateAffiliation(index, 'roleId', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                              >
+                                {roles.map((r) => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Branch Specific Email, Phone, Status */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-slate-700 mb-1 font-semibold">
+                                E-mail Institucional na Filial
+                              </label>
+                              <input
+                                type="email"
+                                value={aff.email}
+                                onChange={(e) => handleUpdateAffiliation(index, 'email', e.target.value)}
+                                placeholder="mariana.sp@escritorio.adv.br"
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium font-mono text-[11px]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-slate-700 mb-1 font-semibold">
+                                Telefone / Ramal na Filial
+                              </label>
+                              <input
+                                type="text"
+                                value={aff.phone}
+                                onChange={(e) => handleUpdateAffiliation(index, 'phone', e.target.value)}
+                                placeholder="(11) 98765-4321"
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium font-mono text-[11px]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-slate-700 mb-1 font-semibold">
+                                Status nesta Filial *
+                              </label>
+                              <select
+                                value={aff.status}
+                                onChange={(e) => handleUpdateAffiliation(index, 'status', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                              >
+                                <option value="ACTIVE">Ativo (Acesso Liberado)</option>
+                                <option value="INVITED">Convidado (Pendente)</option>
+                                <option value="SUSPENDED">Inativo / Suspenso</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Função / Perfil RBAC *</label>
-                  <select
-                    required
-                    value={userFormData.roleId}
-                    onChange={(e) => setUserFormData({ ...userFormData, roleId: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Unidade de Lotação (Filial) *</label>
-                  <select
-                    required
-                    value={userFormData.branchId}
-                    onChange={(e) => setUserFormData({ ...userFormData, branchId: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.city}/{b.state})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 mb-1 font-semibold">Status do Usuário</label>
-                <select
-                  value={userFormData.status}
-                  onChange={(e) => setUserFormData({ ...userFormData, status: e.target.value as any })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                >
-                  <option value="ACTIVE">Ativo (Acesso Liberado)</option>
-                  <option value="INVITED">Convidado (Pendente de Ativação)</option>
-                  <option value="SUSPENDED">Inativo / Suspenso</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsUserModalOpen(false)}
@@ -1975,7 +2329,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all shadow-xs disabled:opacity-50"
+                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all shadow-xs disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {submitting ? 'Salvando...' : editingUser ? 'Salvar Alterações' : 'Cadastrar Membro'}
                 </button>
