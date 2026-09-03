@@ -24,8 +24,43 @@ export interface RBACContext {
 export function isSuperAdmin(user?: User | null, role?: Role | null): boolean {
   if (!user && !role) return false;
   if (user?.id === 'u-superadmin' || user?.email?.includes('superadmin')) return true;
-  if (role?.code === 'SUPER_ADMIN') return true;
+  if (role?.code === 'SUPER_ADMIN' || role?.id === 'role-super-admin') return true;
+  if (user?.roleCode === 'SUPER_ADMIN' || user?.roleId === 'role-super-admin') return true;
+  if (user?.roleName?.toLowerCase().includes('super admin')) return true;
+  if (user?.branchAffiliations?.some((a) => a.roleCode === 'SUPER_ADMIN' || a.roleId === 'role-super-admin' || a.roleName?.toLowerCase().includes('super admin'))) {
+    return true;
+  }
+  if (user?.memberships?.some((m) => m.roleCode === 'SUPER_ADMIN' || m.roleId === 'role-super-admin' || m.roleName?.toLowerCase().includes('super admin'))) {
+    return true;
+  }
   return false;
+}
+
+/**
+ * Checks if the current user can assign a given role.
+ * Strictly enforces that ONLY the Super Admin of the SaaS platform can assign the SaaS Admin (SUPER_ADMIN) role to another user.
+ */
+export function canAssignRole(
+  targetRoleCodeOrId: string,
+  currentUser?: User | null,
+  currentRole?: Role | null,
+  roles?: Role[]
+): boolean {
+  const isTargetSuperAdmin =
+    targetRoleCodeOrId === 'SUPER_ADMIN' ||
+    targetRoleCodeOrId === 'role-super-admin' ||
+    Boolean(
+      roles?.some(
+        (r) => (r.id === targetRoleCodeOrId || r.code === targetRoleCodeOrId) && r.code === 'SUPER_ADMIN'
+      )
+    );
+
+  if (!isTargetSuperAdmin) {
+    return true; // Non-super-admin roles can be assigned by authorized office admins
+  }
+
+  // Only a Super Admin can assign the Super Admin SaaS role
+  return isSuperAdmin(currentUser, currentRole);
 }
 
 /**
