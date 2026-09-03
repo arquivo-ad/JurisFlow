@@ -3307,16 +3307,24 @@ Contexto do Caso Atual do Usuário: ${caseContext || 'Nenhum processo específic
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`JurisFlow SaaS Backend running on http://0.0.0.0:${PORT}`);
 
-    // Asynchronously hydrate & sync in background without blocking startup TCP probe
+    // Hydrate in the background without blocking startup TCP probe.
+    // A full push is destructive and must be explicitly enabled.
     (async () => {
       try {
         const hyd = await hydrateFromSupabase(db);
         if (hyd.success) {
           console.log('[Supabase] Startup hydration finished:', hyd.counts);
         }
-        const pushResult = await syncAllLocalToSupabase(db);
-        if (pushResult.success) {
-          console.log('[Supabase] Startup syncAll finished:', pushResult.counts);
+
+        if (process.env.SUPABASE_SYNC_ON_STARTUP === 'true') {
+          const pushResult = await syncAllLocalToSupabase(db);
+          if (pushResult.success) {
+            console.log('[Supabase] Startup syncAll finished:', pushResult.counts);
+          } else {
+            console.warn('[Supabase] Startup syncAll completed with errors:', pushResult.counts);
+          }
+        } else {
+          console.log('[Supabase] Startup push disabled (set SUPABASE_SYNC_ON_STARTUP=true to enable).');
         }
       } catch (err) {
         console.warn('[Supabase] Startup background hydration/sync skipped:', err);
