@@ -11,9 +11,11 @@ import { CrmView } from './components/crm/CrmView';
 import { CasesView } from './components/cases/CasesView';
 import { CalendarView } from './components/calendar/CalendarView';
 import { DocumentsView } from './components/documents/DocumentsView';
+import { TasksView } from './components/tasks/TasksView';
 import { FinancialView } from './components/financial/FinancialView';
 import { AIGatewayView } from './components/ai/AIGatewayView';
 import { SettingsView } from './components/settings/SettingsView';
+import { AdminView } from './components/admin/AdminView';
 import { NewTenantModal } from './components/settings/NewTenantModal';
 import { LoginModal } from './components/common/LoginModal';
 import { AccessDeniedView } from './components/common/AccessDeniedView';
@@ -34,6 +36,7 @@ import {
   Deadline,
   Hearing,
   Diligence,
+  Task,
   Notification,
   DocumentItem,
   DocumentTemplate,
@@ -69,6 +72,7 @@ export default function App() {
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [hearings, setHearings] = useState<Hearing[]>([]);
   const [diligences, setDiligences] = useState<Diligence[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -80,6 +84,7 @@ export default function App() {
   const [roles, setRoles] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [lgpdConsents, setLgpdConsents] = useState<LGPDConsent[]>([]);
+  const [systemVersion, setSystemVersion] = useState<string>('1.2.0');
 
   // AI Gateway Tab Target State
   const [aiInitialTab, setAiInitialTab] = useState<string>('extract');
@@ -127,6 +132,7 @@ export default function App() {
       setDeadlines(data.deadlines || []);
       setHearings(data.hearings || []);
       setDiligences(data.diligences || []);
+      setTasks(data.tasks || []);
       setNotifications(data.notifications || []);
 
       setDocuments(data.documents || []);
@@ -138,6 +144,9 @@ export default function App() {
       setRoles(data.roles || []);
       setAuditLogs(data.auditLogs || []);
       setLgpdConsents(data.lgpdConsents || []);
+      if ((data as any).systemVersion) {
+        setSystemVersion((data as any).systemVersion);
+      }
     } catch (err) {
       console.error('Failed to load bootstrap data:', err);
     } finally {
@@ -271,6 +280,48 @@ export default function App() {
     const updated = await api.completeDeadline(id);
     setDeadlines((prev) => prev.map((d) => (d.id === id ? updated : d)));
     showToast('Prazo cumprido com sucesso!');
+  };
+
+  const handleCreateTaskFromDeadline = async (dl: Deadline) => {
+    try {
+      const created = await api.createTask({
+        title: `Cumprir: ${dl.title}`,
+        description: `Elaborar e protocolar peça relativa ao prazo fatal processual de ${dl.dueDate}. Processo: ${dl.caseTitle || ''}`,
+        category: 'PETICAO',
+        priority: 'URGENT',
+        dueDate: dl.dueDate,
+        caseId: dl.caseId,
+        deadlineId: dl.id,
+        deadlineTitle: dl.title,
+        deadlineFatalDate: dl.dueDate || dl.fatalDate,
+        assignedUserId: dl.responsibleUserId || currentUser?.id || users[0]?.id || '',
+        estimatedMinutes: 90,
+        checklist: [
+          { id: 'chk-dl-1', text: 'Examinar intimação/publicação nos autos', completed: false },
+          { id: 'chk-dl-2', text: 'Redigir petição com teses e jurisprudência', completed: false },
+          { id: 'chk-dl-3', text: 'Revisar e protocolar no portal do tribunal', completed: false },
+          { id: 'chk-dl-4', text: 'Juntar comprovante de protocolo no processo', completed: false },
+        ],
+        tags: ['Prazo CPC', 'Fatal', 'Petição'],
+      });
+      setTasks((prev) => [created, ...prev]);
+      showToast(`Tarefa "${created.title}" gerada no Kanban com sucesso!`);
+      setActiveModule('tasks');
+    } catch (err: any) {
+      showToast('Falha ao criar tarefa a partir do prazo.');
+    }
+  };
+
+  const handleSaveHearing = async (data: Partial<Hearing>) => {
+    const saved = await api.createHearing(data);
+    setHearings((prev) => [saved, ...prev]);
+    showToast(`Audiência "${saved.title}" agendada`);
+  };
+
+  const handleSaveDiligence = async (data: Partial<Diligence>) => {
+    const saved = await api.createDiligence(data);
+    setDiligences((prev) => [saved, ...prev]);
+    showToast(`Diligência "${saved.title}" cadastrada`);
   };
 
   const handleSaveDocument = async (data: Partial<DocumentItem>) => {
@@ -414,6 +465,7 @@ export default function App() {
           pendingDeadlinesCount={pendingDeadlinesCount}
           currentUser={currentUser}
           currentRole={activeUserRole}
+          systemVersion={systemVersion}
         />
 
         {/* Main Content Area */}
@@ -468,7 +520,27 @@ export default function App() {
                   users={users}
                   onSaveDeadline={handleSaveDeadline}
                   onCompleteDeadline={handleCompleteDeadline}
+                  onSaveHearing={handleSaveHearing}
+                  onSaveDiligence={handleSaveDiligence}
                   onOpenAiGateway={handleOpenAiGateway}
+                  onCreateTaskFromDeadline={handleCreateTaskFromDeadline}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {activeModule === 'tasks' && (
+                <TasksView
+                  tasks={tasks}
+                  users={users}
+                  cases={cases}
+                  clients={clients}
+                  deadlines={deadlines}
+                  currentUser={currentUser}
+                  currentRole={activeUserRole}
+                  onRefresh={loadBootstrapData}
+                  onShowToast={showToast}
+                  onOpenAiGateway={handleOpenAiGateway}
+                  onNavigateToCase={(_caseId) => setActiveModule('cases')}
                 />
               )}
 
@@ -480,6 +552,8 @@ export default function App() {
                   persons={persons}
                   onSaveDocument={handleSaveDocument}
                   onOpenAiGateway={handleOpenAiGateway}
+                  onRefresh={loadBootstrapData}
+                  onShowToast={showToast}
                 />
               )}
 
@@ -493,6 +567,8 @@ export default function App() {
                   onSaveContract={handleSaveContract}
                   onGenerateCharge={handleGenerateCharge}
                   onSimulatePayment={handleSimulatePayment}
+                  onRefresh={loadBootstrapData}
+                  onShowToast={showToast}
                 />
               )}
 
@@ -529,6 +605,16 @@ export default function App() {
                   onSaveLgpdConsent={handleSaveLgpdConsent}
                   onSwitchTenant={handleSwitchTenant}
                   onOpenNewTenantModal={() => setIsNewTenantModalOpen(true)}
+                />
+              )}
+
+              {activeModule === 'admin' && (
+                <AdminView
+                  currentUser={currentUser}
+                  currentRole={activeUserRole}
+                  tenants={tenants}
+                  onShowToast={showToast}
+                  onRefreshBootstrap={loadBootstrapData}
                 />
               )}
             </>

@@ -5,10 +5,12 @@ export type AppModule =
   | 'crm'
   | 'cases'
   | 'calendar'
+  | 'tasks'
   | 'documents'
   | 'financial'
   | 'ai-gateway'
-  | 'settings';
+  | 'settings'
+  | 'admin';
 
 export interface RBACContext {
   user: User | null;
@@ -139,6 +141,14 @@ export function canAccessModule(
         hasPermission(role, 'SETTINGS', 'APPROVE') ||
         hasPermission(role, 'SETTINGS', 'CREATE')
       );
+
+    case 'admin':
+      // Dedicated platform admin area for Super Admin and Managing Partner
+      return isSuperAdmin(user, role) || roleCode === 'SUPER_ADMIN' || roleCode === 'SOCIO_ADMIN';
+
+    case 'tasks':
+      // All operational users have access to tasks
+      return true;
 
     default:
       return false;

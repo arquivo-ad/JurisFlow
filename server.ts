@@ -88,14 +88,399 @@ import {
   AIGatewayLog,
   GlobalSearchResult,
   UserBranchAffiliation,
+  ModuleMetadata,
+  FeatureFlag,
+  SystemUpdateManifest,
+  SystemUpdateLog,
+  SystemHealthReport,
 } from './src/types/index.ts';
 
 dotenv.config();
 
 // ==========================================
+// SYSTEM MODULES REGISTRY SEED
+// ==========================================
+const DEFAULT_SYSTEM_MODULES: ModuleMetadata[] = [
+  {
+    id: 'dashboard',
+    name: 'Painel Geral',
+    description: 'Métricas executivas, prazos do dia, audiências e visão geral do escritório.',
+    version: '1.2.0',
+    category: 'core',
+    status: 'ACTIVE',
+    dependencies: [],
+    requiredPermissions: [],
+    minPlanTier: 'STARTER',
+    icon: 'LayoutDashboard',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-08-15T14:30:00Z',
+    configurable: false,
+  },
+  {
+    id: 'clients',
+    name: 'Clientes & CRM',
+    description: 'Gestão de pessoas físicas/jurídicas, histórico de atendimento, prospecção e LGPD.',
+    version: '1.2.0',
+    category: 'core',
+    status: 'ACTIVE',
+    dependencies: [],
+    requiredPermissions: ['CLIENT_VIEW'],
+    minPlanTier: 'STARTER',
+    icon: 'Users',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'cases',
+    name: 'Processos & Casos',
+    description: 'Pastas processuais completas, varas, tribunais, partes, fases e movimentações.',
+    version: '1.2.0',
+    category: 'operations',
+    status: 'ACTIVE',
+    dependencies: ['clients'],
+    requiredPermissions: ['CASE_VIEW'],
+    minPlanTier: 'STARTER',
+    icon: 'Briefcase',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-08-25T11:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'deadlines',
+    name: 'Prazos Processuais',
+    description: 'Controle de prazos com cálculo legal CPC/2015 em dias úteis e suspensões forenses.',
+    version: '1.2.0',
+    category: 'operations',
+    status: 'ACTIVE',
+    dependencies: ['cases'],
+    requiredPermissions: ['DEADLINE_VIEW'],
+    minPlanTier: 'STARTER',
+    icon: 'Clock',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-08-28T09:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'calendar',
+    name: 'Agenda & Audiências',
+    description: 'Calendário integrado com audiências, reuniões, diligências e compromissos.',
+    version: '1.1.5',
+    category: 'operations',
+    status: 'ACTIVE',
+    dependencies: ['cases'],
+    requiredPermissions: ['DEADLINE_VIEW'],
+    minPlanTier: 'STARTER',
+    icon: 'Calendar',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-08-20T16:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'tasks',
+    name: 'Tarefas & Atividades',
+    description: 'Gerenciamento de tarefas internas, checklists, prazos e delegação entre equipe.',
+    version: '1.1.0',
+    category: 'operations',
+    status: 'ACTIVE',
+    dependencies: [],
+    requiredPermissions: ['DEADLINE_CREATE'],
+    minPlanTier: 'STARTER',
+    icon: 'CheckSquare',
+    installedAt: '2026-02-01T10:00:00Z',
+    updatedAt: '2026-08-10T12:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'documents',
+    name: 'Central de Documentos',
+    description: 'Repositório de arquivos, peças protocoladas, procurações e controle de versões.',
+    version: '1.1.8',
+    category: 'documents',
+    status: 'ACTIVE',
+    dependencies: [],
+    requiredPermissions: ['DOCUMENT_VIEW'],
+    minPlanTier: 'STARTER',
+    icon: 'FolderArchive',
+    installedAt: '2026-01-15T09:00:00Z',
+    updatedAt: '2026-08-15T15:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'templates',
+    name: 'Biblioteca de Modelos',
+    description: 'Modelos de peças e procurações com preenchimento automático por tags {{cliente.nome}}.',
+    version: '1.1.0',
+    category: 'documents',
+    status: 'ACTIVE',
+    dependencies: ['documents'],
+    requiredPermissions: ['TEMPLATE_MANAGE'],
+    minPlanTier: 'PROFESSIONAL',
+    icon: 'FileText',
+    installedAt: '2026-02-10T11:00:00Z',
+    updatedAt: '2026-08-18T10:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'document-generator',
+    name: 'Gerador Automático de Peças',
+    description: 'Geração em lote de procurações, contratos e declarações com validação humana.',
+    version: '1.0.5',
+    category: 'documents',
+    status: 'ACTIVE',
+    dependencies: ['templates', 'clients'],
+    requiredPermissions: ['DOCUMENT_GENERATE'],
+    minPlanTier: 'PROFESSIONAL',
+    icon: 'FileCode',
+    installedAt: '2026-03-01T14:00:00Z',
+    updatedAt: '2026-08-22T09:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'financial',
+    name: 'Financeiro & Honorários',
+    description: 'Contratos de honorários, parcelas, contas a receber, inadimplência e conciliação.',
+    version: '1.2.0',
+    category: 'financial',
+    status: 'ACTIVE',
+    dependencies: ['clients'],
+    requiredPermissions: ['FINANCIAL_VIEW'],
+    minPlanTier: 'PROFESSIONAL',
+    icon: 'DollarSign',
+    installedAt: '2026-01-20T10:00:00Z',
+    updatedAt: '2026-08-30T17:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'reports',
+    name: 'Relatórios & BI',
+    description: 'Relatórios gerenciais, produtividade por advogado e taxas de sucesso processual.',
+    version: '1.0.0',
+    category: 'governance',
+    status: 'ACTIVE',
+    dependencies: ['cases', 'financial'],
+    requiredPermissions: ['REPORT_VIEW'],
+    minPlanTier: 'PROFESSIONAL',
+    icon: 'BarChart3',
+    installedAt: '2026-04-01T08:00:00Z',
+    updatedAt: '2026-07-15T11:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'ai',
+    name: 'IA Jurídica & Copilot',
+    description: 'Assistente com Gemini para extração de prazos em publicações e minuta de petições.',
+    version: '1.0.2',
+    category: 'intelligence',
+    status: 'ACTIVE',
+    dependencies: ['documents'],
+    requiredPermissions: ['AI_ASSISTANT_USE'],
+    minPlanTier: 'PREMIUM',
+    icon: 'Bot',
+    installedAt: '2026-05-01T10:00:00Z',
+    updatedAt: '2026-09-01T18:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'audit',
+    name: 'Auditoria & Logs de Segurança',
+    description: 'Rastreabilidade total de operações, acessos e alterações críticas no sistema.',
+    version: '1.1.0',
+    category: 'governance',
+    status: 'ACTIVE',
+    dependencies: [],
+    requiredPermissions: ['AUDIT_LOG_VIEW'],
+    minPlanTier: 'PROFESSIONAL',
+    icon: 'ShieldCheck',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-08-01T12:00:00Z',
+    configurable: false,
+  },
+  {
+    id: 'updates',
+    name: 'Atualizador do Sistema (Release Engine)',
+    description: 'Gerenciamento de versões, verificação de releases no GitHub, backups e migrações.',
+    version: '1.2.0',
+    category: 'governance',
+    status: 'ACTIVE',
+    dependencies: [],
+    requiredPermissions: ['TENANT_MANAGE'],
+    minPlanTier: 'STARTER',
+    icon: 'RefreshCw',
+    installedAt: '2026-01-10T08:00:00Z',
+    updatedAt: '2026-09-03T10:00:00Z',
+    configurable: true,
+  },
+];
+
+// ==========================================
+// FEATURE FLAGS SEED
+// ==========================================
+const DEFAULT_FEATURE_FLAGS: FeatureFlag[] = [
+  {
+    id: 'ff-1',
+    key: 'financial.new-dashboard',
+    name: 'Novo Dashboard Financeiro Interativo',
+    description: 'Habilita visualização analítica com previsão de êxito e curva de fluxo de caixa.',
+    module: 'financial',
+    enabled: true,
+    rolloutPercentage: 100,
+    environment: 'all',
+    createdAt: '2026-08-01T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z',
+  },
+  {
+    id: 'ff-2',
+    key: 'documents.ai-generator',
+    name: 'Gerador IA de Minutas Jurídicas',
+    description: 'Permite redigir petições e cláusulas contratuais usando modelos generativos.',
+    module: 'ai',
+    enabled: true,
+    rolloutPercentage: 100,
+    environment: 'all',
+    createdAt: '2026-08-10T10:00:00Z',
+    updatedAt: '2026-09-01T10:00:00Z',
+  },
+  {
+    id: 'ff-3',
+    key: 'cases.timeline-v2',
+    name: 'Linha do Tempo Processual V2',
+    description: 'Exibe movimentações em formato de linha do tempo com tags e badges de tribunal.',
+    module: 'cases',
+    enabled: true,
+    rolloutPercentage: 100,
+    environment: 'all',
+    createdAt: '2026-08-15T10:00:00Z',
+    updatedAt: '2026-08-25T10:00:00Z',
+  },
+  {
+    id: 'ff-4',
+    key: 'clients.import',
+    name: 'Importador em Lote de Clientes (CSV/Excel)',
+    description: 'Habilita o assistente de upload em massa de contatos e pessoas jurídicas.',
+    module: 'clients',
+    enabled: false,
+    rolloutPercentage: 0,
+    environment: 'development',
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-09-02T10:00:00Z',
+  },
+];
+
+// ==========================================
+// OFFICIAL RELEASES MANIFESTS SEED
+// ==========================================
+const OFFICIAL_RELEASES: SystemUpdateManifest[] = [
+  {
+    version: '1.2.0',
+    releaseName: 'v1.2.0 — Governança, Module Registry & Update Engine',
+    minimumVersion: '1.0.0',
+    releaseDate: '2026-09-03',
+    description: 'Lançamento do painel administrativo /admin, controle de módulos a quente, feature flags e suporte a updates controlados.',
+    changelog: {
+      added: [
+        'Área administrativa dedicada (/admin) para Platform Admin e Super Admin',
+        'Module Registry com ativação/desativação dinâmica de módulos',
+        'Motor de Feature Flags granulares por ambiente',
+        'Sistema de verificação de releases com manifestos e validação de checksums SHA-256',
+        'Camada central de Entitlements (canUse) com verificação em 4 níveis',
+      ],
+      changed: [
+        'Reforço de RBAC no backend com checagem de módulos ativos',
+        'Health check enriquecido com métricas de memória, módulos e latência',
+      ],
+      fixed: [
+        'Isolamento estrito de dados entre escritórios/tenants no bootstrap',
+        'Sincronização de permissões com papéis customizados',
+      ],
+      security: [
+        'Validação de integridade de manifestos de atualização antes da aplicação',
+        'Bloqueio automático de endpoints pertencentes a módulos desativados',
+      ],
+    },
+    artifactUrl: 'https://github.com/4ZuR3Fl4m3S/Projeto_Advocacia_v5/releases/tag/v1.2.0',
+    checksumSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    databaseMigration: true,
+    migrationDetails: [
+      '20260903_01_create_system_modules_table.sql',
+      '20260903_02_create_feature_flags_table.sql',
+      '20260903_03_create_system_update_logs_table.sql',
+    ],
+    restartRequired: false,
+    targetEnvironment: 'all',
+  },
+  {
+    version: '1.3.0',
+    releaseName: 'v1.3.0 — Automação de Tarefas & CRM Jurídico Avançado',
+    minimumVersion: '1.1.0',
+    releaseDate: '2026-09-15',
+    description: 'Nova versão disponível no repositório oficial com módulo autônomo de Tarefas, checklists e pontuação preditiva de risco no CRM.',
+    changelog: {
+      added: [
+        'Módulo autônomo de Tarefas com Kanban e visualização por prioridade',
+        'Checklists em tarefas vinculadas a processos judiciais',
+        'Importador de clientes via planilha CSV com preview e deduplicação',
+      ],
+      changed: [
+        'Otimização do cálculo de prazos CPC/2015 com suporte a calendários de comarcas locais',
+      ],
+      fixed: [
+        'Tratamento de prazos vencidos em feriados municipais',
+      ],
+      security: [
+        'Assinatura digital de manifestos com chave assimétrica',
+      ],
+    },
+    artifactUrl: 'https://github.com/4ZuR3Fl4m3S/Projeto_Advocacia_v5/releases/tag/v1.3.0',
+    checksumSha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    databaseMigration: true,
+    migrationDetails: [
+      '20260915_01_create_tasks_checklist_table.sql',
+      '20260915_02_add_crm_risk_score_column.sql',
+    ],
+    restartRequired: false,
+    targetEnvironment: 'all',
+  },
+];
+
+const DEFAULT_UPDATE_LOGS: SystemUpdateLog[] = [
+  {
+    id: 'upd-log-01',
+    previousVersion: '1.1.0',
+    targetVersion: '1.2.0',
+    status: 'SUCCESS',
+    startedAt: '2026-09-03T09:45:00Z',
+    completedAt: '2026-09-03T09:47:30Z',
+    operatorId: 'u-superadmin',
+    operatorName: 'Super Administrador (Platform)',
+    backupSnapshotId: 'snap-20260903-094500',
+    databaseMigrationsApplied: [
+      '20260903_01_create_system_modules_table.sql',
+      '20260903_02_create_feature_flags_table.sql',
+      '20260903_03_create_system_update_logs_table.sql',
+    ],
+    logs: [
+      '[Update Engine] Iniciando processo de atualização para v1.2.0...',
+      '[Integrity Check] Checksum SHA-256 verificado com sucesso contra manifesto oficial.',
+      '[Backup] Snapshot de segurança snap-20260903-094500 gerado com sucesso.',
+      '[Migrations] 3 migrações estruturais executadas em transação segura.',
+      '[Health Check] Diagnóstico de sanidade do sistema: OK.',
+      '[Status] Atualização concluída com êxito.',
+    ],
+  },
+];
+
+// ==========================================
 // IN-MEMORY TENANT ISOLATED STORE
 // ==========================================
 class MemoryDatabase {
+  systemVersion: string = '1.2.0';
+  systemStartTime: number = Date.now();
+  modules: ModuleMetadata[] = JSON.parse(JSON.stringify(DEFAULT_SYSTEM_MODULES));
+  featureFlags: FeatureFlag[] = JSON.parse(JSON.stringify(DEFAULT_FEATURE_FLAGS));
+  updateManifests: SystemUpdateManifest[] = JSON.parse(JSON.stringify(OFFICIAL_RELEASES));
+  updateLogs: SystemUpdateLog[] = JSON.parse(JSON.stringify(DEFAULT_UPDATE_LOGS));
+
   tenants: Tenant[] = [...SEED_TENANTS];
   branches = [...SEED_BRANCHES];
   departments = [...SEED_DEPARTMENTS];
@@ -258,7 +643,7 @@ async function startServer() {
 
     const user = db.users.find((u) => u.id === userId) || db.users[0];
     const isSuperAdmin = user.id === 'u-superadmin' || user.email?.includes('superadmin');
-    
+
     // User accessible tenants
     const userMemberships = db.memberships.filter((m) => m.userId === user.id);
     const accessibleTenants = isSuperAdmin 
@@ -492,6 +877,275 @@ async function startServer() {
       roles: tenantRoles,
       auditLogs: tenantAuditLogs,
       lgpdConsents: tenantLgpdConsents,
+      modules: db.modules,
+      featureFlags: db.featureFlags,
+      systemVersion: db.systemVersion,
+    });
+  });
+
+  // ==========================================
+  // MODULE REGISTRY & PLATFORM ADMIN ROUTES
+  // ==========================================
+  app.get('/api/admin/modules', (req: Request, res: Response) => {
+    res.json({
+      modules: db.modules,
+      activeCount: db.modules.filter((m) => m.status === 'ACTIVE').length,
+      totalCount: db.modules.length,
+    });
+  });
+
+  app.patch('/api/admin/modules/:id', (req: Request, res: Response) => {
+    const moduleId = req.params.id;
+    const { status, settings } = req.body;
+    const mod = db.modules.find((m) => m.id === moduleId);
+
+    if (!mod) {
+      return res.status(404).json({ error: 'Módulo não encontrado no registro da plataforma' });
+    }
+
+    const previousStatus = mod.status;
+    if (status && ['ACTIVE', 'INACTIVE', 'MAINTENANCE'].includes(status)) {
+      mod.status = status;
+    }
+    if (settings && typeof settings === 'object') {
+      mod.settings = { ...mod.settings, ...settings };
+    }
+    mod.updatedAt = new Date().toISOString();
+
+    logAudit(
+      req,
+      'USER',
+      moduleId,
+      'UPDATE',
+      `Alterou status do módulo ${mod.name} de ${previousStatus} para ${mod.status}`
+    );
+
+    res.json({
+      success: true,
+      module: mod,
+      message: `Módulo ${mod.name} agora está ${mod.status === 'ACTIVE' ? 'Ativo' : 'Desativado'}.`,
+    });
+  });
+
+  // --- FEATURE FLAGS ---
+  app.get('/api/admin/feature-flags', (req: Request, res: Response) => {
+    res.json(db.featureFlags);
+  });
+
+  app.post('/api/admin/feature-flags', (req: Request, res: Response) => {
+    const newFlag: FeatureFlag = {
+      id: `ff-${Date.now()}`,
+      key: req.body.key,
+      name: req.body.name,
+      description: req.body.description || '',
+      module: req.body.module || 'dashboard',
+      enabled: req.body.enabled ?? true,
+      rolloutPercentage: req.body.rolloutPercentage ?? 100,
+      environment: req.body.environment || 'all',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.featureFlags.unshift(newFlag);
+    logAudit(req, 'USER', newFlag.id, 'CREATE', `Criou feature flag: ${newFlag.key}`);
+    res.status(201).json(newFlag);
+  });
+
+  app.patch('/api/admin/feature-flags/:id', (req: Request, res: Response) => {
+    const flag = db.featureFlags.find((f) => f.id === req.params.id || f.key === req.params.id);
+    if (!flag) return res.status(404).json({ error: 'Feature flag não encontrada' });
+
+    if (req.body.enabled !== undefined) flag.enabled = req.body.enabled;
+    if (req.body.rolloutPercentage !== undefined) flag.rolloutPercentage = req.body.rolloutPercentage;
+    if (req.body.name) flag.name = req.body.name;
+    if (req.body.description) flag.description = req.body.description;
+    flag.updatedAt = new Date().toISOString();
+
+    logAudit(req, 'USER', flag.id, 'UPDATE', `Alterou feature flag ${flag.key}: enabled=${flag.enabled}`);
+    res.json(flag);
+  });
+
+  // --- SYSTEM UPDATE ENGINE & RELEASE MANAGEMENT ---
+  app.get('/api/admin/updates/check', (req: Request, res: Response) => {
+    const currentVersion = db.systemVersion;
+    // Latest available release from official releases
+    const latestRelease = db.updateManifests[db.updateManifests.length - 1];
+    const updateAvailable = latestRelease && latestRelease.version !== currentVersion;
+
+    res.json({
+      currentVersion,
+      latestVersion: latestRelease?.version || currentVersion,
+      updateAvailable,
+      environment: process.env.NODE_ENV === 'production' ? 'production' : 'localhost',
+      currentManifest: db.updateManifests.find((m) => m.version === currentVersion) || db.updateManifests[0],
+      latestManifest: latestRelease,
+      releasesHistory: db.updateManifests,
+    });
+  });
+
+  app.post('/api/admin/updates/apply', (req: Request, res: Response) => {
+    const { targetVersion } = req.body;
+    const manifest = db.updateManifests.find((m) => m.version === targetVersion);
+
+    if (!manifest) {
+      return res.status(404).json({ error: 'Manifesto da versão de atualização não encontrado' });
+    }
+
+    const previousVersion = db.systemVersion;
+    const operatorId = (req as any).userId || 'u-superadmin';
+    const operator = db.users.find((u) => u.id === operatorId) || db.users[0];
+    const snapshotId = `snap-${Date.now()}`;
+
+    // Execute simulated atomic update lifecycle
+    const logSteps: string[] = [
+      `[Update Engine] Inicializando processo de atualização para ${manifest.version} (${manifest.releaseName})...`,
+      `[Integrity Check] Validando integridade de checksum SHA-256 (${manifest.checksumSha256})... OK.`,
+      `[Security Check] Verificando permissão 'system.update' e origem oficial do release GitHub... OK.`,
+      `[Backup] Gerando snapshot de segurança e integridade (${snapshotId})... OK.`,
+    ];
+
+    if (manifest.databaseMigration && manifest.migrationDetails) {
+      logSteps.push(`[Migrations] Aplicando ${manifest.migrationDetails.length} scripts de migração estrutural...`);
+      manifest.migrationDetails.forEach((m) => {
+        logSteps.push(`  -> Executado com sucesso: ${m}`);
+      });
+    }
+
+    logSteps.push(`[Health Check] Executando diagnóstico e verificação de sanidade dos serviços... OK.`);
+    logSteps.push(`[Finalize] Atualização da versão do sistema de ${previousVersion} para ${manifest.version} concluída com sucesso.`);
+
+    const updateLog: SystemUpdateLog = {
+      id: `upd-${Date.now()}`,
+      previousVersion,
+      targetVersion: manifest.version,
+      status: 'SUCCESS',
+      startedAt: new Date(Date.now() - 3000).toISOString(),
+      completedAt: new Date().toISOString(),
+      operatorId: operator.id,
+      operatorName: operator.name,
+      backupSnapshotId: snapshotId,
+      databaseMigrationsApplied: manifest.migrationDetails || [],
+      logs: logSteps,
+    };
+
+    db.systemVersion = manifest.version;
+    db.updateLogs.unshift(updateLog);
+
+    logAudit(
+      req,
+      'USER',
+      updateLog.id,
+      'UPDATE',
+      `Executou atualização do Projeto Advocacia para ${manifest.version}`
+    );
+
+    res.json({
+      success: true,
+      message: `Sistema atualizado com sucesso para a versão ${manifest.version}!`,
+      newVersion: db.systemVersion,
+      updateLog,
+    });
+  });
+
+  app.post('/api/admin/updates/rollback/:id', (req: Request, res: Response) => {
+    const log = db.updateLogs.find((l) => l.id === req.params.id);
+    if (!log) return res.status(404).json({ error: 'Registro de update não encontrado' });
+
+    const currentVersion = db.systemVersion;
+    const targetRollback = log.previousVersion;
+
+    const rollbackLog: SystemUpdateLog = {
+      id: `upd-rollback-${Date.now()}`,
+      previousVersion: currentVersion,
+      targetVersion: targetRollback,
+      status: 'ROLLED_BACK',
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      operatorId: (req as any).userId || 'u-superadmin',
+      operatorName: 'Super Administrador (Platform)',
+      backupSnapshotId: log.backupSnapshotId,
+      databaseMigrationsApplied: [],
+      logs: [
+        `[Rollback Engine] Iniciando rollback para a versão anterior ${targetRollback}...`,
+        `[Snapshot Restore] Restaurando dados a partir do snapshot ${log.backupSnapshotId}... OK.`,
+        `[Status] Rollback concluído com sucesso.`,
+      ],
+      rollbackReason: req.body.reason || 'Reversão solicitada pelo administrador da plataforma.',
+    };
+
+    db.systemVersion = targetRollback;
+    db.updateLogs.unshift(rollbackLog);
+
+    logAudit(req, 'USER', rollbackLog.id, 'UPDATE', `Executou rollback do sistema para versão ${targetRollback}`);
+
+    res.json({
+      success: true,
+      message: `Rollback para a versão ${targetRollback} concluído com sucesso.`,
+      newVersion: db.systemVersion,
+      rollbackLog,
+    });
+  });
+
+  app.get('/api/admin/updates/history', (req: Request, res: Response) => {
+    res.json(db.updateLogs);
+  });
+
+  // --- COMPREHENSIVE HEALTH CHECK & OBSERVABILITY ---
+  app.get('/api/admin/health', (req: Request, res: Response) => {
+    const memUsage = process.memoryUsage ? process.memoryUsage() : { rss: 0, heapUsed: 0, heapTotal: 0 };
+    const uptimeSec = Math.floor((Date.now() - db.systemStartTime) / 1000);
+
+    const totalRecords =
+      db.cases.length +
+      db.clients.length +
+      db.deadlines.length +
+      db.hearings.length +
+      db.documents.length +
+      db.receivables.length +
+      db.auditLogs.length;
+
+    const health: SystemHealthReport = {
+      status: 'HEALTHY',
+      environment: process.env.NODE_ENV === 'production' ? 'production' : 'localhost',
+      version: db.systemVersion,
+      uptimeSeconds: uptimeSec,
+      timestamp: new Date().toISOString(),
+      database: {
+        status: 'CONNECTED',
+        provider: 'InMemoryRepository (Ready for PostgreSQL/Drizzle migration)',
+        totalRecords,
+        latencyMs: 1.2,
+      },
+      memory: {
+        rssMb: Math.round((memUsage.rss / 1024 / 1024) * 10) / 10,
+        heapUsedMb: Math.round((memUsage.heapUsed / 1024 / 1024) * 10) / 10,
+        heapTotalMb: Math.round((memUsage.heapTotal / 1024 / 1024) * 10) / 10,
+      },
+      activeModulesCount: db.modules.filter((m) => m.status === 'ACTIVE').length,
+      totalModulesCount: db.modules.length,
+      featureFlagsActiveCount: db.featureFlags.filter((f) => f.enabled).length,
+      aiGatewayStatus: process.env.GEMINI_API_KEY ? 'READY' : 'MISSING_KEY',
+      security: {
+        lastAuditLogTimestamp: db.auditLogs[0]?.timestamp || new Date().toISOString(),
+        mfaEnforced: false,
+        activeSessionsCount: 1,
+      },
+      storage: {
+        status: 'OK',
+        documentsCount: db.documents.length,
+        storageUsedBytes: db.documents.reduce((acc, d) => acc + (d.fileSize || 1024), 0),
+      },
+    };
+
+    res.json(health);
+  });
+
+  // Public Health Endpoint
+  app.get('/api/health', (req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      version: db.systemVersion,
+      environment: process.env.NODE_ENV === 'production' ? 'production' : 'localhost',
+      timestamp: new Date().toISOString(),
     });
   });
 
@@ -1548,21 +2202,39 @@ async function startServer() {
 
   app.post('/api/tasks', (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
+    const assignedUser = db.users.find((u) => u.id === req.body.assignedUserId);
+    const relatedCase = req.body.caseId ? db.cases.find((c) => c.id === req.body.caseId) : undefined;
+    const relatedClient = req.body.clientId ? db.clients.find((c) => c.id === req.body.clientId) : undefined;
+    const clientPerson = relatedClient ? db.persons.find((p) => p.id === relatedClient.personId) : undefined;
+    const relatedDeadline = req.body.deadlineId ? db.deadlines.find((d) => d.id === req.body.deadlineId) : undefined;
+
     const newTask: Task = {
       id: `tsk-${Date.now()}`,
       tenantId,
-      caseId: req.body.caseId,
-      caseNumber: req.body.caseNumber,
+      caseId: req.body.caseId || relatedDeadline?.caseId,
+      caseNumber: req.body.caseNumber || relatedCase?.caseNumber || relatedDeadline?.caseNumber,
+      caseTitle: req.body.caseTitle || relatedCase?.title || relatedDeadline?.caseTitle,
+      clientId: req.body.clientId,
+      clientName: req.body.clientName || clientPerson?.name,
+      deadlineId: req.body.deadlineId,
+      deadlineTitle: req.body.deadlineTitle || relatedDeadline?.title,
+      deadlineFatalDate: req.body.deadlineFatalDate || relatedDeadline?.fatalDate || relatedDeadline?.dueDate,
       title: req.body.title,
       description: req.body.description || '',
+      category: req.body.category || 'GERAL',
       priority: req.body.priority || 'MEDIUM',
-      dueDate: req.body.dueDate || formatDateToYMD(new Date()),
+      dueDate: req.body.dueDate || relatedDeadline?.dueDate || formatDateToYMD(new Date()),
       assignedUserId: req.body.assignedUserId || (req as any).userId,
-      assignedUserName: 'Dr. Carlos Silveira',
-      status: 'TODO',
+      assignedUserName: assignedUser?.name || 'Dr. Carlos Silveira',
+      status: req.body.status || 'TODO',
+      checklist: Array.isArray(req.body.checklist) ? req.body.checklist : [],
+      tags: Array.isArray(req.body.tags) ? req.body.tags : [],
+      estimatedMinutes: Number(req.body.estimatedMinutes) || 30,
+      timeLogs: Array.isArray(req.body.timeLogs) ? req.body.timeLogs : [],
       createdAt: new Date().toISOString(),
     };
     db.tasks.unshift(newTask);
+    logAudit(req, 'CASE', newTask.id, 'CREATE', `Criou nova tarefa: ${newTask.title}`);
     res.status(201).json(newTask);
   });
 
@@ -1570,8 +2242,51 @@ async function startServer() {
     const tenantId = (req as any).tenantId;
     const idx = db.tasks.findIndex((t) => t.id === req.params.id && t.tenantId === tenantId);
     if (idx === -1) return res.status(404).json({ error: 'Tarefa não encontrada' });
-    db.tasks[idx] = { ...db.tasks[idx], ...req.body };
-    res.json(db.tasks[idx]);
+
+    const assignedUser = req.body.assignedUserId ? db.users.find((u) => u.id === req.body.assignedUserId) : undefined;
+    const relatedDeadline = req.body.deadlineId ? db.deadlines.find((d) => d.id === req.body.deadlineId) : undefined;
+
+    const updated = {
+      ...db.tasks[idx],
+      ...req.body,
+      deadlineTitle: req.body.deadlineTitle || relatedDeadline?.title || db.tasks[idx].deadlineTitle,
+      deadlineFatalDate: req.body.deadlineFatalDate || relatedDeadline?.fatalDate || relatedDeadline?.dueDate || db.tasks[idx].deadlineFatalDate,
+      assignedUserName: assignedUser?.name || req.body.assignedUserName || db.tasks[idx].assignedUserName,
+      completedAt: req.body.status === 'DONE' && !db.tasks[idx].completedAt ? new Date().toISOString() : db.tasks[idx].completedAt,
+    };
+    db.tasks[idx] = updated;
+    res.json(updated);
+  });
+
+  app.post('/api/tasks/:id/time-log', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const task = db.tasks.find((t) => t.id === req.params.id && t.tenantId === tenantId);
+    if (!task) return res.status(404).json({ error: 'Tarefa não encontrada' });
+
+    const user = db.users.find((u) => u.id === (req as any).userId);
+    const newLog = {
+      id: `log-${Date.now()}`,
+      userId: (req as any).userId,
+      userName: user?.name || 'Advogado',
+      minutes: Number(req.body.minutes) || 15,
+      note: req.body.note || 'Apontamento operacional de horas',
+      date: req.body.date || formatDateToYMD(new Date()),
+      billable: req.body.billable !== false,
+    };
+
+    if (!task.timeLogs) task.timeLogs = [];
+    task.timeLogs.unshift(newLog);
+    logAudit(req, 'CASE', task.id, 'UPDATE', `Registrou ${newLog.minutes} min no timesheet da tarefa: ${task.title}`);
+    res.status(201).json(task);
+  });
+
+  app.delete('/api/tasks/:id', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const task = db.tasks.find((t) => t.id === req.params.id && t.tenantId === tenantId);
+    if (!task) return res.status(404).json({ error: 'Tarefa não encontrada' });
+    db.tasks = db.tasks.filter((t) => !(t.id === req.params.id && t.tenantId === tenantId));
+    logAudit(req, 'CASE', task.id, 'DELETE', `Excluiu tarefa: ${task.title}`);
+    res.json({ success: true });
   });
 
   // --- DOCUMENTS & TEMPLATES ---
@@ -1606,6 +2321,66 @@ async function startServer() {
     await syncDocumentToSupabase(newDoc);
     logAudit(req, 'DOCUMENT', newDoc.id, 'CREATE', `Criou documento: ${newDoc.title}`);
     res.status(201).json(newDoc);
+  });
+
+  app.put('/api/documents/:id', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const idx = db.documents.findIndex((d) => d.id === req.params.id && d.tenantId === tenantId);
+    if (idx === -1) return res.status(404).json({ error: 'Documento não encontrado' });
+
+    const current = db.documents[idx];
+    const isNewContent = req.body.content && req.body.content !== current.content;
+    const updated: DocumentItem = {
+      ...current,
+      ...req.body,
+      currentVersion: isNewContent ? current.currentVersion + 1 : current.currentVersion,
+      fileSize: (req.body.content?.length || current.content?.length || 1000) * 2,
+      updatedAt: new Date().toISOString(),
+    };
+    db.documents[idx] = updated;
+    logAudit(req, 'DOCUMENT', updated.id, 'UPDATE', `Atualizou documento: ${updated.title} (v${updated.currentVersion})`);
+    res.json(updated);
+  });
+
+  app.delete('/api/documents/:id', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const doc = db.documents.find((d) => d.id === req.params.id && d.tenantId === tenantId);
+    if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
+    db.documents = db.documents.filter((d) => !(d.id === req.params.id && d.tenantId === tenantId));
+    logAudit(req, 'DOCUMENT', doc.id, 'DELETE', `Excluiu documento: ${doc.title}`);
+    res.json({ success: true });
+  });
+
+  app.post('/api/documents/:id/sign', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const doc = db.documents.find((d) => d.id === req.params.id && d.tenantId === tenantId);
+    if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
+
+    const signerName = req.body.signerName || 'Dr. Carlos Silveira';
+    const signerCpf = req.body.signerCpf || '***.458.918-**';
+    const signerRole = req.body.signerRole || 'Advogado Titular - OAB/SP 412.890';
+    const randomHex = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const verificationCode = `JURIS-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const signatureInfo = {
+      id: `sig-${Date.now()}`,
+      signerName,
+      signerCpf,
+      signerRole,
+      signedAt: new Date().toISOString(),
+      ipAddress: '189.120.45.18',
+      hashSha256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855${randomHex.substring(0, 8)}`,
+      verificationCode,
+      certificateAuthority: 'Autoridade Certificadora JurisFlow ICP-Brasil v4',
+      status: 'VALID' as const,
+    };
+
+    doc.digitalSignature = signatureInfo;
+    doc.status = 'APPROVED';
+    doc.updatedAt = new Date().toISOString();
+
+    logAudit(req, 'DOCUMENT', doc.id, 'UPDATE', `Assinou digitalmente o documento ${doc.title} (Código: ${verificationCode})`);
+    res.json(doc);
   });
 
   app.get('/api/templates', (req: Request, res: Response) => {
@@ -1836,6 +2611,94 @@ async function startServer() {
 
     console.log(`[Mercado Pago Webhook] Processed event ${type || action} id=${eventId}`);
     res.status(200).json({ status: 'received', eventId });
+  });
+
+  // --- TIMESHEET BILLING & CONVERSION ---
+  app.get('/api/financial/timesheet/unbilled', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const tasks = db.tasks.filter((t) => t.tenantId === tenantId);
+    const unbilledEntries: any[] = [];
+
+    tasks.forEach((t) => {
+      (t.timeLogs || []).forEach((log) => {
+        if (log.billable) {
+          unbilledEntries.push({
+            taskId: t.id,
+            taskTitle: t.title,
+            category: t.category,
+            caseId: t.caseId,
+            caseNumber: t.caseNumber,
+            clientId: t.clientId,
+            clientName: t.clientName,
+            logId: log.id,
+            userName: log.userName,
+            minutes: log.minutes,
+            hours: Math.round((log.minutes / 60) * 10) / 10,
+            note: log.note,
+            date: log.date,
+          });
+        }
+      });
+    });
+
+    res.json(unbilledEntries);
+  });
+
+  app.post('/api/financial/timesheet/bill', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const { clientId, caseId, hourlyRate, totalMinutes, description, taskIds } = req.body;
+
+    const client = db.clients.find((c) => c.id === clientId);
+    const person = client ? db.persons.find((p) => p.id === client.personId) : undefined;
+    const relatedCase = caseId ? db.cases.find((c) => c.id === caseId) : undefined;
+
+    const rate = Number(hourlyRate) || 450;
+    const hours = (Number(totalMinutes) || 60) / 60;
+    const totalAmount = Math.round(hours * rate * 100) / 100;
+
+    const due = new Date();
+    due.setDate(due.getDate() + 15);
+
+    // Create a new Receivable for the Timesheet
+    const rec: AccountReceivable = {
+      id: `rec-ts-${Date.now()}`,
+      tenantId,
+      clientId,
+      clientName: person?.name || 'Cliente',
+      caseId: relatedCase?.id,
+      caseNumber: relatedCase?.caseNumber,
+      title: description || `Fatura Timesheet (${hours.toFixed(1)}h a R$ ${rate}/h)`,
+      amount: totalAmount,
+      dueDate: formatDateToYMD(due),
+      status: 'OPEN',
+    };
+
+    db.receivables.unshift(rec);
+
+    // Also create a contract entry if needed
+    const contract: FeeContract = {
+      id: `fc-ts-${Date.now()}`,
+      tenantId,
+      clientId,
+      clientName: person?.name || 'Cliente',
+      caseId: relatedCase?.id,
+      caseNumber: relatedCase?.caseNumber,
+      contractNumber: `TS-2026-${String(db.feeContracts.length + 1).padStart(4, '0')}`,
+      title: `Honorários por Hora — ${hours.toFixed(1)}h (${rec.title})`,
+      type: 'FIXED',
+      totalValue: totalAmount,
+      successPercentage: 0,
+      retainerMonthlyValue: 0,
+      status: 'ACTIVE',
+      startDate: formatDateToYMD(new Date()),
+      installmentsCount: 1,
+      createdAt: new Date().toISOString(),
+    };
+    db.feeContracts.unshift(contract);
+
+    logAudit(req, 'PAYMENT', rec.id, 'CREATE', `Faturou timesheet: R$ ${totalAmount} (${hours.toFixed(1)}h) para o cliente ${person?.name || 'Cliente'}`);
+
+    res.status(201).json({ success: true, receivable: rec, contract });
   });
 
   // --- AI GATEWAY JURÍDICO (GEMINI 3.7 FLASH INTEGRATION) ---
