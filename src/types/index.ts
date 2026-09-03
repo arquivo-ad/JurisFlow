@@ -143,9 +143,9 @@ export interface AuditLog {
   userId: UUID;
   userName: string;
   userEmail: string;
-  entityType: 'CASE' | 'CLIENT' | 'PERSON' | 'DOCUMENT' | 'PAYMENT' | 'DEADLINE' | 'AI_REQUEST' | 'AUTH';
+  entityType: 'CASE' | 'CLIENT' | 'PERSON' | 'DOCUMENT' | 'PAYMENT' | 'DEADLINE' | 'AI_REQUEST' | 'AUTH' | 'MODULE' | 'SETTING' | 'SYSTEM' | 'USER';
   entityId: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'VIEW_SENSITIVE' | 'EXPORT' | 'SIMULATE_PAYMENT' | 'GENERATE_AI';
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'VIEW_SENSITIVE' | 'EXPORT' | 'SIMULATE_PAYMENT' | 'GENERATE_AI' | 'UPDATE_STATUS' | 'ROLLBACK' | 'LOGIN';
   details: string;
   ip: string;
   userAgent?: string;
@@ -353,6 +353,9 @@ export interface Diligence {
   title: string;
   location: string;
   dueDate: string;
+  date?: string;
+  type?: string;
+  notes?: string;
   executorUserId: UUID;
   executorUserName?: string;
   costEstimate: number;
@@ -362,18 +365,55 @@ export interface Diligence {
   createdAt: string;
 }
 
+export interface TaskChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface TaskTimeLog {
+  id: string;
+  userId: UUID;
+  userName: string;
+  minutes: number;
+  note: string;
+  date: string;
+  billable: boolean;
+}
+
+export type TaskCategory =
+  | 'PETICAO'
+  | 'PESQUISA'
+  | 'REUNIAO'
+  | 'DILIGENCIA'
+  | 'FINANCEIRO'
+  | 'CONTRATO'
+  | 'GERAL';
+
 export interface Task {
   id: UUID;
   tenantId: UUID;
   caseId?: UUID;
   caseNumber?: string;
+  caseTitle?: string;
+  clientId?: UUID;
+  clientName?: string;
+  deadlineId?: UUID;
+  deadlineTitle?: string;
+  deadlineFatalDate?: string;
   title: string;
   description: string;
+  category?: TaskCategory;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate: string;
   assignedUserId: UUID;
   assignedUserName?: string;
   status: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
+  checklist?: TaskChecklistItem[];
+  tags?: string[];
+  estimatedMinutes?: number;
+  timeLogs?: TaskTimeLog[];
+  completedAt?: string;
   createdAt: string;
 }
 
@@ -419,6 +459,19 @@ export interface DocumentFolder {
   icon?: string;
 }
 
+export interface DigitalSignatureInfo {
+  id: string;
+  signerName: string;
+  signerCpf: string;
+  signerRole: string;
+  signedAt: string;
+  ipAddress: string;
+  hashSha256: string;
+  verificationCode: string;
+  certificateAuthority: string;
+  status: 'VALID' | 'REVOKED';
+}
+
 export interface DocumentItem {
   id: UUID;
   tenantId: UUID;
@@ -436,6 +489,7 @@ export interface DocumentItem {
   isDraft: boolean;
   content: string;
   status: 'DRAFT' | 'UNDER_REVIEW' | 'APPROVED' | 'FILED' | 'ARCHIVED';
+  digitalSignature?: DigitalSignatureInfo;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -668,4 +722,135 @@ export interface GlobalSearchResult {
   badge?: string;
   badgeColor?: string;
   linkAction: { module: string; entityId: string };
+}
+
+// --- MODULE REGISTRY & CAPABILITIES (ADMIN & GOVERNANCE) ---
+export type ModuleId =
+  | 'clients'
+  | 'cases'
+  | 'deadlines'
+  | 'calendar'
+  | 'tasks'
+  | 'hearings'
+  | 'financial'
+  | 'contracts'
+  | 'documents'
+  | 'templates'
+  | 'document-generator'
+  | 'reports'
+  | 'dashboard'
+  | 'notifications'
+  | 'audit'
+  | 'users'
+  | 'profiles'
+  | 'permissions'
+  | 'admin'
+  | 'updates'
+  | 'integrations'
+  | 'ai';
+
+export interface ModuleMetadata {
+  id: ModuleId;
+  name: string;
+  description: string;
+  version: string;
+  category: 'core' | 'operations' | 'documents' | 'financial' | 'intelligence' | 'governance';
+  status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+  dependencies: ModuleId[];
+  requiredPermissions: string[];
+  minPlanTier: 'STARTER' | 'PROFESSIONAL' | 'PREMIUM';
+  icon: string;
+  installedAt: string;
+  updatedAt: string;
+  configurable: boolean;
+  settings?: Record<string, any>;
+}
+
+export interface FeatureFlag {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  module: ModuleId;
+  enabled: boolean;
+  targetTenants?: UUID[];
+  rolloutPercentage: number;
+  environment: 'all' | 'development' | 'preview' | 'production';
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- SYSTEM UPDATES & RELEASE ENGINE ---
+export interface SystemUpdateManifest {
+  version: string;
+  releaseName: string;
+  minimumVersion: string;
+  releaseDate: string;
+  description: string;
+  changelog: {
+    added: string[];
+    changed: string[];
+    fixed: string[];
+    security: string[];
+  };
+  artifactUrl: string;
+  checksumSha256: string;
+  databaseMigration: boolean;
+  migrationDetails?: string[];
+  restartRequired: boolean;
+  targetEnvironment: 'all' | 'localhost' | 'vercel' | 'cloud';
+}
+
+export interface SystemUpdateLog {
+  id: UUID;
+  previousVersion: string;
+  targetVersion: string;
+  status: 'SUCCESS' | 'FAILED' | 'ROLLED_BACK' | 'IN_PROGRESS';
+  startedAt: string;
+  completedAt?: string;
+  operatorId: UUID;
+  operatorName: string;
+  backupSnapshotId?: string;
+  databaseMigrationsApplied: string[];
+  logs: string[];
+  rollbackReason?: string;
+}
+
+export interface SystemHealthReport {
+  status: 'HEALTHY' | 'DEGRADED' | 'DOWN';
+  environment: 'development' | 'preview' | 'production' | 'localhost';
+  version: string;
+  uptimeSeconds: number;
+  timestamp: string;
+  database: {
+    status: 'CONNECTED' | 'DISCONNECTED';
+    provider: string;
+    totalRecords: number;
+    latencyMs: number;
+  };
+  memory: {
+    rssMb: number;
+    heapUsedMb: number;
+    heapTotalMb: number;
+  };
+  activeModulesCount: number;
+  totalModulesCount: number;
+  featureFlagsActiveCount: number;
+  aiGatewayStatus: 'READY' | 'MISSING_KEY' | 'DISABLED';
+  security: {
+    lastAuditLogTimestamp: string;
+    mfaEnforced: boolean;
+    activeSessionsCount: number;
+  };
+  storage: {
+    status: 'OK';
+    documentsCount: number;
+    storageUsedBytes: number;
+  };
+}
+
+export interface CapabilityCheck {
+  capability: string;
+  allowed: boolean;
+  reason?: string;
 }

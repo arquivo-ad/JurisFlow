@@ -27,6 +27,11 @@ import {
   AIDraftPieceResponse,
   AICaseSummaryResponse,
   GlobalSearchResult,
+  ModuleMetadata,
+  FeatureFlag,
+  SystemUpdateManifest,
+  SystemUpdateLog,
+  SystemHealthReport,
 } from '../types';
 
 let currentTenantId = 't-silveira';
@@ -168,10 +173,18 @@ export const api = {
   getTasks: () => request<Task[]>('/api/tasks'),
   createTask: (data: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
   updateTask: (id: string, data: Partial<Task>) => request<Task>(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTask: (id: string) => request<{ success: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  logTaskTime: (id: string, data: { minutes: number; note?: string; date?: string; billable?: boolean }) =>
+    request<Task>(`/api/tasks/${id}/time-log`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Documents & Templates
   getDocuments: () => request<DocumentItem[]>('/api/documents'),
   createDocument: (data: Partial<DocumentItem>) => request<DocumentItem>('/api/documents', { method: 'POST', body: JSON.stringify(data) }),
+  updateDocument: (id: string, data: Partial<DocumentItem>) =>
+    request<DocumentItem>(`/api/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDocument: (id: string) => request<{ success: boolean }>(`/api/documents/${id}`, { method: 'DELETE' }),
+  signDocument: (id: string, signerData?: { signerName?: string; signerCpf?: string; signerRole?: string }) =>
+    request<DocumentItem>(`/api/documents/${id}/sign`, { method: 'POST', body: JSON.stringify(signerData || {}) }),
   getTemplates: () => request<DocumentTemplate[]>('/api/templates'),
   renderTemplate: (templateId: string, variables: Record<string, any>) =>
     request<{ rendered: string; template: DocumentTemplate }>('/api/templates/render', {
@@ -185,6 +198,36 @@ export const api = {
   createFeeContract: (data: Partial<FeeContract>) => request<FeeContract>('/api/financial/contracts', { method: 'POST', body: JSON.stringify(data) }),
   createContract: (data: Partial<FeeContract>) => request<FeeContract>('/api/financial/contracts', { method: 'POST', body: JSON.stringify(data) }),
   getReceivables: () => request<AccountReceivable[]>('/api/financial/receivables'),
+  getUnbilledTimesheet: () =>
+    request<
+      {
+        taskId: string;
+        taskTitle: string;
+        category?: string;
+        caseId?: string;
+        caseNumber?: string;
+        clientId?: string;
+        clientName?: string;
+        logId: string;
+        userName: string;
+        minutes: number;
+        hours: number;
+        note: string;
+        date: string;
+      }[]
+    >('/api/financial/timesheet/unbilled'),
+  billTimesheet: (params: {
+    clientId: string;
+    caseId?: string;
+    hourlyRate: number;
+    totalMinutes: number;
+    description?: string;
+    taskIds?: string[];
+  }) =>
+    request<{ success: boolean; receivable: AccountReceivable; contract: FeeContract }>('/api/financial/timesheet/bill', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
   generateCharge: (accountReceivableId: string, method: 'PIX' | 'BOLETO' | 'CREDIT_CARD') =>
     request<Charge>('/api/financial/charges/mercadopago', {
       method: 'POST',
@@ -263,4 +306,49 @@ export const api = {
 
   // Global Search
   search: (query: string) => request<GlobalSearchResult[]>(`/api/search?q=${encodeURIComponent(query)}`),
+
+  // Module Registry & Feature Flags (Platform Admin)
+  getModules: () => request<{ modules: ModuleMetadata[]; activeCount: number; totalCount: number }>('/api/admin/modules'),
+  updateModuleStatus: (id: string, status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE', settings?: Record<string, any>) =>
+    request<{ success: boolean; module: ModuleMetadata; message: string }>(`/api/admin/modules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, settings }),
+    }),
+  getFeatureFlags: () => request<FeatureFlag[]>('/api/admin/feature-flags'),
+  createFeatureFlag: (data: Partial<FeatureFlag>) =>
+    request<FeatureFlag>('/api/admin/feature-flags', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateFeatureFlag: (id: string, data: Partial<FeatureFlag>) =>
+    request<FeatureFlag>(`/api/admin/feature-flags/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // System Update Engine
+  checkUpdates: () =>
+    request<{
+      currentVersion: string;
+      latestVersion: string;
+      updateAvailable: boolean;
+      environment: string;
+      currentManifest: SystemUpdateManifest;
+      latestManifest: SystemUpdateManifest;
+      releasesHistory: SystemUpdateManifest[];
+    }>('/api/admin/updates/check'),
+  applyUpdate: (targetVersion: string) =>
+    request<{ success: boolean; message: string; newVersion: string; updateLog: SystemUpdateLog }>('/api/admin/updates/apply', {
+      method: 'POST',
+      body: JSON.stringify({ targetVersion }),
+    }),
+  rollbackUpdate: (logId: string, reason?: string) =>
+    request<{ success: boolean; message: string; newVersion: string; rollbackLog: SystemUpdateLog }>(`/api/admin/updates/rollback/${logId}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  getUpdateHistory: () => request<SystemUpdateLog[]>('/api/admin/updates/history'),
+
+  // Observability & System Health
+  getAdminHealth: () => request<SystemHealthReport>('/api/admin/health'),
 };
