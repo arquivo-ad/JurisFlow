@@ -95,6 +95,7 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
   const [activeTab, setActiveTab] = useState<'UPLOAD' | 'PRESETS' | 'URL'>('UPLOAD');
   const [urlInput, setUrlInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -105,10 +106,7 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setErrorMsg('Por favor, selecione um arquivo de imagem válido (JPG, PNG ou WebP).');
       return;
@@ -127,6 +125,28 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
         fileInputRef.current.value = '';
       }
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
   const handleApplyUrl = () => {
@@ -246,20 +266,25 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
           {/* Tab 1: Upload */}
           {activeTab === 'UPLOAD' && (
             <div className="space-y-2">
-              <button
-                type="button"
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
-                className="w-full py-2 px-3 border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/40 rounded-xl text-xs font-semibold text-indigo-700 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                className={`w-full py-4 px-3 border-2 border-dashed rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  isDragging
+                    ? 'border-indigo-500 bg-indigo-50/80 text-indigo-800 scale-[1.01]'
+                    : 'border-indigo-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/40 text-indigo-700'
+                } ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                <Upload className="w-5 h-5 text-indigo-600 mb-0.5" />
                 <span>
-                  {isProcessing ? 'Processando imagem...' : 'Escolher foto do computador ou celular'}
+                  {isProcessing ? 'Otimizando e processando foto...' : isDragging ? 'Solte a foto aqui' : 'Clique ou arraste sua foto aqui'}
                 </span>
-              </button>
-              <p className="text-[11px] text-slate-400 text-center">
-                Formatos suportados: PNG, JPG ou WebP (otimização e compressão automática)
-              </p>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  PNG, JPG ou WebP • Salvo permanentemente no banco
+                </span>
+              </div>
             </div>
           )}
 

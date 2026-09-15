@@ -169,6 +169,8 @@ export const api = {
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) =>
     request<User>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateUserAvatar: (id: string, avatarUrl: string) =>
+    request<User>(`/api/users/${id}/avatar`, { method: 'PUT', body: JSON.stringify({ avatarUrl }) }),
   deleteUser: (id: string) => request<{ success: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
   updateUserStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED') =>
     request<User>(`/api/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),

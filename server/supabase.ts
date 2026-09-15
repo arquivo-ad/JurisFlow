@@ -1,3 +1,10 @@
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ override: true });
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.SUPABASE_URL) {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.example'), override: true });
+}
+
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   Tenant,
@@ -241,7 +248,11 @@ export async function syncTenantToSupabase(t: Tenant): Promise<boolean> {
       oab_uf: (t.oabOfficeRegister?.split('/')[1] || 'SP').substring(0, 2),
       plan: t.plan || 'ENTERPRISE',
       status: t.active ? 'ACTIVE' : 'SUSPENDED',
-      settings: t.settings || {},
+      settings: {
+        ...(t.settings || {}),
+        logoUrl: t.logoUrl || t.visualIdentity?.logoUrl || (t.settings as any)?.logoUrl || '',
+        visualIdentity: t.visualIdentity || (t.settings as any)?.visualIdentity || {},
+      },
       created_at: t.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -1071,6 +1082,8 @@ export async function hydrateFromSupabase(db: any): Promise<{
         active: t.status === 'ACTIVE',
         contactEmail: t.settings?.contactEmail || '',
         contactPhone: t.settings?.contactPhone || '',
+        logoUrl: t.settings?.logoUrl || t.logo_url || (t.settings?.visualIdentity?.logoUrl) || '',
+        visualIdentity: t.settings?.visualIdentity || undefined,
         settings: t.settings || {},
         createdAt: t.created_at,
       }));
@@ -1079,7 +1092,9 @@ export async function hydrateFromSupabase(db: any): Promise<{
       for (const ft of fetchedTenants) {
         const existingIdx = db.tenants.findIndex((et: any) => et.id === ft.id);
         if (existingIdx !== -1) {
-          db.tenants[existingIdx] = { ...db.tenants[existingIdx], ...ft };
+          const logoUrl = ft.logoUrl || db.tenants[existingIdx].logoUrl;
+          const visualIdentity = ft.visualIdentity || db.tenants[existingIdx].visualIdentity;
+          db.tenants[existingIdx] = { ...db.tenants[existingIdx], ...ft, logoUrl, visualIdentity };
         } else {
           db.tenants.push(ft);
         }
@@ -1130,7 +1145,9 @@ export async function hydrateFromSupabase(db: any): Promise<{
       for (const fu of fetchedUsers) {
         const existingIdx = db.users.findIndex((eu: any) => eu.id === fu.id);
         if (existingIdx !== -1) {
-          db.users[existingIdx] = { ...db.users[existingIdx], ...fu };
+          // If Supabase has an avatar_url, prioritize it. If empty and local has one, don't wipe it out
+          const avatarUrl = fu.avatarUrl || db.users[existingIdx].avatarUrl;
+          db.users[existingIdx] = { ...db.users[existingIdx], ...fu, avatarUrl };
         } else {
           db.users.push(fu);
         }

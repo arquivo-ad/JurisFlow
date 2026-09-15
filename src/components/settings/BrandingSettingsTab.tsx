@@ -81,6 +81,47 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  const logoFileInputRef = React.useRef<HTMLInputElement>(null);
+  const sigFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (file: File, type: 'logo' | 'signature') => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 512;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const outputFormat = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL(outputFormat, 0.88);
+          if (type === 'logo') {
+            setVi((prev) => ({ ...prev, logoUrl: dataUrl }));
+          } else {
+            setVi((prev) => ({ ...prev, signatureImageUrl: dataUrl }));
+          }
+        }
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Template Modal State
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<{ id: string; name: string; category: string; content: string } | null>(null);
@@ -220,15 +261,35 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1.5">
-                <label className="block text-slate-700 font-semibold">URL do Logotipo Oficial</label>
+                <label className="block text-slate-700 font-semibold">Logotipo Oficial do Escritório</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={vi.logoUrl || ''}
                     onChange={(e) => setVi({ ...vi, logoUrl: e.target.value })}
-                    placeholder="https://.../logo.png"
+                    placeholder="https://.../logo.png ou clique em Upload"
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-mono text-[11px]"
                   />
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleImageUpload(f, 'logo');
+                      if (e.target) e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoFileInputRef.current?.click()}
+                    className="px-2.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-[11px] flex items-center gap-1.5 border border-indigo-200 transition-colors cursor-pointer shrink-0"
+                    title="Carregar imagem do seu computador ou celular"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload</span>
+                  </button>
                   {vi.logoUrl && (
                     <img
                       src={vi.logoUrl}
@@ -294,15 +355,35 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
             </div>
 
             <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
-              <label className="block text-slate-700 font-semibold">URL da Assinatura / Imagem da Chancela (PNG Transparente)</label>
+              <label className="block text-slate-700 font-semibold">Assinatura / Imagem da Chancela (PNG Transparente ou Foto)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={vi.signatureImageUrl || ''}
                   onChange={(e) => setVi({ ...vi, signatureImageUrl: e.target.value })}
-                  placeholder="https://.../assinatura.png"
+                  placeholder="https://.../assinatura.png ou clique em Upload"
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
                 />
+                <input
+                  ref={sigFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleImageUpload(f, 'signature');
+                    if (e.target) e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => sigFileInputRef.current?.click()}
+                  className="px-2.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-[11px] flex items-center gap-1.5 border border-indigo-200 transition-colors cursor-pointer shrink-0"
+                  title="Carregar imagem de assinatura do computador ou celular"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload</span>
+                </button>
                 {vi.signatureImageUrl && (
                   <img
                     src={vi.signatureImageUrl}

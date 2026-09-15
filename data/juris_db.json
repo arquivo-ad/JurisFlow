@@ -1,0 +1,1129 @@
+{
+  "systemVersion": "1.2.0",
+  "systemStartTime": 1789503757237,
+  "modules": [
+    {
+      "id": "dashboard",
+      "name": "Painel Geral",
+      "description": "Métricas executivas, prazos do dia, audiências e visão geral do escritório.",
+      "version": "1.2.0",
+      "category": "core",
+      "status": "ACTIVE",
+      "dependencies": [],
+      "requiredPermissions": [],
+      "minPlanTier": "STARTER",
+      "icon": "LayoutDashboard",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-08-15T14:30:00Z",
+      "configurable": false
+    },
+    {
+      "id": "clients",
+      "name": "Clientes & CRM",
+      "description": "Gestão de pessoas físicas/jurídicas, histórico de atendimento, prospecção e LGPD.",
+      "version": "1.2.0",
+      "category": "core",
+      "status": "ACTIVE",
+      "dependencies": [],
+      "requiredPermissions": [
+        "CLIENT_VIEW"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "Users",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-08-20T10:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "cases",
+      "name": "Processos & Casos",
+      "description": "Pastas processuais completas, varas, tribunais, partes, fases e movimentações.",
+      "version": "1.2.0",
+      "category": "operations",
+      "status": "ACTIVE",
+      "dependencies": [
+        "clients"
+      ],
+      "requiredPermissions": [
+        "CASE_VIEW"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "Briefcase",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-08-25T11:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "deadlines",
+      "name": "Prazos Processuais",
+      "description": "Controle de prazos com cálculo legal CPC/2015 em dias úteis e suspensões forenses.",
+      "version": "1.2.0",
+      "category": "operations",
+      "status": "ACTIVE",
+      "dependencies": [
+        "cases"
+      ],
+      "requiredPermissions": [
+        "DEADLINE_VIEW"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "Clock",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-08-28T09:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "calendar",
+      "name": "Agenda & Audiências",
+      "description": "Calendário integrado com audiências, reuniões, diligências e compromissos.",
+      "version": "1.1.5",
+      "category": "operations",
+      "status": "ACTIVE",
+      "dependencies": [
+        "cases"
+      ],
+      "requiredPermissions": [
+        "DEADLINE_VIEW"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "Calendar",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-08-20T16:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "tasks",
+      "name": "Tarefas & Atividades",
+      "description": "Gerenciamento de tarefas internas, checklists, prazos e delegação entre equipe.",
+      "version": "1.1.0",
+      "category": "operations",
+      "status": "ACTIVE",
+      "dependencies": [],
+      "requiredPermissions": [
+        "DEADLINE_CREATE"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "CheckSquare",
+      "installedAt": "2026-02-01T10:00:00Z",
+      "updatedAt": "2026-08-10T12:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "documents",
+      "name": "Central de Documentos",
+      "description": "Repositório de arquivos, peças protocoladas, procurações e controle de versões.",
+      "version": "1.1.8",
+      "category": "documents",
+      "status": "ACTIVE",
+      "dependencies": [],
+      "requiredPermissions": [
+        "DOCUMENT_VIEW"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "FolderArchive",
+      "installedAt": "2026-01-15T09:00:00Z",
+      "updatedAt": "2026-08-15T15:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "templates",
+      "name": "Biblioteca de Modelos",
+      "description": "Modelos de peças e procurações com preenchimento automático por tags {{cliente.nome}}.",
+      "version": "1.1.0",
+      "category": "documents",
+      "status": "ACTIVE",
+      "dependencies": [
+        "documents"
+      ],
+      "requiredPermissions": [
+        "TEMPLATE_MANAGE"
+      ],
+      "minPlanTier": "PROFESSIONAL",
+      "icon": "FileText",
+      "installedAt": "2026-02-10T11:00:00Z",
+      "updatedAt": "2026-08-18T10:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "document-generator",
+      "name": "Gerador Automático de Peças",
+      "description": "Geração em lote de procurações, contratos e declarações com validação humana.",
+      "version": "1.0.5",
+      "category": "documents",
+      "status": "ACTIVE",
+      "dependencies": [
+        "templates",
+        "clients"
+      ],
+      "requiredPermissions": [
+        "DOCUMENT_GENERATE"
+      ],
+      "minPlanTier": "PROFESSIONAL",
+      "icon": "FileCode",
+      "installedAt": "2026-03-01T14:00:00Z",
+      "updatedAt": "2026-08-22T09:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "financial",
+      "name": "Financeiro & Honorários",
+      "description": "Contratos de honorários, parcelas, contas a receber, inadimplência e conciliação.",
+      "version": "1.2.0",
+      "category": "financial",
+      "status": "ACTIVE",
+      "dependencies": [
+        "clients"
+      ],
+      "requiredPermissions": [
+        "FINANCIAL_VIEW"
+      ],
+      "minPlanTier": "PROFESSIONAL",
+      "icon": "DollarSign",
+      "installedAt": "2026-01-20T10:00:00Z",
+      "updatedAt": "2026-08-30T17:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "reports",
+      "name": "Relatórios & BI",
+      "description": "Relatórios gerenciais, produtividade por advogado e taxas de sucesso processual.",
+      "version": "1.0.0",
+      "category": "governance",
+      "status": "ACTIVE",
+      "dependencies": [
+        "cases",
+        "financial"
+      ],
+      "requiredPermissions": [
+        "REPORT_VIEW"
+      ],
+      "minPlanTier": "PROFESSIONAL",
+      "icon": "BarChart3",
+      "installedAt": "2026-04-01T08:00:00Z",
+      "updatedAt": "2026-07-15T11:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "ai",
+      "name": "IA Jurídica & Copilot",
+      "description": "Assistente com Gemini para extração de prazos em publicações e minuta de petições.",
+      "version": "1.0.2",
+      "category": "intelligence",
+      "status": "ACTIVE",
+      "dependencies": [
+        "documents"
+      ],
+      "requiredPermissions": [
+        "AI_ASSISTANT_USE"
+      ],
+      "minPlanTier": "PREMIUM",
+      "icon": "Bot",
+      "installedAt": "2026-05-01T10:00:00Z",
+      "updatedAt": "2026-09-01T18:00:00Z",
+      "configurable": true
+    },
+    {
+      "id": "audit",
+      "name": "Auditoria & Logs de Segurança",
+      "description": "Rastreabilidade total de operações, acessos e alterações críticas no sistema.",
+      "version": "1.1.0",
+      "category": "governance",
+      "status": "ACTIVE",
+      "dependencies": [],
+      "requiredPermissions": [
+        "AUDIT_LOG_VIEW"
+      ],
+      "minPlanTier": "PROFESSIONAL",
+      "icon": "ShieldCheck",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-08-01T12:00:00Z",
+      "configurable": false
+    },
+    {
+      "id": "updates",
+      "name": "Atualizador do Sistema (Release Engine)",
+      "description": "Gerenciamento de versões, verificação de releases no GitHub, backups e migrações.",
+      "version": "1.2.0",
+      "category": "governance",
+      "status": "ACTIVE",
+      "dependencies": [],
+      "requiredPermissions": [
+        "TENANT_MANAGE"
+      ],
+      "minPlanTier": "STARTER",
+      "icon": "RefreshCw",
+      "installedAt": "2026-01-10T08:00:00Z",
+      "updatedAt": "2026-09-03T10:00:00Z",
+      "configurable": true
+    }
+  ],
+  "featureFlags": [
+    {
+      "id": "ff-1",
+      "key": "financial.new-dashboard",
+      "name": "Novo Dashboard Financeiro Interativo",
+      "description": "Habilita visualização analítica com previsão de êxito e curva de fluxo de caixa.",
+      "module": "financial",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "environment": "all",
+      "createdAt": "2026-08-01T10:00:00Z",
+      "updatedAt": "2026-08-20T10:00:00Z"
+    },
+    {
+      "id": "ff-2",
+      "key": "documents.ai-generator",
+      "name": "Gerador IA de Minutas Jurídicas",
+      "description": "Permite redigir petições e cláusulas contratuais usando modelos generativos.",
+      "module": "ai",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "environment": "all",
+      "createdAt": "2026-08-10T10:00:00Z",
+      "updatedAt": "2026-09-01T10:00:00Z"
+    },
+    {
+      "id": "ff-3",
+      "key": "cases.timeline-v2",
+      "name": "Linha do Tempo Processual V2",
+      "description": "Exibe movimentações em formato de linha do tempo com tags e badges de tribunal.",
+      "module": "cases",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "environment": "all",
+      "createdAt": "2026-08-15T10:00:00Z",
+      "updatedAt": "2026-08-25T10:00:00Z"
+    },
+    {
+      "id": "ff-4",
+      "key": "clients.import",
+      "name": "Importador em Lote de Clientes (CSV/Excel)",
+      "description": "Habilita o assistente de upload em massa de contatos e pessoas jurídicas.",
+      "module": "clients",
+      "enabled": false,
+      "rolloutPercentage": 0,
+      "environment": "development",
+      "createdAt": "2026-08-20T10:00:00Z",
+      "updatedAt": "2026-09-02T10:00:00Z"
+    }
+  ],
+  "updateManifests": [
+    {
+      "version": "1.2.0",
+      "releaseName": "v1.2.0 — Governança, Module Registry & Update Engine",
+      "minimumVersion": "1.0.0",
+      "releaseDate": "2026-09-03",
+      "description": "Lançamento do painel administrativo /admin, controle de módulos a quente, feature flags e suporte a updates controlados.",
+      "changelog": {
+        "added": [
+          "Área administrativa dedicada (/admin) para Platform Admin e Super Admin",
+          "Module Registry com ativação/desativação dinâmica de módulos",
+          "Motor de Feature Flags granulares por ambiente",
+          "Sistema de verificação de releases com manifestos e validação de checksums SHA-256",
+          "Camada central de Entitlements (canUse) com verificação em 4 níveis"
+        ],
+        "changed": [
+          "Reforço de RBAC no backend com checagem de módulos ativos",
+          "Health check enriquecido com métricas de memória, módulos e latência"
+        ],
+        "fixed": [
+          "Isolamento estrito de dados entre escritórios/tenants no bootstrap",
+          "Sincronização de permissões com papéis customizados"
+        ],
+        "security": [
+          "Validação de integridade de manifestos de atualização antes da aplicação",
+          "Bloqueio automático de endpoints pertencentes a módulos desativados"
+        ]
+      },
+      "artifactUrl": "https://github.com/4ZuR3Fl4m3S/Projeto_Advocacia_v5/releases/tag/v1.2.0",
+      "checksumSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "databaseMigration": true,
+      "migrationDetails": [
+        "20260903_01_create_system_modules_table.sql",
+        "20260903_02_create_feature_flags_table.sql",
+        "20260903_03_create_system_update_logs_table.sql"
+      ],
+      "restartRequired": false,
+      "targetEnvironment": "all"
+    },
+    {
+      "version": "1.3.0",
+      "releaseName": "v1.3.0 — Automação de Tarefas & CRM Jurídico Avançado",
+      "minimumVersion": "1.1.0",
+      "releaseDate": "2026-09-15",
+      "description": "Nova versão disponível no repositório oficial com módulo autônomo de Tarefas, checklists e pontuação preditiva de risco no CRM.",
+      "changelog": {
+        "added": [
+          "Módulo autônomo de Tarefas com Kanban e visualização por prioridade",
+          "Checklists em tarefas vinculadas a processos judiciais",
+          "Importador de clientes via planilha CSV com preview e deduplicação"
+        ],
+        "changed": [
+          "Otimização do cálculo de prazos CPC/2015 com suporte a calendários de comarcas locais"
+        ],
+        "fixed": [
+          "Tratamento de prazos vencidos em feriados municipais"
+        ],
+        "security": [
+          "Assinatura digital de manifestos com chave assimétrica"
+        ]
+      },
+      "artifactUrl": "https://github.com/4ZuR3Fl4m3S/Projeto_Advocacia_v5/releases/tag/v1.3.0",
+      "checksumSha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "databaseMigration": true,
+      "migrationDetails": [
+        "20260915_01_create_tasks_checklist_table.sql",
+        "20260915_02_add_crm_risk_score_column.sql"
+      ],
+      "restartRequired": false,
+      "targetEnvironment": "all"
+    }
+  ],
+  "updateLogs": [
+    {
+      "id": "upd-log-01",
+      "previousVersion": "1.1.0",
+      "targetVersion": "1.2.0",
+      "status": "SUCCESS",
+      "startedAt": "2026-09-03T09:45:00Z",
+      "completedAt": "2026-09-03T09:47:30Z",
+      "operatorId": "u-superadmin",
+      "operatorName": "Super Administrador (Platform)",
+      "backupSnapshotId": "snap-20260903-094500",
+      "databaseMigrationsApplied": [
+        "20260903_01_create_system_modules_table.sql",
+        "20260903_02_create_feature_flags_table.sql",
+        "20260903_03_create_system_update_logs_table.sql"
+      ],
+      "logs": [
+        "[Update Engine] Iniciando processo de atualização para v1.2.0...",
+        "[Integrity Check] Checksum SHA-256 verificado com sucesso contra manifesto oficial.",
+        "[Backup] Snapshot de segurança snap-20260903-094500 gerado com sucesso.",
+        "[Migrations] 3 migrações estruturais executadas em transação segura.",
+        "[Health Check] Diagnóstico de sanidade do sistema: OK.",
+        "[Status] Atualização concluída com êxito."
+      ]
+    }
+  ],
+  "tenants": [
+    {
+      "id": "t-1789481820042",
+      "slug": "gabriela",
+      "name": "Gabriela Capitani Advocacia",
+      "tradeName": "Gabriela Capitani Advocacia",
+      "cnpj": "11.111.111/0001-11",
+      "oabOfficeRegister": "OAB/SP 478.370/SP",
+      "plan": "ENTERPRISE",
+      "active": true,
+      "status": "ACTIVE",
+      "contactEmail": "gabriela.capitani@adv.oab.sp.org.br",
+      "contactPhone": "(12) 99148-6012",
+      "logoUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=200&auto=format&fit=crop&q=80",
+      "visualIdentity": {
+        "logoUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=200&auto=format&fit=crop&q=80",
+        "logoPosition": "left",
+        "signatureImageUrl": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80",
+        "signatoryName": "Dra. Gabriela M. Manni Capitani",
+        "signatoryOab": "OAB/SP 478.370",
+        "signatoryRole": "Advogada Sócia e Titular",
+        "headerAddress": "R. Cap. Alfredo de Paula Salgado, 110, Pindamonhangaba/SP • Tel: (12) 99148-6012",
+        "footerText": "Gabriela Capitani Advocacia • OAB/SP 478.370 • Sigilo, Excelência e Prática Forense Humanizada",
+        "headerStyle": "CLASSIC",
+        "fontFamily": "Times New Roman",
+        "bodyFontSize": "12pt",
+        "lineSpacing": "1.5",
+        "paragraphIndent": true,
+        "citationIndent": true,
+        "closingFormula": "Termos em que, Pede e Espera Deferimento.",
+        "jurisprudenceStyle": "DESTAQUE_ENXUTO",
+        "editorialTone": "TECNICO_DIRETO",
+        "templates": [
+          {
+            "id": "tmpl-inicial",
+            "name": "Petição Inicial Cível ABNT",
+            "category": "PETICAO",
+            "content": "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA VARA CÍVEL DA COMARCA DE PINDAMONHANGABA/SP\n\n[QUALIFICAÇÃO COMPLETA DA PARTE AUTORA], por sua advogada infra-assinada, vem respeitosamente à presença de Vossa Excelência propor a presente...\n\nDOS FATOS...\nDO DIREITO...\nDOS PEDIDOS...",
+            "isDefault": true
+          },
+          {
+            "id": "tmpl-procuracao",
+            "name": "Procuração Ad Judicia et Extra",
+            "category": "PROCURACAO",
+            "content": "PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: [NOME DO CLIENTE], [ESTADO CIVIL], [PROFISSÃO], inscrito no CPF sob nº [CPF], residente e domiciliado em [ENDEREÇO COMPLETO].\n\nOUTORGADA: DRA. GABRIELA M. MANNI CAPITANI, brasileira, advogada inscrita nos quadros da OAB/SP sob o nº 478.370...",
+            "isDefault": true
+          },
+          {
+            "id": "tmpl-honorarios",
+            "name": "Contrato de Honorários e Prestação de Serviços Jurídicos",
+            "category": "CONTRATO",
+            "content": "CONTRATO DE PRESTAÇÃO DE SERVIÇOS JURÍDICOS E HONORÁRIOS ADVOCATÍCIOS\n\nCONTRATANTE: [NOME DO CLIENTE], [CPF/CNPJ]\nCONTRATADA: GABRIELA CAPITANI ADVOCACIA, representada por Dra. Gabriela M. Manni Capitani, OAB/SP 478.370...\n\nCLÁUSULA PRIMEIRA - DO OBJETO...",
+            "isDefault": true
+          }
+        ]
+      },
+      "settings": {
+        "pixKey": "gabriela.mannicapitani@gmail.com",
+        "pixKeyType": "EMAIL",
+        "pixRecipientName": "Gabriela Capitani Advocacia",
+        "pixBankName": "Banco Itaú Empresas PJ",
+        "paymentChannels": {
+          "pix": true,
+          "boleto": false,
+          "creditCard": false
+        },
+        "bankingIntegration": {
+          "provider": "OUTRO",
+          "status": "NOT_CONFIGURED",
+          "superAdminNotified": false
+        },
+        "currency": "BRL",
+        "cpcCountDaysDefault": true,
+        "mercadopagoConfigured": true,
+        "notifyDeadlinesDaysBefore": [
+          1,
+          3,
+          5
+        ]
+      },
+      "createdAt": "2026-09-15T14:17:00.042Z"
+    }
+  ],
+  "branches": [
+    {
+      "id": "b-1789481820042-matriz",
+      "tenantId": "t-1789481820042",
+      "code": "MAT-01",
+      "name": "Matriz Principal",
+      "isMain": true,
+      "city": "Pindamonhangaba",
+      "state": "SP",
+      "address": "R. Cap. Alfredo de Paula Salgado, 110, Pindamonhangaba-SP",
+      "phone": "(12) 99148-6012",
+      "email": "gabriela.capitani@adv.oab.sp.org.br"
+    }
+  ],
+  "departments": [],
+  "teams": [],
+  "users": [
+    {
+      "id": "u-1789481820042-admin",
+      "name": "Dra. Gabriela M. Manni Capitani",
+      "email": "gabriela.mannicapitani@gmail.com",
+      "phone": "(12) 99148-6012",
+      "oabNumber": "478.370",
+      "oabUf": "SP",
+      "avatarUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "active": true,
+      "createdAt": "2026-09-15T14:17:00.042Z",
+      "roleId": "role-socio-admin",
+      "roleName": "Sócio Administrador",
+      "roleCode": "SOCIO_ADMIN",
+      "branchId": "b-1789481820042-matriz",
+      "branchName": "Matriz Principal",
+      "status": "ACTIVE",
+      "branchAffiliations": [
+        {
+          "id": "m-aff-gabriela-matriz",
+          "branchId": "b-1789481820042-matriz",
+          "branchName": "Matriz Principal (Pindamonhangaba/SP)",
+          "roleId": "role-socio-admin",
+          "roleName": "Sócio Administrador",
+          "roleCode": "SOCIO_ADMIN",
+          "email": "gabriela.mannicapitani@gmail.com",
+          "phone": "(12) 99148-6012",
+          "status": "ACTIVE",
+          "isPrimary": true
+        }
+      ],
+      "memberships": [
+        {
+          "id": "m-gabriela-matriz",
+          "branchId": "b-1789481820042-matriz",
+          "branchName": "Matriz Principal (Pindamonhangaba/SP)",
+          "roleId": "role-socio-admin",
+          "roleName": "Sócio Administrador",
+          "roleCode": "SOCIO_ADMIN",
+          "email": "gabriela.mannicapitani@gmail.com",
+          "phone": "(12) 99148-6012",
+          "status": "ACTIVE",
+          "isPrimary": true
+        }
+      ]
+    },
+    {
+      "id": "u-superadmin",
+      "name": "Super Admin (JurisFlow SaaS)",
+      "email": "superadmin@jurisflow.adv.br",
+      "phone": "(11) 99999-0000",
+      "avatarUrl": "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=256&auto=format&fit=crop&q=80",
+      "active": true,
+      "createdAt": "2025-01-01T00:00:00Z",
+      "roleId": "role-super-admin",
+      "roleName": "Super Admin da Plataforma SaaS",
+      "roleCode": "SUPER_ADMIN",
+      "branchId": "b-1789481820042-matriz",
+      "branchName": "Matriz Principal",
+      "status": "ACTIVE",
+      "branchAffiliations": [
+        {
+          "id": "m-superadmin-gabriela",
+          "branchId": "b-1789481820042-matriz",
+          "branchName": "Matriz Principal",
+          "roleId": "role-super-admin",
+          "roleName": "Super Admin da Plataforma SaaS",
+          "roleCode": "SUPER_ADMIN",
+          "email": "superadmin@jurisflow.adv.br",
+          "phone": "(11) 99999-0000",
+          "status": "ACTIVE",
+          "isPrimary": true
+        }
+      ],
+      "memberships": [
+        {
+          "id": "m-superadmin-gabriela",
+          "branchId": "b-1789481820042-matriz",
+          "branchName": "Matriz Principal",
+          "roleId": "role-super-admin",
+          "roleName": "Super Admin da Plataforma SaaS",
+          "roleCode": "SUPER_ADMIN",
+          "email": "superadmin@jurisflow.adv.br",
+          "phone": "(11) 99999-0000",
+          "status": "ACTIVE",
+          "isPrimary": true
+        }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "id": "role-super-admin",
+      "tenantId": "GLOBAL",
+      "code": "SUPER_ADMIN",
+      "name": "Super Admin da Plataforma SaaS",
+      "description": "Acesso mestre e irrestrito global: criação e governança de novos escritórios, auditoria global e provisionamento de instâncias.",
+      "isSystem": true,
+      "permissions": [
+        {
+          "code": "TENANTS_CREATE",
+          "resource": "SETTINGS",
+          "action": "CREATE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "TENANTS_ALL",
+          "resource": "SETTINGS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "CASES_ALL",
+          "resource": "CASES",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "CLIENTS_ALL",
+          "resource": "CLIENTS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "FINANCIAL_ALL",
+          "resource": "FINANCIAL",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DOCUMENTS_ALL",
+          "resource": "DOCUMENTS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "SETTINGS_ALL",
+          "resource": "SETTINGS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "AI_ALL",
+          "resource": "AI_GATEWAY",
+          "action": "EXECUTE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "AUDIT_ALL",
+          "resource": "AUDIT",
+          "action": "READ",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DEADLINES_ALL",
+          "resource": "DEADLINES",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        }
+      ]
+    },
+    {
+      "id": "role-socio-admin",
+      "tenantId": "t-silveira",
+      "code": "SOCIO_ADMIN",
+      "name": "Sócio Administrador",
+      "description": "Acesso total irrestrito a todos os módulos, financeiro, IA, segurança e auditoria.",
+      "isSystem": true,
+      "permissions": [
+        {
+          "code": "CASES_ALL",
+          "resource": "CASES",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "CLIENTS_ALL",
+          "resource": "CLIENTS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "FINANCIAL_ALL",
+          "resource": "FINANCIAL",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DOCUMENTS_ALL",
+          "resource": "DOCUMENTS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "SETTINGS_ALL",
+          "resource": "SETTINGS",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "AI_ALL",
+          "resource": "AI_GATEWAY",
+          "action": "EXECUTE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "AUDIT_ALL",
+          "resource": "AUDIT",
+          "action": "READ",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DEADLINES_ALL",
+          "resource": "DEADLINES",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        }
+      ]
+    },
+    {
+      "id": "role-adv-senior",
+      "tenantId": "t-silveira",
+      "code": "ADVOGADO_SENIOR",
+      "name": "Advogado Sênior / Coordenador",
+      "description": "Gestão de casos, clientes, prazos, audiências, geração de minutas por IA e visualização financeira de seus processos.",
+      "isSystem": true,
+      "permissions": [
+        {
+          "code": "CASES_MANAGE",
+          "resource": "CASES",
+          "action": "UPDATE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "CLIENTS_MANAGE",
+          "resource": "CLIENTS",
+          "action": "UPDATE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "FINANCIAL_VIEW",
+          "resource": "FINANCIAL",
+          "action": "READ",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DOCUMENTS_MANAGE",
+          "resource": "DOCUMENTS",
+          "action": "CREATE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "AI_EXECUTE",
+          "resource": "AI_GATEWAY",
+          "action": "EXECUTE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DEADLINES_MANAGE",
+          "resource": "DEADLINES",
+          "action": "UPDATE",
+          "effect": "ALLOW"
+        }
+      ]
+    },
+    {
+      "id": "role-financeiro",
+      "tenantId": "t-silveira",
+      "code": "FINANCEIRO",
+      "name": "Controladoria & Financeiro",
+      "description": "Controle de honorários, emissão de cobranças Mercado Pago (PIX/Boleto), conciliação bancária e faturamento.",
+      "isSystem": true,
+      "permissions": [
+        {
+          "code": "FINANCIAL_FULL",
+          "resource": "FINANCIAL",
+          "action": "APPROVE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "CLIENTS_READ",
+          "resource": "CLIENTS",
+          "action": "READ",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "AUDIT_READ",
+          "resource": "AUDIT",
+          "action": "READ",
+          "effect": "ALLOW"
+        }
+      ]
+    },
+    {
+      "id": "role-estagiario",
+      "tenantId": "t-silveira",
+      "code": "PARALEGAL_ESTAGIARIO",
+      "name": "Paralegal / Estagiário de Direito",
+      "description": "Acompanhamento de prazos, cumprimento de diligências e elaboração de pesquisas jurídicas.",
+      "isSystem": true,
+      "permissions": [
+        {
+          "code": "DEADLINES_MANAGE",
+          "resource": "DEADLINES",
+          "action": "UPDATE",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "CASES_READ",
+          "resource": "CASES",
+          "action": "READ",
+          "effect": "ALLOW"
+        },
+        {
+          "code": "DOCUMENTS_READ",
+          "resource": "DOCUMENTS",
+          "action": "READ",
+          "effect": "ALLOW"
+        }
+      ]
+    }
+  ],
+  "memberships": [
+    {
+      "id": "m-gabriela-main",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "roleId": "role-socio-admin",
+      "branchId": "b-1789481820042-matriz",
+      "status": "ACTIVE",
+      "scopes": [
+        "*"
+      ]
+    },
+    {
+      "id": "m-superadmin-main",
+      "tenantId": "t-1789481820042",
+      "userId": "u-superadmin",
+      "roleId": "role-super-admin",
+      "branchId": "b-1789481820042-matriz",
+      "status": "ACTIVE",
+      "scopes": [
+        "*"
+      ]
+    }
+  ],
+  "persons": [],
+  "clients": [],
+  "leads": [],
+  "cases": [],
+  "movements": [],
+  "deadlines": [],
+  "hearings": [],
+  "diligences": [],
+  "tasks": [],
+  "notifications": [],
+  "templates": [
+    {
+      "id": "tpl-peticao-inicial",
+      "tenantId": "t-silveira",
+      "name": "Petição Inicial Cível — Ação de Cobrança com Tutela de Urgência",
+      "category": "PETICAO",
+      "placeholders": [
+        "nome_cliente",
+        "documento_cliente",
+        "endereco_cliente",
+        "nome_reu",
+        "documento_reu",
+        "valor_causa",
+        "tribunal_vara",
+        "fatos_resumo"
+      ],
+      "description": "Modelo padrão para cobrança com pedido liminar de arresto/bloqueio via SISBAJUD (CPC art. 300).",
+      "templateContent": "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA {{tribunal_vara}}\n\n{{nome_cliente}}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº {{documento_cliente}}, com sede em {{endereco_cliente}}, por seus advogados devidamente constituídos, vem respeitosamente à presença de Vossa Excelência propor a presente\n\nAÇÃO DE COBRANÇA C/C PEDIDO DE TUTELA PROVISÓRIA DE URGÊNCIA CAUTELAR\n\nem face de {{nome_reu}}, inscrito no CPF/CNPJ sob o nº {{documento_reu}}, pelos fatos e fundamentos a seguir expostos:\n\nI - DOS FATOS\n{{fatos_resumo}}\n\nII - DO DIREITO\nConsoante preceitua o Código Civil Brasileiro em seus artigos 389 e seguintes, não cumprida a obrigação, responde o devedor por perdas e danos, mais juros e atualização monetária.\n\nIII - DA TUTELA DE URGÊNCIA (ART. 300 DO CPC)\nDemonstrada a probabilidade do direito e o risco concreto ao resultado útil do processo, requer-se o bloqueio liminar via SISBAJUD no montante do débito atualizado.\n\nIV - DOS PEDIDOS\nAnte o exposto, requer:\na) O deferimento inaudita altera parte da tutela de urgência pleiteada;\nb) A citação do Réu para, querendo, apresentar contestação no prazo legal;\nc) A procedência total dos pedidos com a condenação ao pagamento de {{valor_causa}}, acrescido de custas e honorários sucumbenciais de 20%.\n\nDá-se à causa o valor de {{valor_causa}}.\n\nNestes termos, pede deferimento.\nSão Paulo, 31 de agosto de 2026.\n[Assinatura do Advogado]"
+    },
+    {
+      "id": "tpl-contrato-honorarios",
+      "tenantId": "t-silveira",
+      "name": "Contrato de Prestação de Serviços Advocatícios e Honorários (Quota Litis & Fixo)",
+      "category": "CONTRATO",
+      "placeholders": [
+        "nome_cliente",
+        "documento_cliente",
+        "valor_fixo",
+        "percentual_exito",
+        "objeto_contrato"
+      ],
+      "description": "Contrato padrão de honorários advocatícios em conformidade com o Estatuto da OAB (Lei 8.906/94).",
+      "templateContent": "CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS E HONORÁRIOS PROFISSIONAIS\n\nCONTRATANTE: {{nome_cliente}}, inscrito(a) no CPF/CNPJ nº {{documento_cliente}}.\nCONTRATADA: SILVEIRA & ASSOCIADOS ADVOCACIA EMPRESARIAL, Sociedade de Advogados registrada na OAB/SP sob o nº 4.521.\n\nAs partes acima qualificadas têm entre si justo e acordado o seguinte:\n\nCLÁUSULA PRIMEIRA - DO OBJETO\nA CONTRATADA prestará serviços jurídicos na defesa dos interesses da CONTRATANTE para: {{objeto_contrato}}.\n\nCLÁUSULA SEGUNDA - DOS HONORÁRIOS\nPela prestação dos serviços ora pactuados, a CONTRATANTE pagará:\na) Honorários Iniciais Pró-Labore: R$ {{valor_fixo}}, pagos conforme cronograma ajustado;\nb) Honorários de Êxito (Quota Litis): o percentual de {{percentual_exito}}% sobre o proveito econômico efetivamente auferido.\n\nCLÁUSULA TERCEIRA - DAS DESPESAS\nAs custas judiciais, emolumentos cartorários e despesas com perícias correrão por conta exclusiva da CONTRATANTE.\n\nSão Paulo, 31 de agosto de 2026."
+    },
+    {
+      "id": "tpl-procuracao",
+      "tenantId": "t-silveira",
+      "name": "Procuração Ad Judicia et Extra com Poderes Especiais",
+      "category": "PROCURACAO",
+      "placeholders": [
+        "nome_cliente",
+        "documento_cliente",
+        "endereco_cliente"
+      ],
+      "description": "Instrumento particular de mandato com cláusula para transigir, firmar acordos e dar quitação.",
+      "templateContent": "PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: {{nome_cliente}}, inscrito(a) no CPF/CNPJ sob o nº {{documento_cliente}}, residente/sediado(a) em {{endereco_cliente}}.\n\nOUTORGADOS: Os advogados integrantes de SILVEIRA & ASSOCIADOS ADVOCACIA EMPRESARIAL, conferindo-lhes amplos poderes para o foro em geral, com a cláusula \"ad judicia et extra\", em qualquer Juízo, Instância ou Tribunal, conferindo ainda poderes especiais para confessar, reconhecer a procedência do pedido, transigir, desistir, renunciar ao direito, receber e dar quitação.\n\nSão Paulo, 31 de agosto de 2026."
+    }
+  ],
+  "documents": [],
+  "feeContracts": [],
+  "installments": [],
+  "receivables": [],
+  "payments": [],
+  "auditLogs": [],
+  "lgpdConsents": [],
+  "aiLogs": [],
+  "legalKnowledgeSources": [
+    {
+      "id": "lk-cf88",
+      "title": "Constituição da República Federativa do Brasil de 1988",
+      "category": "CONSTITUCIONAL",
+      "officialSource": "Portal da Legislação da Presidência da República (Planalto)",
+      "lastUpdated": "2026-08-15",
+      "groundingStatus": "SYNCED",
+      "articlesIndexed": 250,
+      "description": "Texto constitucional com Emendas Constitucionais consolidadas até 2026, com foco em Direitos Fundamentais (Art. 5º), Ordem Econômica e Competências Judiciais."
+    },
+    {
+      "id": "lk-cpc15",
+      "title": "Código de Processo Civil (Lei nº 13.105/2015)",
+      "category": "PROCESSO_CIVIL",
+      "officialSource": "Portal do Planalto & Banco Nacional de Precedentes (CNJ)",
+      "lastUpdated": "2026-08-28",
+      "groundingStatus": "ACTIVE",
+      "articlesIndexed": 1072,
+      "description": "Regras processuais, prazos em dias úteis (Art. 219), tutelas provisórias (Art. 300), petição inicial (Art. 319) e sistema de precedentes vinculantes (Art. 927)."
+    },
+    {
+      "id": "lk-cc02",
+      "title": "Código Civil Brasileiro (Lei nº 10.406/2002)",
+      "category": "CIVIL",
+      "officialSource": "Portal da Legislação da Presidência da República (Planalto)",
+      "lastUpdated": "2026-08-10",
+      "groundingStatus": "SYNCED",
+      "articlesIndexed": 2046,
+      "description": "Direito das obrigações, contratos, responsabilidade civil, prescrição e decadência (Arts. 205 e 206), direito de família e sucessões."
+    },
+    {
+      "id": "lk-clt",
+      "title": "Consolidação das Leis do Trabalho (Decreto-Lei nº 5.452/1943)",
+      "category": "TRABALHISTA",
+      "officialSource": "Portal do Planalto & TST",
+      "lastUpdated": "2026-07-20",
+      "groundingStatus": "SYNCED",
+      "articlesIndexed": 922,
+      "description": "Normas de Direito Material e Processual do Trabalho, prazos recursais trabalhistas (Art. 895, 896 CLT), súmulas e orientações jurisprudenciais do TST."
+    },
+    {
+      "id": "lk-cdc",
+      "title": "Código de Defesa do Consumidor (Lei nº 8.078/1990)",
+      "category": "CONSUMIDOR",
+      "officialSource": "Portal da Legislação da Presidência da República (Planalto)",
+      "lastUpdated": "2026-06-30",
+      "groundingStatus": "SYNCED",
+      "articlesIndexed": 119,
+      "description": "Relações de consumo, responsabilidade objetiva por fato e vício do produto/serviço, inversão do ônus da prova e práticas abusivas."
+    },
+    {
+      "id": "lk-stf-stj",
+      "title": "Súmulas Vinculantes STF & Teses Repetitivas STJ",
+      "category": "PROCESSO_CIVIL",
+      "officialSource": "Repositório Oficial de Jurisprudência STF / STJ",
+      "lastUpdated": "2026-08-30",
+      "groundingStatus": "ACTIVE",
+      "articlesIndexed": 3450,
+      "description": "Jurisprudência com filtro anti-alucinação: validação cruzada para garantir que o acórdão existe e não foi cancelado por overruling."
+    },
+    {
+      "id": "lk-escritorio-teses",
+      "title": "Acervo de Teses e Peças Precedentes do Escritório",
+      "category": "INTERNO_ESCRITORIO",
+      "officialSource": "JurisFlow Private Document Store (Tenant Silveira Advogados)",
+      "lastUpdated": "2026-08-31",
+      "groundingStatus": "ACTIVE",
+      "articlesIndexed": 184,
+      "description": "Banco de minutas vitoriosas, contratos padrão aprovados e teses proprietárias do escritório indexados via vetorização semântica (RAG Corporativo).",
+      "isCustomOfficeTesis": true
+    }
+  ],
+  "legalSyncConnectors": [
+    {
+      "id": "conn-planalto",
+      "name": "Portal da Legislação da Presidência da República (Planalto)",
+      "type": "PLANALTO_LEGISLACAO",
+      "status": "CONNECTED",
+      "protocol": "REST_API",
+      "endpointUrl": "https://legis.planalto.gov.br/legis/api/v2/normas",
+      "lastSyncAt": "Hoje, 03:15 BRT",
+      "frequency": "Diária automatizada (03:00 BRT)",
+      "recordsSynced": 7853,
+      "description": "Varredura contínua de Leis Complementares, Leis Ordinárias e Decretos com atualização de vigência e marcação de derrogações no CPC, CC, CLT e CDC.",
+      "autoSyncEnabled": true
+    },
+    {
+      "id": "conn-djen",
+      "name": "DJEN - Diário da Justiça Eletrônico Nacional (CNJ)",
+      "type": "DJEN_DIARIO_JUSTICA",
+      "status": "CONNECTED",
+      "protocol": "WEBHOOK",
+      "endpointUrl": "https://comunicaapi.pje.jus.br/api/v1/comunicacao",
+      "webhookPushUrl": "/api/webhooks/djen-intimacoes",
+      "lastSyncAt": "Hoje, 10:45 BRT",
+      "frequency": "Tempo Real (Push Webhook a cada 15 min)",
+      "recordsSynced": 1248,
+      "description": "Captura ativa e contínua de publicações forenses e intimações em nome dos advogados da banca com cálculo automático de prazos CPC/2015.",
+      "autoSyncEnabled": true
+    },
+    {
+      "id": "conn-precedentes-stf-stj",
+      "name": "Banco Nacional de Precedentes (STF / STJ)",
+      "type": "STF_STJ_PRECEDENTES",
+      "status": "CONNECTED",
+      "protocol": "REST_API",
+      "endpointUrl": "https://jurisprudencia.stf.jus.br/api/v1/sumulas-repetitivos",
+      "lastSyncAt": "Ontem, 22:00 BRT",
+      "frequency": "Diária (22:00 BRT)",
+      "recordsSynced": 3450,
+      "description": "Catalogação de Súmulas Vinculantes do STF, Recursos Especiais Repetitivos do STJ e detecção imediata de superação de teses (overruling).",
+      "autoSyncEnabled": true
+    },
+    {
+      "id": "conn-tjsp-dje",
+      "name": "Diários de Justiça Estaduais (DJe SP, RJ, MG, RS)",
+      "type": "TRIBUNAIS_ESTADUAIS_DJE",
+      "status": "CONNECTED",
+      "protocol": "REST_API",
+      "endpointUrl": "https://dje.tjsp.jus.br/cdje/api/cadernos",
+      "lastSyncAt": "Hoje, 06:00 BRT",
+      "frequency": "Matutina (06:00 BRT)",
+      "recordsSynced": 932,
+      "description": "Conector unificado aos cadernos administrativos e judiciais dos Tribunais de Justiça estaduais para checagem de despachos locais.",
+      "autoSyncEnabled": true
+    }
+  ],
+  "legalWebhookLogs": [
+    {
+      "id": "wh-log-1",
+      "timestamp": "Hoje, 10:45:12 BRT",
+      "source": "DJEN / CNJ Webhook Inbound",
+      "event": "INTIMACAO_RECEBIDA",
+      "payloadSummary": "Publicação identificada para Dr. Carlos Silveira (OAB/SP 184.920) no Proc. 1092834-12.2026.8.26.0100",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "wh-log-2",
+      "timestamp": "Hoje, 03:15:04 BRT",
+      "source": "Portal do Planalto REST API",
+      "event": "SINC_LEGISLACAO_FEDERAL",
+      "payloadSummary": "Varredura normativo-federal concluída: 7.853 normas validadas. 0 revogações nos Códigos principais.",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "wh-log-3",
+      "timestamp": "Ontem, 22:00:31 BRT",
+      "source": "Banco de Precedentes STJ",
+      "event": "OVERRULING_HEALTH_CHECK",
+      "payloadSummary": "Verificação de Súmulas Repetitivas: Súmula 385/STJ validada sem cancelamento ativo.",
+      "status": "SUCCESS"
+    },
+    {
+      "id": "wh-log-4",
+      "timestamp": "Ontem, 16:20:00 BRT",
+      "source": "DJEN / CNJ Webhook Inbound",
+      "event": "INTIMACAO_RECEBIDA",
+      "payloadSummary": "Intimação eletrônica da 4ª Vara de Família recebida e processada pelo extrator neural.",
+      "status": "SUCCESS"
+    }
+  ],
+  "processedWebhookIds": {},
+  "databaseNodes": [
+    {
+      "id": "db-node-primary",
+      "name": "Supabase Primário (PostgreSQL Cloud Ativo)",
+      "provider": "SUPABASE",
+      "url": "https://fqatbtzyedqwjxnqkvqd.supabase.co",
+      "anonKey": "",
+      "serviceRoleKey": "[configured]",
+      "role": "ACTIVE",
+      "status": "ONLINE",
+      "region": "sa-east-1 (São Paulo - BR)",
+      "latencyMs": 28,
+      "lastSyncAt": "2026-09-15T20:22:37.237Z",
+      "tablesCount": 14,
+      "recordsCount": 184,
+      "isManagedDefault": true,
+      "notes": "Banco de dados ativo de produção principal conectado ao Supabase Cloud.",
+      "createdAt": "2026-09-15T00:00:00.000Z"
+    },
+    {
+      "id": "db-node-dr-standby",
+      "name": "Supabase Réplica DR (Disaster Recovery / Standby)",
+      "provider": "SUPABASE",
+      "url": "https://dr-standby-jurisflow.supabase.co",
+      "anonKey": "[configured]",
+      "serviceRoleKey": "[configured]",
+      "role": "PASSIVE",
+      "status": "ONLINE",
+      "region": "us-east-1 (N. Virginia - USA)",
+      "latencyMs": 65,
+      "lastSyncAt": "2026-09-15T19:52:37.237Z",
+      "tablesCount": 14,
+      "recordsCount": 184,
+      "isManagedDefault": false,
+      "notes": "Nó secundário de Disaster Recovery para failover imediato e cópia contínua de segurança.",
+      "createdAt": "2026-09-15T00:00:00.000Z"
+    }
+  ],
+  "lgpdPortalConfig": {
+    "status": "ACTIVE",
+    "dpoName": "Dra. Gabriela M. Manni Capitani",
+    "dpoEmail": "privacidade.lgpd@capitani.adv.br",
+    "dpoPhone": "(12) 99148-6012",
+    "privacyPolicyUrl": "https://capitani.adv.br/politica-privacidade-lgpd",
+    "termsSummary": "Tratamento de dados estritamente voltado à representação judicial, cumprimento de obrigações legais perante os Tribunais e defesa de direitos conforme arts. 7º, incisos II, V e VI da Lei 13.709/2018.",
+    "updatedAt": "2026-09-15T20:22:37.237Z"
+  }
+}

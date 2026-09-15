@@ -67,6 +67,11 @@ import {
 } from './server/supabase.ts';
 
 import {
+  loadLocalDb,
+  saveLocalDb,
+} from './server/localDb.ts';
+
+import {
   PROD_TENANT,
   PROD_BRANCH,
   PROD_LAWYER,
@@ -751,6 +756,12 @@ class MemoryDatabase {
 }
 
 const db = new MemoryDatabase();
+
+// Hydrate from durable local disk database if present
+const localSavedDb = loadLocalDb();
+if (localSavedDb) {
+  Object.assign(db, localSavedDb);
+}
 
 // ==========================================
 // GEMINI ENTERPRISE FOR LEGAL (GOOGLE GENAI SDK)
@@ -1647,6 +1658,7 @@ async function startServer() {
       },
     };
     db.tenants[tenantIndex] = updated;
+    saveLocalDb(db);
     await syncTenantToSupabase(updated);
     logAudit(req, 'AUTH', updated.id, 'UPDATE', `Atualizou dados cadastrais e governança do escritório: ${updated.name}`);
     res.json(updated);
@@ -1687,6 +1699,7 @@ async function startServer() {
     if (req.body.logoUrl) {
       tenant.logoUrl = req.body.logoUrl;
     }
+    saveLocalDb(db);
     await syncTenantToSupabase(tenant);
     logAudit(req, 'AUTH', tenant.id, 'UPDATE', `Atualizou identidade visual e templates do escritório: ${tenant.name}`);
     res.json(tenant);
@@ -2102,7 +2115,26 @@ async function startServer() {
       'UPDATE',
       `Atualizou perfil/permissões do membro da equipe: ${updatedUser.name} (${branchAffiliations.length} filial(is) vinculada(s))`
     );
+    saveLocalDb(db);
     res.json(returnUser);
+  });
+
+  // Dedicated fast-path route for updating user profile photo & avatar
+  app.put('/api/users/:id/avatar', async (req: Request, res: Response) => {
+    const userIndex = db.users.findIndex((u) => u.id === req.params.id);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    const avatarUrl = req.body.avatarUrl || '';
+    db.users[userIndex].avatarUrl = avatarUrl;
+    const updatedUser = db.users[userIndex];
+
+    saveLocalDb(db);
+    const synced = await syncUserToSupabase(updatedUser);
+    console.log(`[Avatar Update] User ${updatedUser.name} (${updatedUser.id}) avatar updated. Synced to Supabase: ${synced}`);
+
+    logAudit(req, 'USER', updatedUser.id, 'UPDATE', `Foto de perfil atualizada para: ${updatedUser.name}`);
+    res.json(updatedUser);
   });
 
   app.delete('/api/users/:id', async (req: Request, res: Response) => {
@@ -4630,6 +4662,7 @@ Instruções:
         const hyd = await hydrateFromSupabase(db);
         if (hyd.success) {
           console.log('[Supabase] Startup hydration finished:', hyd.counts);
+          saveLocalDb(db);
         }
 
         if (process.env.SUPABASE_SYNC_ON_STARTUP === 'true') {
