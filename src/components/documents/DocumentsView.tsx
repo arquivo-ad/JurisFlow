@@ -364,7 +364,7 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
     const lawyerOab = vi.signatoryOab || currentTenant?.oabOfficeRegister || 'OAB/SP 478.370';
     const accentColor = vi.accentColor || '#4338ca';
     const fontFamily = vi.fontFamily || 'Times New Roman';
-    const logoUrl = vi.logoUrl || currentTenant?.logoUrl || '';
+    const logoUrl = vi.logoUrl !== undefined ? vi.logoUrl : (currentTenant?.logoUrl || '');
 
     // Selective visibility toggles according to user requirements
     const showHeaderOab = vi.showHeaderOab !== false; // Default true (clean OAB without "Registro:")

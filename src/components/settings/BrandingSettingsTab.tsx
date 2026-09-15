@@ -33,6 +33,8 @@ import {
   ShieldAlert,
   Settings2,
   FileSignature,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { Tenant, TenantVisualIdentity } from '../../types';
 import { api } from '../../services/api';
@@ -57,9 +59,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
   onTenantUpdated,
 }) => {
   const initialVi: TenantVisualIdentity = currentTenant?.visualIdentity || {
-    logoUrl: currentTenant?.logoUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=200&auto=format&fit=crop&q=80',
+    logoUrl: currentTenant?.visualIdentity?.logoUrl !== undefined ? currentTenant.visualIdentity.logoUrl : (currentTenant?.logoUrl || ''),
     logoPosition: 'left',
-    signatureImageUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80',
+    signatureImageUrl: currentTenant?.visualIdentity?.signatureImageUrl !== undefined ? currentTenant.visualIdentity.signatureImageUrl : '',
     signatoryName: 'Dra. Gabriela M. Manni Capitani',
     signatoryOab: 'OAB/SP 478.370',
     signatoryRole: 'Advogada Sócia e Titular',
@@ -152,15 +154,22 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     complianceNotes?: string;
   } | null>(null);
 
+  // Document File Extraction States
+  const [isExtractingDoc, setIsExtractingDoc] = useState(false);
+  const [extractSuccessMsg, setExtractSuccessMsg] = useState<string | null>(null);
+
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const sigFileInputRef = useRef<HTMLInputElement>(null);
   const docImportFileRef = useRef<HTMLInputElement>(null);
+  const manualTmplFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (currentTenant?.visualIdentity) {
       setVi((prev) => ({
         ...prev,
         ...currentTenant.visualIdentity,
+        logoUrl: currentTenant.visualIdentity.logoUrl !== undefined ? currentTenant.visualIdentity.logoUrl : (currentTenant.logoUrl || ''),
+        signatureImageUrl: currentTenant.visualIdentity.signatureImageUrl !== undefined ? currentTenant.visualIdentity.signatureImageUrl : '',
         // Guarantee defaults for toggles if unset
         showHeaderOab: currentTenant.visualIdentity.showHeaderOab !== false,
         showHeaderAddress: !!currentTenant.visualIdentity.showHeaderAddress,
@@ -170,6 +179,12 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         showFooterText: currentTenant.visualIdentity.showFooterText !== false,
         showFooterAddress: !!currentTenant.visualIdentity.showFooterAddress,
         showFooterPhone: !!currentTenant.visualIdentity.showFooterPhone,
+      }));
+    } else if (currentTenant) {
+      setVi((prev) => ({
+        ...prev,
+        logoUrl: currentTenant.logoUrl || '',
+        signatureImageUrl: '',
       }));
     }
   }, [currentTenant]);
@@ -210,6 +225,14 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
       img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = (type: 'logo' | 'signature') => {
+    if (type === 'logo') {
+      setVi((prev) => ({ ...prev, logoUrl: '' }));
+    } else {
+      setVi((prev) => ({ ...prev, signatureImageUrl: '' }));
+    }
   };
 
   const handleSave = async (customVi?: TenantVisualIdentity) => {
@@ -313,20 +336,55 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setIsAiModalOpen(true);
   };
 
-  const handleDocFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      if (text) {
-        setAiRawInput(text);
-        if (!aiModelName || aiModelName.includes('Petição')) {
-          setAiModelName(file.name.replace(/\.[^/.]+$/, ''));
+    setIsExtractingDoc(true);
+    setExtractSuccessMsg(null);
+    try {
+      const res = await api.extractDocumentText(file);
+      if (res && res.text) {
+        setAiRawInput(res.text);
+        if (!aiModelName || aiModelName.includes('Petição') || aiModelName.includes('Procuração') || aiModelName.includes('Contrato') || aiModelName.trim() === '') {
+          setAiModelName(res.suggestedTitle || file.name.replace(/\.[^/.]+$/, ''));
         }
+        setExtractSuccessMsg(`Arquivo "${file.name}" carregado com sucesso (${res.charCount.toLocaleString('pt-BR')} caracteres extraídos)`);
+      } else {
+        alert('Não foi possível extrair o texto deste documento.');
       }
-    };
-    reader.readAsText(file);
+    } catch (err: any) {
+      console.error('Falha na extração:', err);
+      alert('Erro ao extrair conteúdo do arquivo: ' + (err.message || 'Arquivo corrompido ou formato não suportado'));
+    } finally {
+      setIsExtractingDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleManualTemplateFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsExtractingDoc(true);
+    setExtractSuccessMsg(null);
+    try {
+      const res = await api.extractDocumentText(file);
+      if (res && res.text) {
+        setTemplateForm((prev) => ({
+          ...prev,
+          content: res.text,
+          name: prev.name.trim() ? prev.name : res.suggestedTitle,
+        }));
+        setExtractSuccessMsg(`Arquivo "${file.name}" importado com sucesso (${res.charCount.toLocaleString('pt-BR')} caracteres).`);
+      } else {
+        alert('Não foi possível extrair texto legível deste documento.');
+      }
+    } catch (err: any) {
+      console.error('Falha na extração:', err);
+      alert('Erro ao extrair conteúdo do arquivo: ' + (err.message || 'Formato não suportado'));
+    } finally {
+      setIsExtractingDoc(false);
+      e.target.value = '';
+    }
   };
 
   const handleRunAiAction = async () => {
@@ -572,23 +630,50 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleImageUpload(file, 'logo');
+                        e.target.value = '';
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => logoFileInputRef.current?.click()}
-                      className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
-                    >
-                      <Upload className="w-3 h-3" />
-                      <span>Upload Imagem</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {vi.logoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('logo')}
+                          title="Remover logotipo e manter apenas o nome do escritório"
+                          className="text-[11px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Remover</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => logoFileInputRef.current?.click()}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>{vi.logoUrl ? 'Alterar' : 'Upload Imagem'}</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden">
+                  <div className="relative h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden group">
                     {vi.logoUrl ? (
-                      <img src={vi.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                      <>
+                        <img src={vi.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('logo')}
+                          title="Remover logotipo"
+                          className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/70 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-all shadow-xs"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">Sem logotipo cadastrado</span>
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Building2 className="w-4 h-4 text-slate-300 shrink-0" />
+                        <span className="text-[11px] italic">Sem logo (cabeçalho institucional em texto)</span>
+                      </div>
                     )}
                   </div>
 
@@ -643,23 +728,50 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleImageUpload(file, 'signature');
+                        e.target.value = '';
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => sigFileInputRef.current?.click()}
-                      className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
-                    >
-                      <Upload className="w-3 h-3" />
-                      <span>Upload Imagem</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {vi.signatureImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('signature')}
+                          title="Remover chancela e usar traço tradicional"
+                          className="text-[11px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Remover</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => sigFileInputRef.current?.click()}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>{vi.signatureImageUrl ? 'Alterar' : 'Upload Imagem'}</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden">
+                  <div className="relative h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden group">
                     {vi.signatureImageUrl ? (
-                      <img src={vi.signatureImageUrl} alt="Chancela" className="max-h-full max-w-full object-contain" />
+                      <>
+                        <img src={vi.signatureImageUrl} alt="Chancela" className="max-h-full max-w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('signature')}
+                          title="Remover assinatura gráfica"
+                          className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/70 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-all shadow-xs"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">Sem assinatura gráfica cadastrada</span>
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <FileSignature className="w-4 h-4 text-slate-300 shrink-0" />
+                        <span className="text-[11px] italic">Sem chancela (traço tradicional para caneta/física)</span>
+                      </div>
                     )}
                   </div>
 
@@ -1244,11 +1356,23 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => handleOpenAiImportModal('SANITIZE')}
+                  onClick={() => {
+                    handleOpenAiImportModal('SANITIZE');
+                    setTimeout(() => docImportFileRef.current?.click(), 150);
+                  }}
                   className="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-md"
                 >
-                  <Scissors className="w-4 h-4" />
-                  <span>Importar Real & Higienizar (LGPD)</span>
+                  <Upload className="w-4 h-4" />
+                  <span>Enviar Peça em Word (.docx) ou PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenAiImportModal('SANITIZE')}
+                  className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-semibold text-xs transition-all flex items-center gap-1.5"
+                >
+                  <Scissors className="w-4 h-4 text-indigo-300" />
+                  <span>Higienizar Real (LGPD)</span>
                 </button>
 
                 <button
@@ -1257,7 +1381,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                   className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-semibold text-xs transition-all flex items-center gap-1.5"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>Gerar Modelo Padrão por IA</span>
+                  <span>IA Sugestão / Padrão</span>
                 </button>
 
                 <button
@@ -1467,6 +1591,66 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                 </div>
               </div>
 
+              {/* Import Word / PDF into Manual Template */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-indigo-950">
+                    <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>Importar Arquivo Pronto do Escritório</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-mono font-bold">
+                      .DOCX • .PDF • .TXT
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-900/80 leading-snug">
+                    Carregue uma petição, procuração ou contrato já existente para preencher automaticamente esta minuta.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <input
+                    ref={manualTmplFileRef}
+                    type="file"
+                    accept=".docx,.doc,.pdf,.txt"
+                    className="hidden"
+                    onChange={handleManualTemplateFileUpload}
+                  />
+                  <button
+                    type="button"
+                    disabled={isExtractingDoc}
+                    onClick={() => manualTmplFileRef.current?.click()}
+                    className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+                  >
+                    {isExtractingDoc ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Extraindo Arquivo...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Importar Arquivo</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {extractSuccessMsg && (
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{extractSuccessMsg}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExtractSuccessMsg(null)}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-slate-700 font-semibold">Conteúdo da Minuta / Template</label>
@@ -1618,34 +1802,66 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
               </div>
 
               {aiMode !== 'GENERATE' && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-700 font-semibold">
-                      {aiMode === 'SANITIZE' ? 'Cole o Texto da Peça Real ou Importe um Arquivo' : 'Texto da Minuta'}
-                    </label>
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+                    <div>
+                      <label className="text-slate-700 font-semibold block">
+                        {aiMode === 'SANITIZE' ? 'Documento Real do Escritório' : 'Texto da Minuta'}
+                      </label>
+                      <span className="text-[11px] text-slate-500">
+                        Envie o arquivo original em Word (.docx), PDF ou cole o texto
+                      </span>
+                    </div>
                     <div>
                       <input
                         ref={docImportFileRef}
                         type="file"
-                        accept=".txt,.doc,.docx"
+                        accept=".docx,.doc,.pdf,.txt"
                         className="hidden"
                         onChange={handleDocFileUpload}
                       />
                       <button
                         type="button"
+                        disabled={isExtractingDoc}
                         onClick={() => docImportFileRef.current?.click()}
-                        className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold flex items-center gap-1.5 transition-all shadow-2xs disabled:opacity-50"
                       >
-                        <Upload className="w-3 h-3" />
-                        <span>Carregar Arquivo (.txt)</span>
+                        {isExtractingDoc ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                            <span>Extraindo Word/PDF...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Carregar Arquivo (Word / PDF / TXT)</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
+
+                  {extractSuccessMsg && (
+                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{extractSuccessMsg}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setExtractSuccessMsg(null)}
+                        className="text-emerald-700 hover:text-emerald-900 font-bold text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
                   <textarea
-                    rows={7}
+                    rows={8}
                     value={aiRawInput}
                     onChange={(e) => setAiRawInput(e.target.value)}
-                    placeholder="Cole aqui o texto da petição, procuração ou contrato com os dados reais do cliente. A IA fará a higienização de nomes, CPF, endereços, mantendo os dados da Dra. Gabriela e a formatação."
+                    placeholder="Cole aqui o texto da petição, procuração ou contrato com os dados reais do cliente, ou clique acima em 'Carregar Arquivo' para importar diretamente o arquivo Word (.docx) ou PDF do seu escritório..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>

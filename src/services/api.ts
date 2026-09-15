@@ -398,6 +398,33 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(params),
     }),
+  extractDocumentText: async (file: File) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64Data = result.includes(',') ? result.split(',')[1] : result;
+        resolve(base64Data);
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+
+    return request<{
+      text: string;
+      fileName: string;
+      charCount: number;
+      detectedVariables: string[];
+      suggestedTitle: string;
+    }>('/api/documents/extract-file-content', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type,
+        fileBase64: base64,
+      }),
+    });
+  },
   getLegalKnowledge: () =>
     request<AILegalGroundingOverview>('/api/ai/legal-knowledge'),
   syncLegalSources: () =>

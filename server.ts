@@ -812,8 +812,8 @@ async function startServer() {
     res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
   });
 
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
   // --- MULTI-TENANT & CONTEXT MIDDLEWARE ---
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -1696,7 +1696,7 @@ async function startServer() {
       ...(tenant.visualIdentity || {}),
       ...req.body,
     };
-    if (req.body.logoUrl) {
+    if (req.body.logoUrl !== undefined) {
       tenant.logoUrl = req.body.logoUrl;
     }
 
@@ -2726,6 +2726,99 @@ async function startServer() {
   });
 
   // --- DOCUMENTS & TEMPLATES ---
+  app.post('/api/documents/extract-file-content', async (req: Request, res: Response) => {
+    try {
+      const { fileName, fileBase64, mimeType } = req.body;
+      if (!fileBase64) {
+        return res.status(400).json({ error: 'Nenhum dado de arquivo enviado.' });
+      }
+
+      const buffer = Buffer.from(fileBase64, 'base64');
+      const lowerName = (fileName || '').toLowerCase();
+      let extractedText = '';
+
+      if (lowerName.endsWith('.docx') || mimeType?.includes('wordprocessingml') || mimeType?.includes('officedocument')) {
+        try {
+          const mammothMod: any = await import('mammoth');
+          const mammoth = mammothMod.default || mammothMod;
+          const result = await mammoth.extractRawText({ buffer });
+          extractedText = result?.value || '';
+        } catch (docxErr: any) {
+          console.warn('Erro ao processar DOCX com mammoth:', docxErr);
+        }
+      } else if (lowerName.endsWith('.pdf') || mimeType?.includes('pdf')) {
+        try {
+          const pdfMod: any = await import('pdf-parse');
+          const pdfParse = pdfMod.default || pdfMod;
+          const pdfData = await pdfParse(buffer);
+          extractedText = pdfData?.text || '';
+        } catch (pdfErr: any) {
+          console.warn('pdf-parse falhou, tentando fallback Gemini OCR:', pdfErr);
+        }
+
+        // Se o texto ficou vazio ou muito curto (ex: PDF escaneado), recorre ao Gemini para OCR jurídico de alta fidelidade
+        if ((!extractedText || extractedText.trim().length < 50) && getGeminiClient()) {
+          try {
+            const ai = getGeminiClient();
+            if (ai) {
+              const resp = await ai.models.generateContent({
+                model: GEMINI_LEGAL_MODEL,
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [
+                      {
+                        inlineData: {
+                          mimeType: 'application/pdf',
+                          data: fileBase64,
+                        },
+                      },
+                      {
+                        text: 'Extraia o texto integral e exato deste documento jurídico com todas as suas seções, qualificações, pedidos, cláusulas, cabeçalho e fechamento. Mantenha os parágrafos e termos literais sem resumir.',
+                      },
+                    ],
+                  },
+                ],
+              });
+              if (resp?.text) {
+                extractedText = resp.text;
+              }
+            }
+          } catch (geminiPdfErr) {
+            console.error('Falha no fallback Gemini PDF OCR:', geminiPdfErr);
+          }
+        }
+      } else {
+        // Arquivo de texto simples (.txt, etc.)
+        extractedText = buffer.toString('utf-8');
+      }
+
+      // Normaliza quebras de linha e limpa excessos mantendo parágrafos
+      extractedText = extractedText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      extractedText = extractedText.replace(/\n{3,}/g, '\n\n').trim();
+
+      // Detecta variáveis existentes com tags {{...}}
+      const varMatches = extractedText.match(/\{\{([A-Za-z0-9_]+)\}\}/g) || [];
+      const detectedVariables = Array.from(new Set(varMatches.map((m) => m.replace(/[{}]/g, '').trim())));
+
+      const suggestedTitle = (fileName || 'Modelo Forense')
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]+/g, ' ')
+        .trim();
+
+      return res.json({
+        text: extractedText,
+        fileName: fileName || 'documento',
+        charCount: extractedText.length,
+        detectedVariables,
+        suggestedTitle,
+      });
+    } catch (err: any) {
+      console.error('Falha geral na extração do arquivo:', err);
+      return res.status(500).json({ error: 'Erro ao processar arquivo: ' + (err.message || 'Erro interno') });
+    }
+  });
+
   app.get('/api/documents', (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     res.json(db.documents.filter((d) => d.tenantId === tenantId));
