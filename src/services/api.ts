@@ -381,6 +381,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(params),
     }),
+  aiSanitizeOrSuggestTemplate: (params: {
+    action: 'SANITIZE_REAL_MODEL' | 'SUGGEST_IMPROVEMENTS' | 'GENERATE_LEGAL_BASE';
+    category: string;
+    modelName?: string;
+    rawContent?: string;
+  }) =>
+    request<{
+      sanitizedContent: string;
+      extractedVariables: string[];
+      titleSuggestion: string;
+      summary: string;
+      suggestions?: string[];
+      complianceNotes?: string;
+    }>('/api/ai/template-sanitize-suggest', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
   getLegalKnowledge: () =>
     request<AILegalGroundingOverview>('/api/ai/legal-knowledge'),
   syncLegalSources: () =>

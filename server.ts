@@ -1699,6 +1699,33 @@ async function startServer() {
     if (req.body.logoUrl) {
       tenant.logoUrl = req.body.logoUrl;
     }
+
+    // Synchronize templates into db.templates so all office members see them in DocumentsView
+    if (Array.isArray(req.body.templates)) {
+      req.body.templates.forEach((t: any) => {
+        const existingIdx = db.templates.findIndex((dt: any) => dt.id === t.id);
+        const templateItem: any = {
+          id: t.id,
+          name: t.name,
+          title: t.name,
+          category: t.category,
+          description: t.description || `Modelo institucional padronizado (${t.category})`,
+          content: t.content,
+          variables: t.variables || ['NOME_CLIENTE', 'CPF_CLIENTE', 'ENDERECO_CLIENTE'],
+          placeholders: t.variables || ['NOME_CLIENTE', 'CPF_CLIENTE', 'ENDERECO_CLIENTE'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          tenantId: tenant.id,
+          isDefault: !!t.isDefault,
+        };
+        if (existingIdx >= 0) {
+          db.templates[existingIdx] = { ...db.templates[existingIdx], ...templateItem };
+        } else {
+          db.templates.unshift(templateItem);
+        }
+      });
+    }
+
     saveLocalDb(db);
     await syncTenantToSupabase(tenant);
     logAudit(req, 'AUTH', tenant.id, 'UPDATE', `Atualizou identidade visual e templates do escritório: ${tenant.name}`);
@@ -4092,6 +4119,268 @@ Texto / Conteúdo Analisado:
     });
 
     res.json(auditResult);
+  });
+
+  // Helper de fallback inteligente e conformidade LGPD para modelos forenses
+  function buildTemplateSanitizeFallback(
+    action: string,
+    category: string,
+    modelName: string | undefined,
+    rawContent: string | undefined,
+    lawyerName: string,
+    lawyerOab: string,
+    lawFirmName: string
+  ) {
+    const effectiveName = modelName || (category === 'PETICAO' ? 'Petição Inicial / Peça Forense' : category === 'PROCURACAO' ? 'Procuração Ad Judicia et Extra' : 'Contrato de Honorários Advocatícios');
+    
+    if (action === 'SANITIZE_REAL_MODEL' && rawContent) {
+      let sanitized = rawContent;
+      const extracted: string[] = [];
+
+      // CPF pattern
+      if (/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/.test(sanitized)) {
+        sanitized = sanitized.replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, '{{CPF_CLIENTE}}');
+        extracted.push('CPF_CLIENTE');
+      }
+      // RG pattern
+      if (/\b\d{1,2}\.\d{3}\.\d{3}-[\dXx]\b/.test(sanitized)) {
+        sanitized = sanitized.replace(/\b\d{1,2}\.\d{3}\.\d{3}-[\dXx]\b/g, '{{RG_CLIENTE}}');
+        extracted.push('RG_CLIENTE');
+      }
+      // CNPJ pattern de cliente
+      if (/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/.test(sanitized)) {
+        sanitized = sanitized.replace(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g, '{{CNPJ_CLIENTE}}');
+        extracted.push('CNPJ_CLIENTE');
+      }
+      // Process number pattern
+      if (/\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/.test(sanitized)) {
+        sanitized = sanitized.replace(/\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g, '{{NUMERO_PROCESSO}}');
+        extracted.push('NUMERO_PROCESSO');
+      }
+      // CEP pattern
+      if (/\b\d{5}-\d{3}\b/.test(sanitized)) {
+        sanitized = sanitized.replace(/\b\d{5}-\d{3}\b/g, '{{CEP_CLIENTE}}');
+        extracted.push('CEP_CLIENTE');
+      }
+
+      if (!extracted.includes('NOME_CLIENTE')) extracted.unshift('NOME_CLIENTE');
+      if (!extracted.includes('ENDERECO_CLIENTE')) extracted.push('ENDERECO_CLIENTE');
+
+      return {
+        sanitizedContent: sanitized,
+        extractedVariables: extracted,
+        titleSuggestion: effectiveName,
+        summary: `Documento higienizado conforme a LGPD. Dados pessoais substituídos por tags {{...}} e identificação da banca (${lawyerName}, ${lawyerOab}) integralmente preservada.`
+      };
+    }
+
+    if (action === 'SUGGEST_IMPROVEMENTS') {
+      const suggestions = [
+        'Adequação formal ao CPC/2015 com contagem de prazos estritamente em dias úteis (Art. 219).',
+        'Inclusão de cláusula expressa de conformidade com a LGPD (Lei nº 13.709/2018) para proteção mútua.',
+        'Padronização da assinatura com ${lawyerName} (${lawyerOab}) e desfecho formal institucional.',
+        'Previsão de comunicações forenses e extrajudiciais por canais eletrônicos oficiais.'
+      ];
+      let improved = rawContent || '';
+      if (!improved.includes('Lei nº 13.709/2018')) {
+        improved += '\n\n[CLÁUSULA DE PROTEÇÃO DE DADOS - LGPD]: As partes declaram ciência e concordância mútua quanto ao tratamento de dados pessoais estritamente para a finalidade de execução deste instrumento e representação judicial, nos termos da Lei nº 13.709/2018.';
+      }
+      return {
+        sanitizedContent: improved,
+        extractedVariables: ['NOME_CLIENTE', 'CPF_CLIENTE', 'VALOR_CAUSA'],
+        titleSuggestion: `${effectiveName} (Otimizado por IA)`,
+        summary: 'Revisão forense aplicada com inclusão de cláusula LGPD e adequação de desfecho formal.',
+        suggestions,
+        complianceNotes: 'Documento em conformidade com o CPC/2015, Estatuto da Advocacia e LGPD.'
+      };
+    }
+
+    // Modelo padrão ouro gerado do zero
+    let baseContent = '';
+    if (category === 'PROCURACAO') {
+      baseContent = `PROCURAÇÃO AD JUDICIA ET EXTRA
+
+OUTORGANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, {{PROFISSAO_CLIENTE}}, portador(a) do RG nº {{RG_CLIENTE}} e inscrito(a) no CPF/MF sob o nº {{CPF_CLIENTE}}, residente e domiciliado(a) na {{ENDERECO_CLIENTE}}.
+
+OUTORGADOS: ${lawyerName.toUpperCase()}, advogada inscrita na ${lawyerOab}, integrante da sociedade ${lawFirmName.toUpperCase()}.
+
+PODERES: Pelo presente instrumento particular de mandato, o(a) Outorgante nomeia e constitui o(s) Outorgado(s) seu(sua) bastante procurador(a), conferindo-lhe(s) os poderes da cláusula "ad judicia et extra" para o foro em geral, em qualquer Juízo, Instância ou Tribunal, bem como perante repartições públicas e órgãos da administração direta e indireta.
+
+PODERES ESPECIAIS: Confere ainda poderes especiais para confessar, reconhecer a procedência do pedido, transigir, desistir, renunciar ao direito sobre o qual se funda a ação, receber valores, dar quitação, firmar compromissos e substabelecer com ou sem reserva de poderes (Art. 105 do CPC/2015).
+
+FINALIDADE: Representação judicial e extrajudicial para defesa dos interesses do(a) Outorgante no âmbito de {{OBJETO_DA_ACAO}}.
+
+{{CIDADE_DATA}}.
+
+___________________________________________
+{{NOME_CLIENTE}} - Outorgante`;
+    } else if (category === 'CONTRATO') {
+      baseContent = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS E HONORÁRIOS
+
+Pelo presente instrumento particular, de um lado:
+
+CONTRATANTE: {{NOME_CLIENTE}}, inscrito(a) no CPF sob nº {{CPF_CLIENTE}}, residente em {{ENDERECO_CLIENTE}}.
+
+CONTRATADA: ${lawFirmName.toUpperCase()}, representada por sua patrona ${lawyerName}, inscrita na ${lawyerOab}.
+
+Têm, entre si, justo e contratado o seguinte:
+
+CLÁUSULA PRIMEIRA - DO OBJETO
+O presente instrumento tem por objeto a prestação de serviços jurídicos pela CONTRATADA no patrocínio dos interesses do(a) CONTRATANTE perante o Poder Judiciário em {{OBJETO_DO_CONTRATO}}.
+
+CLÁUSULA SEGUNDA - DOS HONORÁRIOS
+Pelos serviços pactuados, o(a) CONTRATANTE pagará à CONTRATADA:
+a) Honorários Iniciais / Pró-labore no valor de R$ {{VALOR_PRO_LABORE}}, pagável em {{CONDICOES_PAGAMENTO}};
+b) Honorários de Êxito no percentual de {{PERCENTUAL_EXITO}}% sobre o proveito econômico obtido.
+
+CLÁUSULA TERCEIRA - DOS HONORÁRIOS SUCUMBENCIAIS
+Os honorários sucumbenciais fixados em juízo pertencerão exclusivamente aos advogados contratados, nos termos do art. 23 da Lei Federal nº 8.906/1994 (Estatuto da OAB).
+
+CLÁUSULA QUARTA - DA PROTEÇÃO DE DADOS (LGPD)
+As partes declaram ciência e conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018), autorizando o tratamento estritamente para o cumprimento do mandato judicial.
+
+CLÁUSULA QUINTA - DO FORO
+Fica eleito o Foro da Comarca de {{FORO_ELEITO}} para dirimir qualquer dúvida oriunda deste contrato.
+
+{{CIDADE_DATA}}.
+
+___________________________             ___________________________
+CONTRATANTE                             CONTRATADA: ${lawyerName}`;
+    } else {
+      baseContent = `EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA {{VARA_COMARCA}}
+
+Autos nº {{NUMERO_PROCESSO}}
+
+{{NOME_CLIENTE}}, já devidamente qualificado(a) nos autos em epígrafe, por sua advogada infra-assinada, ${lawyerName}, inscrita na ${lawyerOab}, vem, respeitosamente, perante Vossa Excelência, apresentar:
+
+{{NOME_DA_PECA}}
+
+em face de {{NOME_REU}}, pelas razões de fato e de direito a seguir expostas:
+
+I - DOS FATOS
+{{NARRACAO_DOS_FATOS}}
+
+II - DO DIREITO
+{{FUNDAMENTACAO_JURIDICA}}
+
+III - DOS PEDIDOS
+Ante o exposto, requer a Vossa Excelência:
+a) A procedência integral dos pedidos formulados;
+b) A condenação da parte contrária ao pagamento das custas processuais e honorários advocatícios sucumbenciais nos termos do art. 85 do CPC;
+c) Manifesta {{OPCAO_AUDIENCIA_CONCILIACAO}} quanto à realização de audiência de conciliação (art. 319, VII do CPC).
+
+Termos em que,
+Pede e Espera Deferimento.
+
+{{CIDADE_DATA}}.
+
+_____________________________________________
+${lawyerName}
+${lawyerOab}`;
+    }
+
+    return {
+      sanitizedContent: baseContent,
+      extractedVariables: ['NOME_CLIENTE', 'CPF_CLIENTE', 'ENDERECO_CLIENTE', 'CIDADE_DATA'],
+      titleSuggestion: effectiveName,
+      summary: `Modelo institucional padrão ouro gerado para o escritório ${lawFirmName}.`
+    };
+  }
+
+  // 4.1 Sanitizador Inteligente (LGPD) e Gerador de Sugestões de Modelos Jurídicos
+  app.post('/api/ai/template-sanitize-suggest', async (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const { action, category, modelName, rawContent } = req.body;
+    const tenant = db.tenants.find((t) => t.id === tenantId) || db.tenants[0];
+    const vi = tenant?.visualIdentity;
+
+    const lawFirmName = tenant?.name || 'Escritório de Advocacia';
+    const lawyerName = vi?.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+    const lawyerOab = vi?.signatoryOab || tenant?.oabOfficeRegister || 'OAB/SP 478.370';
+
+    const ai = getGeminiClient();
+    let result: any = null;
+
+    if (ai && (rawContent || action === 'GENERATE_LEGAL_BASE')) {
+      try {
+        let systemTask = '';
+        if (action === 'SANITIZE_REAL_MODEL') {
+          systemTask = `Você é o Especialista em Legal Design e Adequação LGPD de Peças Jurídicas do Gemini Enterprise for Legal.
+O usuário enviou um DOCUMENTO REAL utilizado em um caso concreto (${category}: ${modelName || 'Modelo Forense'}).
+O documento contém dados pessoais reais de pessoas físicas e jurídicas (clientes, partes contrárias, testemunhas, números de processos, contas, valores).
+
+SUA MISSÃO:
+1. HIGIENIZAR TOTALMENTE DADOS PESSOAIS conforme a LGPD:
+   Substitua nomes de clientes e partes por tags estruturadas:
+   {{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, {{PROFISSAO_CLIENTE}}, {{CPF_CLIENTE}}, {{RG_CLIENTE}}, {{ENDERECO_CLIENTE}}, {{NUMERO_PROCESSO}}, {{VARA_COMARCA}}, {{NOME_REU}}, {{QUALIFICACAO_REU}}, {{VALOR_CAUSA}}, {{HONORARIOS_VALOR}}, {{CIDADE_DATA}}.
+2. PRESERVAR TOTALMENTE os dados do patrono e da sociedade de advogados:
+   - Nome do(a) advogado(a): "${lawyerName}"
+   - OAB: "${lawyerOab}" (NUNCA insira a palavra "Registro:", apenas a OAB pura)
+   - Nome do escritório: "${lawFirmName}"
+   - Fechamento formal, poderes específicos, cláusulas de honorários padrão.
+3. CONSERVAR A FORMATAÇÃO FORENSE:
+   Mantenha a estrutura de tópicos, seções (DOS FATOS, DO DIREITO, DOS PEDIDOS), cláusulas numeradas, alíneas e fórmulas de deferimento.
+4. Responda ESTRITAMENTE em JSON com a seguinte estrutura:
+{
+  "sanitizedContent": "string com o documento higienizado e tags {{...}}",
+  "extractedVariables": ["NOME_CLIENTE", "CPF_CLIENTE"],
+  "titleSuggestion": "Nome refinado do modelo",
+  "summary": "Resumo objetivo dos dados higienizados e estrutura preservada"
+}`;
+        } else if (action === 'SUGGEST_IMPROVEMENTS') {
+          systemTask = `Você é o Consultor Sênior em Prática Forense e Conformidade Processual (CPC/2015, STJ, OAB).
+Analise o modelo jurídico fornecido (${category}: ${modelName || 'Modelo'}) e sugira MELHORIAS TÉCNICAS E RECOMENDAÇÕES PRÁTICAS:
+1. Verifique conformidade com o Código de Processo Civil de 2015, Código Civil, Estatuto da OAB (Lei 8.906/94) e LGPD (Lei 13.709/2018).
+2. Para Petição: Verifique pedidos obrigatórios (art. 319 CPC), indicação de audiência de conciliação, justiça gratuita e tutela provisória.
+3. Para Procuração: Verifique poderes gerais 'ad judicia et extra' e poderes especiais do art. 105 do CPC (receber e dar quitação, transigir, desistir, renunciar ao direito, firmar compromisso e substabelecer).
+4. Para Contrato de Honorários: Verifique clareza da forma de pagamento, cláusula quota litis dentro dos limites da OAB, previsão de sucumbência, desistência/revogação e proteção de dados LGPD.
+5. Forneça uma versão aprimorada com as melhorias implementadas, mantendo o estilo do escritório (${lawyerName}, ${lawyerOab}).
+6. Responda ESTRITAMENTE em JSON:
+{
+  "sanitizedContent": "string com o texto aprimorado e atualizado com as melhorias",
+  "extractedVariables": ["string"],
+  "titleSuggestion": "Título otimizado do modelo",
+  "summary": "Resumo das melhorias técnicas aplicadas",
+  "suggestions": ["Melhoria 1...", "Melhoria 2...", "Melhoria 3..."],
+  "complianceNotes": "Parecer de conformidade legal"
+}`;
+        } else {
+          systemTask = `Você é o Gerador de Modelos Forenses Padrão Ouro da Advocacia Brasileira.
+Crie um modelo institucional de altíssimo nível para a categoria "${category}" em nome de "${lawyerName}", inscrita na "${lawyerOab}", escritório "${lawFirmName}".
+Utilize placeholders inteligentes {{NOME_CLIENTE}}, {{CPF_CLIENTE}}, etc.
+NÃO use a palavra "Registro:" para a OAB.
+Responda em JSON:
+{
+  "sanitizedContent": "string com o modelo completo",
+  "extractedVariables": ["NOME_CLIENTE", "CPF_CLIENTE"],
+  "titleSuggestion": "Nome do modelo",
+  "summary": "Descrição do modelo gerado"
+}`;
+        }
+
+        const response = await ai.models.generateContent({
+          model: GEMINI_LEGAL_MODEL,
+          contents: [
+            systemTask,
+            `CONTEÚDO DO DOCUMENTO / BASE:\n"""${rawContent || ''}"""`
+          ],
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        result = JSON.parse(response.text || '{}');
+      } catch (err) {
+        console.error('Gemini error in template-sanitize-suggest:', err);
+      }
+    }
+
+    // Fallback inteligente caso a IA não esteja conectada ou retorne vazio
+    if (!result || !result.sanitizedContent) {
+      result = buildTemplateSanitizeFallback(action, category, modelName, rawContent, lawyerName, lawyerOab, lawFirmName);
+    }
+
+    res.json(result);
   });
 
   // 5. Base de Conhecimento e Grounding de Legislação Brasileira

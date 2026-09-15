@@ -584,6 +584,7 @@ export default function App() {
                   templates={templates}
                   cases={cases}
                   persons={persons}
+                  currentTenant={currentTenant}
                   onSaveDocument={handleSaveDocument}
                   onOpenAiGateway={handleOpenAiGateway}
                   onRefresh={loadBootstrapData}

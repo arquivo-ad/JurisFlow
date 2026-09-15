@@ -36,6 +36,7 @@ interface DocumentsViewProps {
   templates: DocumentTemplate[];
   cases: Case[];
   persons: Person[];
+  currentTenant?: any;
   onSaveDocument: (data: Partial<DocumentItem>) => Promise<void>;
   onOpenAiGateway: (tab: string, prompt?: string) => void;
   onRefresh?: () => void;
@@ -66,6 +67,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   templates = [],
   cases = [],
   persons = [],
+  currentTenant,
   onSaveDocument = async (_data: Partial<DocumentItem>) => {},
   onOpenAiGateway = (_tab: string, _prompt?: string) => {},
   onRefresh = () => {},
@@ -356,6 +358,30 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
       return;
     }
 
+    const vi = currentTenant?.visualIdentity || {};
+    const lawFirmName = currentTenant?.name || 'Gabriela Capitani Advocacia';
+    const lawyerName = vi.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+    const lawyerOab = vi.signatoryOab || currentTenant?.oabOfficeRegister || 'OAB/SP 478.370';
+    const accentColor = vi.accentColor || '#4338ca';
+    const fontFamily = vi.fontFamily || 'Times New Roman';
+    const logoUrl = vi.logoUrl || currentTenant?.logoUrl || '';
+
+    // Selective visibility toggles according to user requirements
+    const showHeaderOab = vi.showHeaderOab !== false; // Default true (clean OAB without "Registro:")
+    const showHeaderAddress = !!vi.showHeaderAddress && !!vi.headerAddress;
+    const showHeaderPhone = !!vi.showHeaderPhone && !!(vi.contactPhone || currentTenant?.contactPhone);
+    const showHeaderEmail = !!vi.showHeaderEmail && !!(vi.contactEmail || currentTenant?.contactEmail);
+
+    let headerMetaItems: string[] = [];
+    if (showHeaderOab && lawyerOab) headerMetaItems.push(lawyerOab);
+    if (showHeaderAddress) headerMetaItems.push(vi.headerAddress);
+    if (showHeaderPhone) headerMetaItems.push(`Tel: ${vi.contactPhone || currentTenant?.contactPhone}`);
+    if (showHeaderEmail) headerMetaItems.push(vi.contactEmail || currentTenant?.contactEmail);
+
+    const borderStyle = vi.borderStyle === 'NONE' ? 'none' : vi.borderStyle === 'DOUBLE' ? 'double' : vi.borderStyle === 'DASHED' ? 'dashed' : 'solid';
+    const borderWidth = vi.borderWidth || '2px';
+    const logoHeight = vi.logoMaxHeight || 44;
+
     const signatureBlock = doc.digitalSignature
       ? `
       <div style="margin-top: 40px; padding: 16px; border: 2px solid #10b981; border-radius: 8px; background: #ecfdf5; font-family: sans-serif; font-size: 12px; color: #065f46;">
@@ -366,32 +392,44 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
         <div><strong>Hash SHA-256:</strong> <code style="word-break: break-all; font-family: monospace;">${doc.digitalSignature.hashSha256}</code></div>
         <div><strong>Código de Verificação:</strong> ${doc.digitalSignature.verificationCode} (${doc.digitalSignature.certificateAuthority})</div>
       </div>`
-      : '';
+      : `
+      <div style="margin-top: 50px; text-align: center; font-family: ${fontFamily}, serif;">
+        ${vi.signatureImageUrl ? `<img src="${vi.signatureImageUrl}" style="height: 48px; object-fit: contain; margin-bottom: 4px;" alt="Assinatura" /><br/>` : `<div style="width: 220px; border-bottom: 1px solid #333; margin: 0 auto 6px auto;"></div>`}
+        <div style="font-weight: bold; font-size: 11pt; color: #111;">${lawyerName}</div>
+        <div style="font-size: 10pt; color: #4338ca; font-family: monospace;">${lawyerOab}</div>
+        <div style="font-size: 9pt; color: #666; font-family: sans-serif;">${vi.signatoryRole || 'Advogada'}</div>
+      </div>
+      `;
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${doc.title} - Silveira & Associados</title>
+          <title>${doc.title} - ${lawFirmName}</title>
           <style>
             @page { margin: 20mm; size: A4; }
-            body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.6; color: #111; margin: 0; padding: 20px; }
-            .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 25px; }
-            .header h1 { margin: 0; font-size: 16pt; text-transform: uppercase; letter-spacing: 1px; color: #1e1b4b; }
-            .header p { margin: 4px 0 0 0; font-size: 9pt; color: #555; font-family: sans-serif; }
+            body { font-family: "${fontFamily}", Times, serif; font-size: 12pt; line-height: 1.6; color: #111; margin: 0; padding: 20px; }
+            .header-container { border-bottom: ${borderWidth} ${borderStyle} ${accentColor}; padding-bottom: 14px; margin-bottom: 25px; }
+            .header-content { display: flex; flex-direction: column; align-items: ${vi.logoPosition === 'center' ? 'center' : vi.logoPosition === 'right' ? 'flex-end' : 'flex-start'}; text-align: ${vi.logoPosition === 'center' ? 'center' : vi.logoPosition === 'right' ? 'right' : 'left'}; }
+            .header-logo { max-height: ${logoHeight}px; object-fit: contain; margin-bottom: 8px; }
+            .header-title { margin: 0; font-size: 14pt; text-transform: uppercase; letter-spacing: 1.2px; color: ${accentColor}; font-weight: bold; }
+            .header-meta { margin: 4px 0 0 0; font-size: 9pt; color: #4b5563; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
             .content { white-space: pre-wrap; word-break: break-word; text-align: justify; }
-            .footer { margin-top: 50px; text-align: center; font-size: 8pt; color: #777; border-top: 1px solid #ccc; padding-top: 10px; font-family: sans-serif; }
+            .footer { margin-top: 50px; text-align: center; font-size: 8pt; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 10px; font-family: sans-serif; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>SILVEIRA & ASSOCIADOS ADVOCACIA</h1>
-            <p>Excelência Jurídica • OAB/SP 412.890 • Av. Paulista, 1000 - Bela Vista, São Paulo/SP</p>
+          <div class="header-container">
+            <div class="header-content">
+              ${logoUrl ? `<img src="${logoUrl}" class="header-logo" alt="Logo" />` : ''}
+              <h1 class="header-title">${lawFirmName}</h1>
+              ${headerMetaItems.length > 0 ? `<p class="header-meta">${headerMetaItems.join(' • ')}</p>` : ''}
+            </div>
           </div>
           <div class="content">${doc.content || ''}</div>
           ${signatureBlock}
           <div class="footer">
-            Documento emitido via Sistema JurisFlow ERP em ${new Date().toLocaleString('pt-BR')} • Categoria: ${doc.category}
+            ${vi.footerText || `${lawFirmName} • Documento emitido eletronicamente`}
           </div>
           <script>
             window.onload = function() { window.print(); }

@@ -13,8 +13,26 @@ export interface TenantVisualIdentity {
   signatoryOab?: string;
   signatoryRole?: string;
   headerAddress?: string;
+  contactPhone?: string;
+  contactEmail?: string;
   footerText?: string;
-  headerStyle?: 'MODERN' | 'CLASSIC' | 'MINIMALIST' | 'OFFICIAL_EMBLEM';
+  // Discrete field display toggles (address, phone, email, etc are optional)
+  showHeaderAddress?: boolean;
+  showHeaderPhone?: boolean;
+  showHeaderEmail?: boolean;
+  showHeaderCnpj?: boolean;
+  showHeaderOab?: boolean;
+  showFooterAddress?: boolean;
+  showFooterPhone?: boolean;
+  showFooterEmail?: boolean;
+  showFooterText?: boolean;
+  // Visual layout & design customization
+  headerStyle?: 'MINIMALIST' | 'MODERN_BAR' | 'CLASSIC_CENTERED' | 'SIDE_BY_SIDE' | 'CUSTOM_DESIGN' | 'OFFICIAL_EMBLEM' | 'MODERN' | 'CLASSIC';
+  accentColor?: string;
+  borderStyle?: 'SOLID' | 'DOUBLE' | 'DASHED' | 'NONE';
+  borderWidth?: '1px' | '2px' | '3px' | '4px';
+  logoMaxHeight?: number; // in px
+  headerPadding?: 'COMPACT' | 'NORMAL' | 'SPACIOUS';
   fontFamily?: 'Arial' | 'Times New Roman' | 'Calibri' | 'Garamond' | 'Georgia';
   bodyFontSize?: '11pt' | '12pt' | '13pt';
   lineSpacing?: '1.0' | '1.15' | '1.5';
@@ -29,6 +47,8 @@ export interface TenantVisualIdentity {
     category: string;
     content: string;
     isDefault?: boolean;
+    description?: string;
+    variables?: string[];
   }[];
 }
 
