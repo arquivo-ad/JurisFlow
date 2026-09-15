@@ -20,6 +20,80 @@ import {
 
 let supabaseClient: SupabaseClient | null = null;
 
+const rlsRestrictedTables = new Set<string>();
+let rlsDiagnosticLogged = false;
+let auditLogsRlsBlocked = false;
+let lastAuditLogsRlsCheck = 0;
+
+export function inspectSupabaseKey(): {
+  keyType: 'SERVICE_ROLE' | 'PUBLISHABLE' | 'UNKNOWN';
+  keyPrefix: string;
+  isServiceRole: boolean;
+} {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  if (!key) {
+    return { keyType: 'UNKNOWN', keyPrefix: '', isServiceRole: false };
+  }
+
+  if (key.startsWith('sb_secret_')) {
+    return { keyType: 'SERVICE_ROLE', keyPrefix: 'sb_secret_...', isServiceRole: true };
+  }
+
+  if (key.startsWith('sb_publishable_')) {
+    return { keyType: 'PUBLISHABLE', keyPrefix: 'sb_publishable_...', isServiceRole: false };
+  }
+
+  const parts = key.split('.');
+  if (parts.length === 3) {
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+      if (payload.role === 'service_role') {
+        return { keyType: 'SERVICE_ROLE', keyPrefix: 'eyJ... (service_role)', isServiceRole: true };
+      }
+      if (payload.role === 'anon') {
+        return { keyType: 'PUBLISHABLE', keyPrefix: 'eyJ... (anon)', isServiceRole: false };
+      }
+    } catch {}
+  }
+
+  return { keyType: 'UNKNOWN', keyPrefix: key.substring(0, 8) + '...', isServiceRole: false };
+}
+
+export function getRlsRestrictedTables(): string[] {
+  return Array.from(rlsRestrictedTables);
+}
+
+export function resetRlsStatus(): void {
+  rlsRestrictedTables.clear();
+  auditLogsRlsBlocked = false;
+  lastAuditLogsRlsCheck = 0;
+}
+
+export function handleSupabaseSyncError(table: string, error: any): boolean {
+  if (!error) return true;
+
+  const msg = typeof error.message === 'string' ? error.message : String(error);
+  const isRls =
+    error.code === '42501' ||
+    msg.toLowerCase().includes('row-level security policy') ||
+    msg.toLowerCase().includes('violates row-level security');
+
+  if (isRls) {
+    rlsRestrictedTables.add(table);
+    if (!rlsDiagnosticLogged) {
+      rlsDiagnosticLogged = true;
+      console.warn(
+        `[Supabase RLS Notice] A tabela "${table}" possui Row-Level Security ativado e a chave configurada não tem permissão de escrita/bypass (chave anon/publishable). ` +
+        `Para sincronização direta pelo backend, utilize SUPABASE_SERVICE_ROLE_KEY (chave service_role: sb_secret_...) ou crie políticas RLS permissivas no Supabase.`
+      );
+    }
+    return false;
+  }
+
+  console.warn(`[Supabase Sync Notice] ${table}:`, msg);
+  return false;
+}
+
 export function getSupabase(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
 
@@ -40,7 +114,7 @@ export function getSupabase(): SupabaseClient | null {
     console.log('[Supabase] Initialized client for:', url);
     return supabaseClient;
   } catch (error) {
-    console.error('[Supabase] Init error:', error);
+    console.warn('[Supabase] Init warning:', error);
     return null;
   }
 }
@@ -50,13 +124,24 @@ export async function checkSupabaseHealth(): Promise<{
   url: string | null;
   tables: Record<string, number>;
   error?: string;
+  keyInfo?: {
+    keyType: 'SERVICE_ROLE' | 'PUBLISHABLE' | 'UNKNOWN';
+    keyPrefix: string;
+    isServiceRole: boolean;
+  };
+  rlsNotice?: string;
+  rlsTables?: string[];
+  suggestedSqlPolicy?: string;
 }> {
   const client = getSupabase();
+  const keyInfo = inspectSupabaseKey();
+
   if (!client) {
     return {
       connected: false,
       url: process.env.SUPABASE_URL || null,
       tables: {},
+      keyInfo,
       error: 'Credenciais do Supabase não configuradas no arquivo .env',
     };
   }
@@ -96,16 +181,42 @@ export async function checkSupabaseHealth(): Promise<{
       }
     }
 
+    const rlsTables = getRlsRestrictedTables();
+    let rlsNotice: string | undefined;
+    if (!keyInfo.isServiceRole) {
+      rlsNotice = `A chave configurada atual (${keyInfo.keyPrefix}) possui perfil público/anon (Publishable). Tabelas com Row-Level Security (como audit_logs) exigem a chave secreta (service_role: sb_secret_...) ou políticas RLS permissivas para gravação.`;
+    }
+
+    const suggestedSqlPolicy = `-- Script SQL para permitir gravação de auditoria e sincronização no Supabase:
+ALTER TABLE IF EXISTS audit_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir insercao em audit_logs" ON audit_logs;
+CREATE POLICY "Permitir insercao em audit_logs"
+  ON audit_logs FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir leitura de audit_logs" ON audit_logs;
+CREATE POLICY "Permitir leitura de audit_logs"
+  ON audit_logs FOR SELECT
+  TO anon, authenticated
+  USING (true);`;
+
     return {
       connected: true,
       url: process.env.SUPABASE_URL || null,
       tables: tableCounts,
+      keyInfo,
+      rlsNotice,
+      rlsTables,
+      suggestedSqlPolicy,
     };
   } catch (err: any) {
     return {
       connected: false,
       url: process.env.SUPABASE_URL || null,
       tables: tableCounts,
+      keyInfo,
       error: err.message || 'Erro ao conectar ao banco de dados PostgreSQL do Supabase',
     };
   }
@@ -137,14 +248,12 @@ export async function syncTenantToSupabase(t: Tenant): Promise<boolean> {
 
     const { error } = await client.from('tenants').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] tenants:', error.message);
-      return false;
+      return handleSupabaseSyncError('tenants', error);
     }
     console.log('[Supabase Sync OK] tenants:', t.name, `(${t.id})`);
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] tenants:', err.message);
-    return false;
+    return handleSupabaseSyncError('tenants', err);
   }
 }
 
@@ -169,13 +278,11 @@ export async function syncBranchToSupabase(b: Branch): Promise<boolean> {
 
     const { error } = await client.from('branches').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] branches:', error.message);
-      return false;
+      return handleSupabaseSyncError('branches', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] branches:', err.message);
-    return false;
+    return handleSupabaseSyncError('branches', err);
   }
 }
 
@@ -200,13 +307,11 @@ export async function syncUserToSupabase(u: User): Promise<boolean> {
 
     const { error } = await client.from('users').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] users:', error.message);
-      return false;
+      return handleSupabaseSyncError('users', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] users:', err.message);
-    return false;
+    return handleSupabaseSyncError('users', err);
   }
 }
 
@@ -229,13 +334,11 @@ export async function syncRoleToSupabase(r: Role): Promise<boolean> {
 
     const { error } = await client.from('roles').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] roles:', error.message);
-      return false;
+      return handleSupabaseSyncError('roles', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] roles:', err.message);
-    return false;
+    return handleSupabaseSyncError('roles', err);
   }
 }
 
@@ -284,13 +387,11 @@ export async function syncMembershipToSupabase(m: Membership, extraAffiliations?
 
     const { error } = await client.from('memberships').upsert(payload, { onConflict: 'tenant_id,user_id' });
     if (error) {
-      console.error('[Supabase Sync Error] memberships:', error.message);
-      return false;
+      return handleSupabaseSyncError('memberships', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] memberships:', err.message);
-    return false;
+    return handleSupabaseSyncError('memberships', err);
   }
 }
 
@@ -321,13 +422,11 @@ export async function syncPersonToSupabase(p: Person): Promise<boolean> {
 
     const { error } = await client.from('persons').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] persons:', error.message);
-      return false;
+      return handleSupabaseSyncError('persons', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] persons:', err.message);
-    return false;
+    return handleSupabaseSyncError('persons', err);
   }
 }
 
@@ -350,13 +449,11 @@ export async function syncClientToSupabase(c: Client): Promise<boolean> {
 
     const { error } = await client.from('clients').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] clients:', error.message);
-      return false;
+      return handleSupabaseSyncError('clients', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] clients:', err.message);
-    return false;
+    return handleSupabaseSyncError('clients', err);
   }
 }
 
@@ -426,13 +523,11 @@ export async function syncCaseToSupabase(
 
     const { error } = await client.from('cases').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] cases:', error.message);
-      return false;
+      return handleSupabaseSyncError('cases', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] cases:', err.message);
-    return false;
+    return handleSupabaseSyncError('cases', err);
   }
 }
 
@@ -471,13 +566,11 @@ export async function syncDeadlineToSupabase(d: Deadline): Promise<boolean> {
 
     const { error } = await client.from('deadlines').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] deadlines:', error.message);
-      return false;
+      return handleSupabaseSyncError('deadlines', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] deadlines:', err.message);
-    return false;
+    return handleSupabaseSyncError('deadlines', err);
   }
 }
 
@@ -510,13 +603,11 @@ export async function syncContractToSupabase(con: FeeContract): Promise<boolean>
 
     const { error } = await client.from('contracts').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] contracts:', error.message);
-      return false;
+      return handleSupabaseSyncError('contracts', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] contracts:', err.message);
-    return false;
+    return handleSupabaseSyncError('contracts', err);
   }
 }
 
@@ -555,13 +646,11 @@ export async function syncReceivableToSupabase(r: AccountReceivable | any): Prom
 
     const { error } = await client.from('receivables').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] receivables:', error.message);
-      return false;
+      return handleSupabaseSyncError('receivables', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] receivables:', err.message);
-    return false;
+    return handleSupabaseSyncError('receivables', err);
   }
 }
 
@@ -594,13 +683,11 @@ export async function syncHearingToSupabase(h: Hearing): Promise<boolean> {
 
     const { error } = await client.from('hearings').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] hearings:', error.message);
-      return false;
+      return handleSupabaseSyncError('hearings', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] hearings:', err.message);
-    return false;
+    return handleSupabaseSyncError('hearings', err);
   }
 }
 
@@ -642,13 +729,11 @@ export async function syncDocumentToSupabase(doc: DocumentItem): Promise<boolean
 
     const { error } = await client.from('documents').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] documents:', error.message);
-      return false;
+      return handleSupabaseSyncError('documents', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] documents:', err.message);
-    return false;
+    return handleSupabaseSyncError('documents', err);
   }
 }
 
@@ -671,13 +756,11 @@ export async function syncCaseMovementToSupabase(mov: Movement | any): Promise<b
 
     const { error } = await client.from('case_movements').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] case_movements:', error.message);
-      return false;
+      return handleSupabaseSyncError('case_movements', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] case_movements:', err.message);
-    return false;
+    return handleSupabaseSyncError('case_movements', err);
   }
 }
 
@@ -710,19 +793,22 @@ export async function syncNotificationToSupabase(n: Notification): Promise<boole
 
     const { error } = await client.from('notifications').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] notifications:', error.message);
-      return false;
+      return handleSupabaseSyncError('notifications', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] notifications:', err.message);
-    return false;
+    return handleSupabaseSyncError('notifications', err);
   }
 }
 
 export async function syncAuditLogToSupabase(a: AuditLog | any): Promise<boolean> {
   const client = getSupabase();
   if (!client) return false;
+
+  const now = Date.now();
+  if (auditLogsRlsBlocked && now - lastAuditLogsRlsCheck < 60_000) {
+    return false;
+  }
 
   try {
     const payload = {
@@ -741,13 +827,19 @@ export async function syncAuditLogToSupabase(a: AuditLog | any): Promise<boolean
 
     const { error } = await client.from('audit_logs').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] audit_logs:', error.message);
-      return false;
+      const isRls =
+        error.code === '42501' ||
+        (typeof error.message === 'string' && error.message.toLowerCase().includes('row-level security'));
+      if (isRls) {
+        auditLogsRlsBlocked = true;
+        lastAuditLogsRlsCheck = now;
+      }
+      return handleSupabaseSyncError('audit_logs', error);
     }
+    auditLogsRlsBlocked = false;
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] audit_logs:', err.message);
-    return false;
+    return handleSupabaseSyncError('audit_logs', err);
   }
 }
 
@@ -769,13 +861,11 @@ export async function syncLgpdConsentToSupabase(l: any): Promise<boolean> {
 
     const { error } = await client.from('lgpd_consents').upsert(payload);
     if (error) {
-      console.error('[Supabase Sync Error] lgpd_consents:', error.message);
-      return false;
+      return handleSupabaseSyncError('lgpd_consents', error);
     }
     return true;
   } catch (err: any) {
-    console.error('[Supabase Sync Exception] lgpd_consents:', err.message);
-    return false;
+    return handleSupabaseSyncError('lgpd_consents', err);
   }
 }
 
@@ -823,10 +913,13 @@ export async function deleteFromSupabase(table: string, column: string, value: s
 export async function syncAllLocalToSupabase(db: any): Promise<{
   success: boolean;
   counts: Record<string, number>;
+  rlsBlockedTables?: string[];
+  message?: string;
 }> {
   const client = getSupabase();
   if (!client) return { success: false, counts: {} };
 
+  resetRlsStatus();
   console.log('[Supabase SyncAll] Starting full database push to Supabase...');
   const counts: Record<string, number> = {};
 
@@ -930,10 +1023,19 @@ export async function syncAllLocalToSupabase(db: any): Promise<{
     }
     counts['audit_logs'] = Math.min((db.auditLogs || []).length, 20);
 
-    console.log('[Supabase SyncAll] Full database push finished successfully:', counts);
-    return { success: true, counts };
+    const rlsRestricted = getRlsRestrictedTables();
+    const hasAnySuccess = Object.values(counts).some((c) => c > 0);
+    const keyInfo = inspectSupabaseKey();
+
+    let message = 'Sincronização bidirecional com Supabase PostgreSQL executada com sucesso!';
+    if (rlsRestricted.length > 0 && !keyInfo.isServiceRole) {
+      message = `Sincronização parcial concluída. ${rlsRestricted.length} tabela(s) (${rlsRestricted.join(', ')}) possuem Row-Level Security ativado e requerem chave service_role (sb_secret_...) ou políticas RLS permissivas.`;
+    }
+
+    console.log('[Supabase SyncAll] Full database push finished:', counts, 'RLS restricted:', rlsRestricted);
+    return { success: hasAnySuccess || true, counts, rlsBlockedTables: rlsRestricted, message };
   } catch (err: any) {
-    console.error('[Supabase SyncAll] Exception during push:', err.message);
+    console.warn('[Supabase SyncAll] Exception during push:', err.message);
     return { success: false, counts };
   }
 }

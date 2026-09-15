@@ -17,9 +17,11 @@ import {
   UserCheck,
   LogOut,
   Building2,
+  Camera,
 } from 'lucide-react';
 import { Tenant, Branch, User, Role, Notification } from '../../types';
 import { canAccessModule } from '../../utils/rbac';
+import { ChangeProfilePhotoModal } from '../common/ChangeProfilePhotoModal';
 
 interface HeaderProps {
   currentTenant: Tenant | null;
@@ -40,6 +42,7 @@ interface HeaderProps {
   onNavigate?: (module: string) => void;
   onQuickAction?: (action: 'NEW_CASE' | 'NEW_DEADLINE' | 'NEW_CLIENT' | 'AI_PROMPT') => void;
   onMarkNotificationRead?: (id: string) => void;
+  onUpdateAvatar?: (newUrl: string) => Promise<void>;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -61,12 +64,14 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigate = (_module: string) => {},
   onQuickAction = (_action: 'NEW_CASE' | 'NEW_DEADLINE' | 'NEW_CLIENT' | 'AI_PROMPT') => {},
   onMarkNotificationRead = (_id: string) => {},
+  onUpdateAvatar,
 }) => {
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isChangePhotoOpen, setIsChangePhotoOpen] = useState(false);
 
   const activeBranchToUse = activeBranch || currentBranch || (branches && branches[0]) || null;
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
@@ -463,16 +468,29 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-40">
               {/* User summary */}
               <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 mb-2">
-                <div className="flex items-center gap-2">
-                  <img
-                    src={
-                      currentUser?.avatarUrl ||
-                      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-                    }
-                    alt={currentUser?.name}
-                    className="w-9 h-9 rounded-full object-cover"
-                  />
-                  <div className="min-w-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="relative group shrink-0">
+                    <img
+                      src={
+                        currentUser?.avatarUrl ||
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+                      }
+                      alt={currentUser?.name}
+                      className="w-10 h-10 rounded-full object-cover ring-2 ring-indigo-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setIsChangePhotoOpen(true);
+                      }}
+                      title="Alterar minha foto"
+                      className="absolute inset-0 rounded-full bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-slate-900 truncate">{currentUser?.name}</p>
                     <p className="text-[10px] text-slate-400 truncate">{currentUser?.email}</p>
                     <div className="flex items-center gap-1 mt-0.5">
@@ -486,6 +504,18 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* Actions */}
               <div className="space-y-1">
+                {/* Alterar Foto de Perfil */}
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setIsChangePhotoOpen(true);
+                  }}
+                  className="w-full text-left p-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Camera className="w-4 h-4 text-indigo-600" />
+                  <span>Alterar Minha Foto de Perfil</span>
+                </button>
+
                 {isSuperAdmin && onOpenNewTenantModal && (
                   <button
                     onClick={() => {
@@ -529,6 +559,19 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </div>
+
+      {/* Modal para Alteração de Foto do Usuário Logado */}
+      <ChangeProfilePhotoModal
+        isOpen={isChangePhotoOpen}
+        onClose={() => setIsChangePhotoOpen(false)}
+        currentAvatarUrl={currentUser?.avatarUrl}
+        userName={currentUser?.name || 'Advogado'}
+        onSave={async (newUrl) => {
+          if (onUpdateAvatar) {
+            await onUpdateAvatar(newUrl);
+          }
+        }}
+      />
     </header>
   );
 };
