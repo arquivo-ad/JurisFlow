@@ -31,8 +31,13 @@ import {
   Server,
   CheckCircle,
   Star,
+  Camera,
+  Palette,
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { AvatarPicker } from '../common/AvatarPicker';
+import { BrandingSettingsTab } from './BrandingSettingsTab';
+import { DatabaseDRTab } from './DatabaseDRTab';
 import {
   Tenant,
   Branch,
@@ -148,7 +153,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     currentUser?.email?.includes('superadmin') ||
     currentRole?.code === 'SUPER_ADMIN';
 
-  const [activeTab, setActiveTab] = useState<'GOVERNANCE' | 'TENANTS' | 'USERS' | 'RBAC' | 'AUDIT' | 'LGPD' | 'DATABASE'>('GOVERNANCE');
+  const [activeTab, setActiveTab] = useState<'GOVERNANCE' | 'BRANDING' | 'TENANTS' | 'USERS' | 'RBAC' | 'AUDIT' | 'LGPD' | 'DATABASE'>('GOVERNANCE');
 
   // Supabase Status State
   const [supabaseStatus, setSupabaseStatus] = useState<{
@@ -157,9 +162,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     tables: Record<string, number>;
     memoryCounts?: Record<string, number>;
     error?: string;
+    keyInfo?: {
+      keyType: 'SERVICE_ROLE' | 'PUBLISHABLE' | 'UNKNOWN';
+      keyPrefix: string;
+      isServiceRole: boolean;
+    };
+    rlsNotice?: string;
+    rlsTables?: string[];
+    suggestedSqlPolicy?: string;
   } | null>(null);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const fetchSupabaseStatus = async () => {
     try {
@@ -185,6 +199,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setSyncFeedback('Erro ao sincronizar com Supabase: ' + err.message);
     } finally {
       setIsSyncingSupabase(false);
+    }
+  };
+
+  // Purge Demo Data / Production Slate State
+  const [isPurgingDemo, setIsPurgingDemo] = useState(false);
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [purgeFeedback, setPurgeFeedback] = useState<string | null>(null);
+
+  const handlePurgeDemoData = async () => {
+    setIsPurgingDemo(true);
+    setPurgeFeedback(null);
+    try {
+      const res = await api.purgeDemoData();
+      setPurgeFeedback(res.message || 'Dados fictícios removidos com sucesso! Sistema em estado limpo de produção.');
+      setIsPurgeModalOpen(false);
+      await fetchSupabaseStatus();
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err: any) {
+      setPurgeFeedback('Erro ao limpar dados fictícios: ' + err.message);
+    } finally {
+      setIsPurgingDemo(false);
     }
   };
 
@@ -754,6 +791,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('BRANDING')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'BRANDING'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Palette className="w-4 h-4 text-indigo-600" />
+          <span>Papel Timbrado & Identidade Visual</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('TENANTS')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all whitespace-nowrap ${
             activeTab === 'TENANTS'
@@ -1011,6 +1060,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      {/* 2. IDENTIDADE VISUAL & PAPEL TIMBRADO FORENSE */}
+      {activeTab === 'BRANDING' && (
+        <BrandingSettingsTab
+          currentTenant={currentTenant || null}
+          onTenantUpdated={(updated) => {
+            if (onSaveTenant) {
+              onSaveTenant(updated);
+            }
+          }}
+        />
+      )}
+
       {/* PLATFORM TENANTS (ESCRITÓRIOS SAAS) */}
       {activeTab === 'TENANTS' && (
         <div className="space-y-6">
@@ -1228,11 +1289,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <img
-                        src={u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-                        alt={u.name}
-                        className="w-11 h-11 rounded-full ring-2 ring-slate-100 object-cover shrink-0"
-                      />
+                      <div className="relative group/avatar shrink-0">
+                        <img
+                          src={u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+                          alt={u.name}
+                          className="w-11 h-11 rounded-full ring-2 ring-slate-100 object-cover cursor-pointer"
+                          onClick={() => handleOpenEditUserModal(u)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditUserModal(u)}
+                          title="Alterar foto / dados do usuário"
+                          className="absolute inset-0 rounded-full bg-slate-900/60 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center text-white transition-opacity cursor-pointer"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
                           <h3 className="font-bold text-slate-900 text-sm truncate">{u.name}</h3>
@@ -1603,165 +1675,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* 7. DATABASE & SUPABASE PERSISTENCE */}
+      {/* 7. DATABASE & MULTI-NODE DISASTER RECOVERY (DR) */}
       {activeTab === 'DATABASE' && (
         <div className="space-y-6">
-          {/* Header Card */}
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                  <Database className="w-6 h-6" />
+          {/* Production Real Environment & Purge Slate Card */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 text-white border border-indigo-900/60 space-y-4 shadow-md">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Ambiente de Produção Ativo
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    Base Limpa para Casos Reais
+                  </span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-900">Supabase PostgreSQL</h2>
-                    <span
-                      className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold font-mono border flex items-center gap-1.5 ${
-                        supabaseStatus?.connected
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}
-                    >
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          supabaseStatus?.connected ? 'bg-emerald-500' : 'bg-amber-500'
-                        }`}
-                      />
-                      {supabaseStatus?.connected ? 'Online & Sincronizado' : 'Aguardando Credenciais'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Banco de dados relacional com isolamento multi-tenant, Row-Level Security (RLS) e persistência em tempo real
-                  </p>
-                </div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-indigo-400" />
+                  Gabriela Capitani Advocacia
+                </h3>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Ambiente produtivo pronto para operar. Você pode gerenciar abaixo os nós de réplica (DR Multi-Região), executar failover de contingência e testar a sincronização criptográfica dos dados.
+                </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={fetchSupabaseStatus}
-                  className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                  onClick={() => setIsPurgeModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Atualizar Status</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSyncWithSupabase}
-                  disabled={isSyncingSupabase}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSupabase ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingSupabase ? 'Sincronizando...' : 'Sincronizar Dados Agora'}</span>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Limpar Dados Fictícios / Reset Produção</span>
                 </button>
               </div>
             </div>
 
-            {syncFeedback && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 font-mono">
-                {syncFeedback}
+            {purgeFeedback && (
+              <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-700/50 text-emerald-200 text-xs font-medium flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{purgeFeedback}</span>
               </div>
             )}
           </div>
 
-          {/* Connection Details & Table Matrix */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Infrastructure Details */}
-            <div className="lg:col-span-1 space-y-4">
-              <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3.5 shadow-xs">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Server className="w-4 h-4 text-emerald-600" />
-                  Infraestrutura Supabase
-                </h3>
-
-                <div className="space-y-2.5 text-xs">
-                  <div>
-                    <span className="text-slate-500 block text-[11px]">URL do Projeto:</span>
-                    <span className="font-mono font-medium text-slate-900 break-all">
-                      {supabaseStatus?.url || 'https://xxx.supabase.co (Configurado via .env)'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 block text-[11px]">Isolamento Multi-Tenant:</span>
-                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Ativo (RLS por tenant_id)
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 block text-[11px]">Modo de Operação:</span>
-                    <span className="font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
-                      Híbrido (Cache em Memória + Postgres Sync)
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-slate-900 text-white space-y-3 shadow-xs">
-                <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  Políticas de Segurança (RLS)
-                </h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Todas as tabelas possuem <code>ROW LEVEL SECURITY</code> ativado. A função SQL <code>user_belongs_to_tenant()</code> garante que nenhum usuário veja dados de outro escritório ou filial não autorizada.
-                </p>
-              </div>
-            </div>
-
-            {/* Right: Synced Tables Inventory */}
-            <div className="lg:col-span-2 p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Tabelas Relacionais & Contagem de Registros
-                </h3>
-                <span className="text-[11px] font-mono text-slate-500">
-                  {Object.keys(supabaseStatus?.tables || {}).length} tabelas monitoradas
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                {[
-                  { key: 'tenants', label: 'Escritórios / Tenants', icon: Building2 },
-                  { key: 'branches', label: 'Unidades & Filiais', icon: Building2 },
-                  { key: 'users', label: 'Usuários & Advogados', icon: Users },
-                  { key: 'roles', label: 'Funções & Permissões RBAC', icon: Key },
-                  { key: 'persons', label: 'Pessoas Físicas & Jurídicas', icon: Users },
-                  { key: 'clients', label: 'Clientes Cadastrados', icon: Users },
-                  { key: 'cases', label: 'Processos Judiciais & Casos', icon: Briefcase },
-                  { key: 'deadlines', label: 'Prazos Fatais & Audiências', icon: AlertTriangle },
-                  { key: 'financial_receivables', label: 'Contas a Receber / Faturas', icon: Award },
-                  { key: 'audit_logs', label: 'Trilha de Auditoria & Logs', icon: Lock },
-                ].map((item) => {
-                  const dbCount = supabaseStatus?.tables?.[item.key] ?? 0;
-                  const memoryCount = (supabaseStatus?.memoryCounts as any)?.[item.key] ?? dbCount;
-                  const Icon = item.icon;
-
-                  return (
-                    <div
-                      key={item.key}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Icon className="w-4 h-4 text-indigo-600" />
-                        <div>
-                          <p className="font-semibold text-slate-900">{item.label}</p>
-                          <p className="font-mono text-[10px] text-slate-500">tabela: {item.key}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold text-sm text-slate-900">
-                          {supabaseStatus?.connected ? dbCount : memoryCount}
-                        </span>
-                        <span className="block text-[10px] text-emerald-600 font-medium">registros</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          {/* Full Multi-Node Cluster & Disaster Recovery Console */}
+          <DatabaseDRTab />
         </div>
       )}
 
@@ -2065,6 +2024,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <Users className="w-3.5 h-3.5 text-indigo-600" />
                   Dados Pessoais do Usuário
                 </h3>
+
+                {/* Seletor & Uploader de Foto / Avatar */}
+                <AvatarPicker
+                  value={userFormData.avatarUrl}
+                  onChange={(url) => setUserFormData({ ...userFormData, avatarUrl: url })}
+                  name={userFormData.name || 'Advogado'}
+                />
 
                 <div>
                   <label className="block text-slate-700 mb-1 font-semibold">Nome Completo *</label>
@@ -2560,6 +2526,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Purging Demo Data */}
+      {isPurgeModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Limpar Dados Fictícios?</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Esta ação irá purgar permanentemente todos os processos, prazos, audiências, recebíveis e clientes de demonstração, deixando o sistema 100% limpo em modo de produção.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+              <p className="font-semibold text-slate-800">O que será mantido intacto:</p>
+              <ul className="list-disc list-inside space-y-1 text-slate-600">
+                <li>Escritório: <strong>Gabriela Capitani Advocacia</strong></li>
+                <li>Unidade: <strong>Matriz Principal (Pindamonhangaba/SP)</strong></li>
+                <li>Advogada: <strong>Dra. Gabriela M. Manni Capitani</strong></li>
+                <li>Estrutura de permissões RBAC e tabelas PostgreSQL</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsPurgeModalOpen(false)}
+                disabled={isPurgingDemo}
+                className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handlePurgeDemoData}
+                disabled={isPurgingDemo}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-2 shadow-xs disabled:opacity-50"
+              >
+                <Trash2 className={`w-3.5 h-3.5 ${isPurgingDemo ? 'animate-spin' : ''}`} />
+                <span>{isPurgingDemo ? 'Limpando Dados...' : 'Confirmar e Limpar'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

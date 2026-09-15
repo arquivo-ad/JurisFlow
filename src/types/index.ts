@@ -5,6 +5,33 @@
 export type UUID = string;
 
 // --- TENANT & ORG HIERARCHY ---
+export interface TenantVisualIdentity {
+  logoUrl?: string;
+  logoPosition?: 'left' | 'center' | 'right';
+  signatureImageUrl?: string;
+  signatoryName?: string;
+  signatoryOab?: string;
+  signatoryRole?: string;
+  headerAddress?: string;
+  footerText?: string;
+  headerStyle?: 'MODERN' | 'CLASSIC' | 'MINIMALIST' | 'OFFICIAL_EMBLEM';
+  fontFamily?: 'Arial' | 'Times New Roman' | 'Calibri' | 'Garamond' | 'Georgia';
+  bodyFontSize?: '11pt' | '12pt' | '13pt';
+  lineSpacing?: '1.0' | '1.15' | '1.5';
+  paragraphIndent?: boolean;
+  citationIndent?: boolean;
+  closingFormula?: string;
+  jurisprudenceStyle?: 'EMENDA_INTEGRAL' | 'DESTAQUE_ENXUTO';
+  editorialTone?: 'TECNICO_DIRETO' | 'COMBATIVO_ELOQUENTE' | 'CONCILIATORIO';
+  templates?: {
+    id: string;
+    name: string;
+    category: string;
+    content: string;
+    isDefault?: boolean;
+  }[];
+}
+
 export interface Tenant {
   id: UUID;
   name: string;
@@ -14,17 +41,57 @@ export interface Tenant {
   slug: string;
   plan: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE';
   active: boolean;
+  status?: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
   contactEmail: string;
   contactPhone: string;
   logoUrl?: string;
+  visualIdentity?: TenantVisualIdentity;
   settings: {
     cpcCountDaysDefault: boolean;
     notifyDeadlinesDaysBefore: number[];
     currency: string;
     pixKey?: string;
+    pixKeyType?: 'EMAIL' | 'CNPJ' | 'CPF' | 'PHONE' | 'RANDOM';
+    pixRecipientName?: string;
+    pixBankName?: string;
     mercadopagoConfigured: boolean;
+    paymentChannels?: {
+      pix: boolean;
+      boleto: boolean;
+      creditCard: boolean;
+    };
+    bankingIntegration?: BankingIntegrationConfig;
   };
   createdAt: string;
+}
+
+export interface BankingIntegrationConfig {
+  provider: 'MERCADO_PAGO' | 'BANCO_DO_BRASIL' | 'ITAU' | 'BRADESCO' | 'SANTANDER' | 'INTER' | 'CORA' | 'ASAAS' | 'STONE_PAGARME' | 'OUTRO';
+  providerName?: string;
+  accountType?: 'CONTA_CORRENTE_PJ' | 'CONTA_PAGAMENTO';
+  agency?: string;
+  accountNumber?: string;
+  accountDigit?: string;
+  holderName?: string;
+  holderCnpj?: string;
+  financialContactName?: string;
+  financialContactEmail?: string;
+  status: 'NOT_CONFIGURED' | 'PENDING_ANALYSIS' | 'ACTIVE';
+  superAdminNotified?: boolean;
+  submittedAt?: string;
+  notes?: string;
+}
+
+export interface OABFeeEstimateResponse {
+  categoryDetermined: string;
+  minFee: number;
+  recommendedFee: number;
+  maxFee: number;
+  successPercentageUsual?: number;
+  justification: string;
+  oabSectional: string;
+  tableReference: string;
+  modelUsed?: string;
 }
 
 export interface Branch {
@@ -38,6 +105,8 @@ export interface Branch {
   address: string;
   phone?: string;
   email?: string;
+  active?: boolean;
+  status?: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
 }
 
 export interface Department {
@@ -159,11 +228,72 @@ export interface LGPDConsent {
   personId: UUID;
   personName: string;
   consentType: 'DADOS_CADASTRAIS' | 'REPRESENTACAO_JUDICIAL' | 'MARKETING_INFORMATIVOS' | 'COMPARTILHAMENTO_PERITOS';
-  status: 'GRANTED' | 'REVOKED' | 'EXPIRED';
+  status: 'GRANTED' | 'REVOKED' | 'EXPIRED' | 'SUSPENDED';
   grantedAt: string;
   revokedAt?: string;
   termsVersion: string;
   ip: string;
+}
+
+export interface LGPDPortalConfig {
+  status: 'ACTIVE' | 'SUSPENDED' | 'MAINTENANCE';
+  dpoName: string;
+  dpoEmail: string;
+  dpoPhone: string;
+  privacyPolicyUrl: string;
+  termsSummary: string;
+  updatedAt: string;
+}
+
+// --- MULTI-DATABASE, DISASTER RECOVERY (DR) & REPLICATION ---
+export interface DatabaseNode {
+  id: string;
+  name: string;
+  provider: 'SUPABASE' | 'POSTGRESQL' | 'NEON' | 'AWS_RDS' | 'GCP_CLOUDSQL' | 'CUSTOM';
+  url: string;
+  anonKey?: string;
+  serviceRoleKey?: string;
+  role: 'ACTIVE' | 'PASSIVE'; // Ativo (Primary/Write) vs Passivo (Standby/DR/Backup)
+  status: 'ONLINE' | 'OFFLINE' | 'SYNCING' | 'ERROR';
+  region?: string;
+  latencyMs?: number;
+  lastSyncAt?: string;
+  tablesCount?: number;
+  recordsCount?: number;
+  isManagedDefault?: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface DatabaseSyncResult {
+  success: boolean;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceRole: 'ACTIVE' | 'PASSIVE';
+  targetRole: 'ACTIVE' | 'PASSIVE';
+  startedAt: string;
+  completedAt: string;
+  recordsSynced: number;
+  details: {
+    table: string;
+    count: number;
+    status: 'SYNCED' | 'SKIPPED' | 'ERROR';
+    message?: string;
+  }[];
+  checksumVerified: boolean;
+  message: string;
+}
+
+// --- MULTIMODAL AI ATTACHMENT ---
+export interface AIFileAttachment {
+  id?: string;
+  name: string;
+  type: string; // mimeType (e.g. 'application/pdf', 'image/png', 'text/csv', 'audio/mp3', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  size: number;
+  dataBase64?: string;
+  extractedText?: string;
+  previewUrl?: string;
+  category?: 'PROVA' | 'DOCUMENTO' | 'PLANILHA' | 'PETICAO' | 'AUDIO_GRAVACAO' | 'OUTRO';
 }
 
 // --- CRM & PERSONS ---
@@ -573,6 +703,13 @@ export interface FeeContract {
   startDate: string;
   endDate?: string;
   installmentsCount: number;
+  paymentMethod?: 'PIX' | 'BOLETO' | 'CREDIT_CARD';
+  paymentPlan?: 'SEM_JUROS' | 'COM_JUROS';
+  serviceFeeMonthlyPercent?: number;
+  oabSuggestedMin?: number;
+  oabSuggestedMax?: number;
+  oabStateConsulted?: string;
+  oabCategoryDetermined?: string;
   createdAt: string;
 }
 
@@ -634,6 +771,8 @@ export interface Payment {
   paymentMethod: string;
   transactionId: string;
   receiptNumber: string;
+  receiptSentTo?: string[];
+  proofDispatchedAt?: string;
   notes?: string;
 }
 
@@ -644,7 +783,9 @@ export type AIFeature =
   | 'DOCUMENT_DRAFT' 
   | 'RISK_ANALYSIS' 
   | 'LEGAL_CHAT' 
-  | 'CONTRACT_REVIEW';
+  | 'CONTRACT_REVIEW'
+  | 'DOCUMENT_AUDIT_ERROR_REDUCTION'
+  | 'LEGAL_GROUNDING_RAG';
 
 export interface AIGatewayLog {
   id: UUID;
@@ -699,6 +840,86 @@ export interface AICaseSummaryResponse {
   grauRisco: 'PROBABLE' | 'POSSIBLE' | 'REMOTE';
   justificativaRisco: string;
   resumoFinanceiro: string;
+}
+
+// --- GEMINI ENTERPRISE FOR LEGAL ENHANCEMENTS ---
+export interface AIAuditDocumentIssue {
+  id: string;
+  type: 'REVOKED_ARTICLE' | 'DEADLINE_CALCULATION' | 'SUPERSEDED_PRECEDENT' | 'FORMAL_DEFECT' | 'LOGICAL_CONTRADICTION' | 'SUGGESTION';
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  title: string;
+  description: string;
+  snippetOriginal?: string;
+  suggestedCorrection: string;
+  legalGroundingSource: string;
+}
+
+export interface AIAuditDocumentResponse {
+  documentTitle: string;
+  documentType: string;
+  complianceScore: number; // 0 to 100
+  status: 'APPROVED' | 'REQUIRES_REVISION' | 'REJECTED';
+  executiveSummary: string;
+  criticalIssuesCount: number;
+  warningsCount: number;
+  suggestionsCount: number;
+  detectedLegislation: string[];
+  precedentsVerified: {
+    precedent: string;
+    court: string;
+    status: 'VALID' | 'OVERRULED' | 'DISTINGUISHED' | 'UNVERIFIED';
+    verificationNotes: string;
+  }[];
+  issues: AIAuditDocumentIssue[];
+  auditedTextWithImprovements: string;
+}
+
+export interface AILegalKnowledgeItem {
+  id: string;
+  title: string;
+  category: 'CONSTITUCIONAL' | 'CIVIL' | 'PROCESSO_CIVIL' | 'TRABALHISTA' | 'TRIBUTARIO' | 'CONSUMIDOR' | 'INTERNO_ESCRITORIO';
+  officialSource: string;
+  lastUpdated: string;
+  groundingStatus: 'ACTIVE' | 'UPDATING' | 'SYNCED';
+  articlesIndexed: number;
+  description: string;
+  isCustomOfficeTesis?: boolean;
+}
+
+export interface AILegalSyncConnector {
+  id: string;
+  name: string;
+  type: 'PLANALTO_LEGISLACAO' | 'DJEN_DIARIO_JUSTICA' | 'STF_STJ_PRECEDENTES' | 'TRIBUNAIS_ESTADUAIS_DJE';
+  status: 'CONNECTED' | 'SYNCING' | 'IDLE';
+  protocol: 'REST_API' | 'WEBHOOK' | 'RSS_FEED';
+  endpointUrl: string;
+  webhookPushUrl?: string;
+  lastSyncAt: string;
+  frequency: string;
+  recordsSynced: number;
+  description: string;
+  autoSyncEnabled: boolean;
+}
+
+export interface AILegalWebhookLog {
+  id: string;
+  timestamp: string;
+  source: string;
+  event: string;
+  payloadSummary: string;
+  status: 'SUCCESS' | 'WARNING' | 'ERROR';
+}
+
+export interface AILegalGroundingOverview {
+  enterpriseEngineVersion: string;
+  activeModel: string;
+  zeroHallucinationPolicy: boolean;
+  totalNormsIndexed: number;
+  totalPrecedentsIndexed: number;
+  sources: AILegalKnowledgeItem[];
+  supportedJurisdictions: string[];
+  syncConnectors: AILegalSyncConnector[];
+  webhookLogs: AILegalWebhookLog[];
 }
 
 // --- FINANCIAL OVERVIEW ---

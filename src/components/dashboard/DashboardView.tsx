@@ -164,11 +164,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="mt-3">
             <span className="text-2xl font-bold text-emerald-600 font-mono">
-              R$ {(financial?.totalRecebidoMes || 148500).toLocaleString('pt-BR')}
+              R$ {(financial?.totalRecebidoMes ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-            <span>A receber: R$ {(financial?.totalAReceberAberto || 31500).toLocaleString('pt-BR')}</span>
+            <span>A receber: R$ {(financial?.totalAReceberAberto ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
             <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         </div>

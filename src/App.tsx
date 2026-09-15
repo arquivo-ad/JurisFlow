@@ -406,11 +406,26 @@ export default function App() {
     if (data.id && users.some((u) => u.id === data.id)) {
       const updated = await api.updateUser(data.id, data);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      if (currentUser && currentUser.id === updated.id) {
+        setCurrentUser((prev) => (prev ? { ...prev, ...updated } : updated));
+      }
       showToast(`Usuário "${updated.name}" atualizado`);
     } else {
       const created = await api.createUser(data);
       setUsers((prev) => [created, ...prev]);
       showToast(`Novo usuário "${created.name}" cadastrado na equipe`);
+    }
+  };
+
+  const handleUpdateCurrentUserAvatar = async (avatarUrl: string) => {
+    if (!currentUser) return;
+    try {
+      const updated = await api.updateUser(currentUser.id, { avatarUrl });
+      setCurrentUser((prev) => (prev ? { ...prev, avatarUrl: updated.avatarUrl } : updated));
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, avatarUrl: updated.avatarUrl } : u)));
+      showToast('Foto de perfil atualizada com sucesso!');
+    } catch (err: any) {
+      showToast('Erro ao atualizar foto de perfil: ' + (err.message || 'Falha na conexão'));
     }
   };
 
@@ -455,6 +470,7 @@ export default function App() {
         onMarkNotificationRead={handleMarkNotificationRead}
         onOpenNewTenantModal={() => setIsNewTenantModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onUpdateAvatar={handleUpdateCurrentUserAvatar}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -564,6 +580,7 @@ export default function App() {
                   receivables={receivables}
                   clients={clients}
                   cases={cases}
+                  currentTenant={currentTenant}
                   onSaveContract={handleSaveContract}
                   onGenerateCharge={handleGenerateCharge}
                   onSimulatePayment={handleSimulatePayment}

@@ -1,5 +1,6 @@
 import {
   Tenant,
+  TenantVisualIdentity,
   Branch,
   User,
   Role,
@@ -22,10 +23,19 @@ import {
   Payment,
   AuditLog,
   LGPDConsent,
+  LGPDPortalConfig,
+  DatabaseNode,
+  DatabaseSyncResult,
+  AIFileAttachment,
   FinancialOverviewMetrics,
   AIExtractDeadlineResponse,
   AIDraftPieceResponse,
   AICaseSummaryResponse,
+  AIAuditDocumentResponse,
+  BankingIntegrationConfig,
+  OABFeeEstimateResponse,
+  AILegalGroundingOverview,
+  AILegalKnowledgeItem,
   GlobalSearchResult,
   ModuleMetadata,
   FeatureFlag,
@@ -34,14 +44,49 @@ import {
   SystemHealthReport,
 } from '../types';
 
-let currentTenantId = 't-silveira';
-let currentBranchId = 'b-sp-matriz';
-let currentUserId = 'u-carlos';
+const DEFAULT_TENANT_ID = 't-1789481820042';
+const DEFAULT_BRANCH_ID = 'b-1789481820042-matriz';
+const DEFAULT_USER_ID = 'u-1789481820042-admin';
+
+function getInitialStorage(key: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const val = localStorage.getItem(key);
+    // Ignore legacy mock values
+    if (
+      val === 't-silveira' ||
+      val === 't-campos' ||
+      val === 't-1788431154885' ||
+      val === 'u-carlos' ||
+      val === 'u-marina' ||
+      val === 'u-gabriel' ||
+      val === 'b-sp-matriz' ||
+      val === 'b-rj-filial'
+    ) {
+      localStorage.setItem(key, fallback);
+      return fallback;
+    }
+    return val || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+let currentTenantId = getInitialStorage('jurisflow_tenant_id', DEFAULT_TENANT_ID);
+let currentBranchId = getInitialStorage('jurisflow_branch_id', DEFAULT_BRANCH_ID);
+let currentUserId = getInitialStorage('jurisflow_user_id', DEFAULT_USER_ID);
 
 export function setTenantContext(tenantId: string, branchId?: string, userId?: string) {
   currentTenantId = tenantId;
-  if (branchId) currentBranchId = branchId;
-  if (userId) currentUserId = userId;
+  if (typeof window !== 'undefined') localStorage.setItem('jurisflow_tenant_id', tenantId);
+  if (branchId) {
+    currentBranchId = branchId;
+    if (typeof window !== 'undefined') localStorage.setItem('jurisflow_branch_id', branchId);
+  }
+  if (userId) {
+    currentUserId = userId;
+    if (typeof window !== 'undefined') localStorage.setItem('jurisflow_user_id', userId);
+  }
 }
 
 export function getTenantContext() {
@@ -74,13 +119,19 @@ export const api = {
   // Context Setters
   setTenant: (tenantId: string) => {
     currentTenantId = tenantId;
+    if (typeof window !== 'undefined') localStorage.setItem('jurisflow_tenant_id', tenantId);
   },
   setBranch: (branchId: string) => {
     currentBranchId = branchId;
+    if (typeof window !== 'undefined') localStorage.setItem('jurisflow_branch_id', branchId);
   },
   setUser: (userId: string) => {
     currentUserId = userId;
+    if (typeof window !== 'undefined') localStorage.setItem('jurisflow_user_id', userId);
   },
+
+  // Limpeza de Dados Fictícios / Reset para Produção Limpa
+  purgeDemoData: () => request<any>('/api/system/purge-demo-data', { method: 'POST' }),
 
   // Bootstrap All System Data
   getBootstrap: () => request<any>('/api/bootstrap'),
@@ -100,11 +151,18 @@ export const api = {
   getTenants: () => request<Tenant[]>('/api/tenants'),
   createTenant: (data: any) => request<any>('/api/tenants', { method: 'POST', body: JSON.stringify(data) }),
   updateTenant: (id: string, data: Partial<Tenant>) => request<Tenant>(`/api/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTenant: (id: string) => request<{ success: boolean; message?: string }>(`/api/tenants/${id}`, { method: 'DELETE' }),
+  updateTenantStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED') =>
+    request<Tenant>(`/api/tenants/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  updateTenantVisualIdentity: (id: string, visualIdentity: TenantVisualIdentity) =>
+    request<Tenant>(`/api/tenants/${id}/visual-identity`, { method: 'PUT', body: JSON.stringify(visualIdentity) }),
 
   getBranches: () => request<Branch[]>('/api/branches'),
   createBranch: (data: Partial<Branch>) => request<Branch>('/api/branches', { method: 'POST', body: JSON.stringify(data) }),
   updateBranch: (id: string, data: Partial<Branch>) => request<Branch>(`/api/branches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteBranch: (id: string) => request<{ success: boolean }>(`/api/branches/${id}`, { method: 'DELETE' }),
+  updateBranchStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED') =>
+    request<Branch>(`/api/branches/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 
   getUsers: () => request<User[]>('/api/users'),
   createUser: (data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) =>
@@ -112,6 +170,8 @@ export const api = {
   updateUser: (id: string, data: Partial<User> & { roleId?: string; branchId?: string; status?: string; branchAffiliations?: any[] }) =>
     request<User>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: string) => request<{ success: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
+  updateUserStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED') =>
+    request<User>(`/api/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 
   getRoles: () => request<Role[]>('/api/roles'),
   createRole: (data: Partial<Role>) => request<Role>('/api/roles', { method: 'POST', body: JSON.stringify(data) }),
@@ -248,12 +308,48 @@ export const api = {
       `/api/financial/charges/${chargeId}/simulate-payment`,
       { method: 'POST' }
     ),
+  estimateOabFee: (params: {
+    contractTitle: string;
+    clientId: string;
+    caseId?: string;
+    feeType: string;
+    uf?: string;
+    oabNumber?: string;
+  }) =>
+    request<OABFeeEstimateResponse>('/api/ai/oab-fee-estimate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+  requestBankingIntegration: (data: Partial<BankingIntegrationConfig>) =>
+    request<{ success: boolean; message: string; bankingIntegration: BankingIntegrationConfig }>(
+      '/api/financial/banking-integration/request',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
+  updatePaymentChannels: (data: {
+    pix?: boolean;
+    boleto?: boolean;
+    creditCard?: boolean;
+    pixKey?: string;
+    pixKeyType?: string;
+    pixRecipientName?: string;
+    pixBankName?: string;
+  }) =>
+    request<{ success: boolean; message: string; tenant: Tenant }>(
+      '/api/financial/payment-channels',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
 
-  // AI Gateway (Gemini 3.7 Flash)
-  aiExtractDeadline: (publicationText: string) =>
+  // AI Gateway (Gemini Enterprise for Legal) - Multimodal com Suporte a Arquivos
+  aiExtractDeadline: (publicationText?: string, fileAttachment?: AIFileAttachment) =>
     request<AIExtractDeadlineResponse>('/api/ai/extract-deadline', {
       method: 'POST',
-      body: JSON.stringify({ publicationText }),
+      body: JSON.stringify({ publicationText, fileAttachment }),
     }),
   aiDraftPiece: (params: {
     pieceType: string;
@@ -264,29 +360,97 @@ export const api = {
     legalThesis: string;
     courtBranch?: string;
     caseNumber?: string;
+    fileAttachment?: AIFileAttachment;
+    fileAttachments?: AIFileAttachment[];
   }) => request<AIDraftPieceResponse>('/api/ai/draft-piece', { method: 'POST', body: JSON.stringify(params) }),
-  aiSummarizeCase: (caseId: string, customContext?: string) =>
+  aiSummarizeCase: (caseId: string, customContext?: string, fileAttachment?: AIFileAttachment) =>
     request<AICaseSummaryResponse>('/api/ai/summarize-case', {
       method: 'POST',
-      body: JSON.stringify({ caseId, customContext }),
+      body: JSON.stringify({ caseId, customContext, fileAttachment }),
     }),
-  aiChat: (message: string, caseContext?: string) =>
-    request<{ reply: string }>('/api/ai/chat', { method: 'POST', body: JSON.stringify({ message, caseContext }) }),
+  aiAuditDocument: (params: {
+    documentTitle: string;
+    documentType: string;
+    documentContent: string;
+    context?: string;
+    fileAttachment?: AIFileAttachment;
+  }) =>
+    request<AIAuditDocumentResponse>('/api/ai/audit-document', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+  getLegalKnowledge: () =>
+    request<AILegalGroundingOverview>('/api/ai/legal-knowledge'),
+  syncLegalSources: () =>
+    request<{
+      success: boolean;
+      message: string;
+      syncedAt: string;
+      totalNormsIndexed: number;
+      totalPrecedentsIndexed: number;
+    }>('/api/ai/legal-knowledge/sync', { method: 'POST' }),
+  addCustomLegalKnowledge: (item: Partial<AILegalKnowledgeItem>) =>
+    request<{ success: boolean; item: AILegalKnowledgeItem }>('/api/ai/legal-knowledge/custom', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    }),
+  aiChat: (message: string, caseContext?: string, fileAttachment?: AIFileAttachment) =>
+    request<{ reply: string }>('/api/ai/chat', { method: 'POST', body: JSON.stringify({ message, caseContext, fileAttachment }) }),
   getAiStats: () =>
     request<{
       totalRequests: number;
       totalTokens: number;
       totalCostBRL: number;
       activeModel: string;
+      groundingRate: number;
+      errorsPrevented: number;
       recentLogs: any[];
     }>('/api/ai/stats'),
+  saveAiAttachmentToClientDocuments: (data: {
+    clientId: string;
+    caseId?: string;
+    title: string;
+    category: string;
+    fileAttachment: AIFileAttachment;
+  }) =>
+    request<DocumentItem>('/api/documents/from-ai-attachment', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // Audit, LGPD & Notifications
   getAuditLogs: () => request<AuditLog[]>('/api/audit-logs'),
   getLgpdConsents: () => request<LGPDConsent[]>('/api/lgpd'),
   createLgpdConsent: (data: Partial<LGPDConsent>) => request<LGPDConsent>('/api/lgpd/consent', { method: 'POST', body: JSON.stringify(data) }),
+  updateLgpdConsent: (id: string, data: Partial<LGPDConsent>) =>
+    request<LGPDConsent>(`/api/lgpd/consent/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteLgpdConsent: (id: string) => request<{ success: boolean }>(`/api/lgpd/consent/${id}`, { method: 'DELETE' }),
+  getLgpdPortalConfig: () => request<LGPDPortalConfig>('/api/lgpd/portal-config'),
+  updateLgpdPortalConfig: (data: Partial<LGPDPortalConfig>) =>
+    request<LGPDPortalConfig>('/api/lgpd/portal-config', { method: 'PUT', body: JSON.stringify(data) }),
   getNotifications: () => request<Notification[]>('/api/notifications'),
   markNotificationAsRead: (id: string) => request<{ success: boolean }>(`/api/notifications/${id}/read`, { method: 'PUT' }),
+
+  // Multi-Database, Disaster Recovery (DR) & Replication
+  getDatabases: () => request<DatabaseNode[]>('/api/databases'),
+  createDatabase: (data: Partial<DatabaseNode>) => request<DatabaseNode>('/api/databases', { method: 'POST', body: JSON.stringify(data) }),
+  updateDatabase: (id: string, data: Partial<DatabaseNode>) =>
+    request<DatabaseNode>(`/api/databases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDatabase: (id: string) => request<{ success: boolean }>(`/api/databases/${id}`, { method: 'DELETE' }),
+  failoverDatabase: (activeNodeId: string, passiveNodeId: string) =>
+    request<{ success: boolean; message: string; nodes: DatabaseNode[] }>('/api/databases/failover', {
+      method: 'POST',
+      body: JSON.stringify({ activeNodeId, passiveNodeId }),
+    }),
+  syncDatabases: (sourceNodeId: string, targetNodeId: string) =>
+    request<DatabaseSyncResult>('/api/databases/sync', {
+      method: 'POST',
+      body: JSON.stringify({ sourceNodeId, targetNodeId }),
+    }),
+  pingDatabase: (id: string) =>
+    request<{ success: boolean; latencyMs: number; status: string; message: string }>(`/api/databases/${id}/ping`, {
+      method: 'POST',
+    }),
 
   // Supabase PostgreSQL Persistence Status & Sync
   getSupabaseStatus: () =>
@@ -294,13 +458,23 @@ export const api = {
       connected: boolean;
       url: string | null;
       tables: Record<string, number>;
+      memoryCounts?: Record<string, number>;
       error?: string;
+      keyInfo?: {
+        keyType: 'SERVICE_ROLE' | 'PUBLISHABLE' | 'UNKNOWN';
+        keyPrefix: string;
+        isServiceRole: boolean;
+      };
+      rlsNotice?: string;
+      rlsTables?: string[];
+      suggestedSqlPolicy?: string;
     }>('/api/supabase/status'),
   syncSupabase: () =>
     request<{
       success: boolean;
-      hydrated: boolean;
-      counts: Record<string, number>;
+      pushCounts?: Record<string, number>;
+      hydrateCounts?: Record<string, number>;
+      rlsBlockedTables?: string[];
       message?: string;
     }>('/api/supabase/sync', { method: 'POST' }),
 
