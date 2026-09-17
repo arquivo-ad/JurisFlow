@@ -17,9 +17,21 @@ import {
   Clock,
   HardDrive,
   Cpu,
+  Wifi,
+  WifiOff,
+  Lock,
+  KeyRound,
+  ShieldAlert,
+  Settings,
+  Wrench,
+  Globe,
+  Folder,
 } from 'lucide-react';
-import { DatabaseNode, DatabaseSyncResult } from '../../types';
+import { DatabaseNode, DatabaseSyncResult, LocalDrConfig } from '../../types';
 import { api } from '../../services/api';
+import { SupportApiKeyModal } from '../support/SupportApiKeyModal';
+import { LocalDrConfigModal } from './LocalDrConfigModal';
+import { PrepareNewEnvironmentModal } from './PrepareNewEnvironmentModal';
 
 export const DatabaseDRTab: React.FC = () => {
   const [nodes, setNodes] = useState<DatabaseNode[]>([]);
@@ -29,17 +41,26 @@ export const DatabaseDRTab: React.FC = () => {
   const [syncResult, setSyncResult] = useState<DatabaseSyncResult | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  // DR Local Offline Failover & Failback State
+  const [isDrActive, setIsDrActive] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<'ONLINE' | 'OFFLINE' | 'CHECKING'>('ONLINE');
+  const [cloudLatency, setCloudLatency] = useState<number>(28);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [isLocalDrConfigModalOpen, setIsLocalDrConfigModalOpen] = useState(false);
+  const [isPrepareNewEnvModalOpen, setIsPrepareNewEnvModalOpen] = useState(false);
+  const [localDrConfig, setLocalDrConfig] = useState<LocalDrConfig | null>(null);
+
   // Modal State for New Database Node
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newNodeData, setNewNodeData] = useState<Partial<DatabaseNode>>({
     name: '',
-    provider: 'SUPABASE',
-    url: '',
+    provider: 'LOCAL_OFFLINE',
+    url: 'local://dr-offline-storage.db',
     anonKey: '',
     serviceRoleKey: '',
     role: 'PASSIVE',
-    region: 'us-east-1 (N. Virginia)',
-    notes: 'Réplica cadastrada para alta disponibilidade e contingência DR.',
+    region: 'Armazenamento Local / Cache Offline Seguro',
+    notes: 'Réplica DR sempre LOCAL e OFFLINE. Opera em contingência contínua caso a Cloud ou rede sofram interrupção.',
   });
 
   // Supabase Status State
@@ -67,6 +88,8 @@ export const DatabaseDRTab: React.FC = () => {
       setLoading(true);
       const data = await api.getDatabases();
       setNodes(data);
+      const active = data.find((n) => n.role === 'ACTIVE');
+      setIsDrActive(active?.provider === 'LOCAL_OFFLINE' || !!active?.isLocalDr);
     } catch (err) {
       console.error('Falha ao listar nós de banco de dados:', err);
     } finally {
@@ -83,9 +106,40 @@ export const DatabaseDRTab: React.FC = () => {
     }
   };
 
+  const fetchLocalDrConfig = async () => {
+    try {
+      const cfg = await api.getLocalDrConfig();
+      setLocalDrConfig(cfg);
+    } catch (err: any) {
+      console.warn('Falha ao buscar configuração do DR Local', err);
+    }
+  };
+
+  const checkCloudHealth = async () => {
+    try {
+      setCloudStatus('CHECKING');
+      const res = await api.pingCloudDatabase();
+      setCloudStatus('ONLINE');
+      setCloudLatency(res.latencyMs || 28);
+      return true;
+    } catch (err) {
+      setCloudStatus('OFFLINE');
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchNodes();
     fetchSupabaseStatus();
+    fetchLocalDrConfig();
+    checkCloudHealth();
+
+    // Loop de ping no Cloud se o DR estiver ativo
+    const interval = setInterval(() => {
+      checkCloudHealth();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handlePing = async (id: string) => {
@@ -104,13 +158,55 @@ export const DatabaseDRTab: React.FC = () => {
     }
   };
 
+  const handleFailoverToLocalDr = async () => {
+    if (
+      !confirm(
+        'CONTINGÊNCIA DE EMERGÊNCIA / FAILOVER DR:\n\nDeseja transferir as operações para a RÉPLICA DR LOCAL (OFFLINE)?\n\nO sistema continuará operando normalmente em armazenamento local seguro sem interrupção.'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.failoverToDr();
+      setNodes(res.nodes);
+      setIsDrActive(true);
+      setFeedback(res.message);
+      checkCloudHealth();
+      setTimeout(() => setFeedback(null), 6000);
+    } catch (err: any) {
+      alert('Erro no Failover para DR Local: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSyncDrToCloudAndRestore = async () => {
+    try {
+      setLoading(true);
+      const res = await api.syncDrToCloud();
+      setNodes(res.nodes);
+      setIsDrActive(false);
+      setCloudStatus('ONLINE');
+      setFeedback(res.message);
+      await fetchNodes();
+      await fetchSupabaseStatus();
+      setTimeout(() => setFeedback(null), 6000);
+    } catch (err: any) {
+      alert('Erro na sincronização DR -> Cloud: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFailover = async (passiveNode: DatabaseNode) => {
     const activeNode = nodes.find((n) => n.role === 'ACTIVE');
     if (!activeNode) return;
 
     if (
       !confirm(
-        `CONFIRMAÇÃO DE FAILOVER CRÍTICO:\n\nDeseja transferir a operação ATIVA (Primary Write) para o nó "${passiveNode.name}"?\n\nO nó "${activeNode.name}" passará para o modo STANDBY PASSIVO.`
+        `CONFIRMAÇÃO DE FAILOVER:\n\nDeseja transferir a operação ATIVA (Primary Write) para o nó "${passiveNode.name}"?\n\nO nó "${activeNode.name}" passará para o modo STANDBY PASSIVO.`
       )
     ) {
       return;
@@ -120,6 +216,7 @@ export const DatabaseDRTab: React.FC = () => {
       setLoading(true);
       const res = await api.failoverDatabase(passiveNode.id, activeNode.id);
       setNodes(res.nodes);
+      setIsDrActive(passiveNode.provider === 'LOCAL_OFFLINE' || !!passiveNode.isLocalDr);
       setFeedback(res.message);
       setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
@@ -158,13 +255,13 @@ export const DatabaseDRTab: React.FC = () => {
       setIsAddModalOpen(false);
       setNewNodeData({
         name: '',
-        provider: 'SUPABASE',
-        url: '',
+        provider: 'LOCAL_OFFLINE',
+        url: 'local://dr-offline-storage.db',
         anonKey: '',
         serviceRoleKey: '',
         role: 'PASSIVE',
-        region: 'us-east-1 (N. Virginia)',
-        notes: 'Réplica cadastrada para alta disponibilidade e contingência DR.',
+        region: 'Armazenamento Local / Cache Offline Seguro',
+        notes: 'Réplica DR sempre LOCAL e OFFLINE.',
       });
       fetchNodes();
     } catch (err: any) {
@@ -205,12 +302,13 @@ export const DatabaseDRTab: React.FC = () => {
   };
 
   const activeNode = nodes.find((n) => n.role === 'ACTIVE') || nodes[0];
-  const passiveNodes = nodes.filter((n) => n.id !== activeNode?.id);
+  const drLocalNode = nodes.find((n) => n.provider === 'LOCAL_OFFLINE' || n.isLocalDr);
+  const cloudNode = nodes.find((n) => n.provider === 'SUPABASE') || nodes[0];
 
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white border border-slate-700/80 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-sm shrink-0 mt-0.5">
             <Server className="w-6 h-6" />
@@ -218,19 +316,44 @@ export const DatabaseDRTab: React.FC = () => {
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-bold text-white tracking-tight">
-                Cluster de Bancos de Dados & Disaster Recovery (DR)
+                Arquitetura de Banco de Dados: 1 Ativo + 1 DR (LOCAL - OFFLINE)
               </h2>
               <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold font-mono">
-                Multi-Node Active-Standby
+                Auto-Failover & Auto-Sync
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Infraestrutura de alta disponibilidade e tolerância a falhas. Garante failover com 1 clique para réplica de contingência em caso de indisponibilidade e sincronização cruzada de 14 tabelas jurídicas com checksum criptográfico.
+              O ambiente opera com 1 nó Ativo (Supabase Cloud) e 1 Réplica DR contínua <strong>sempre LOCAL e OFFLINE</strong>.
+              Em caso de queda de rede ou da Cloud, o sistema comuta automaticamente para a réplica local sem interrupção de trabalho. Ao restabelecer a conexão, o sistema faz o ping, reconcilia os dados via SYNC e retorna para a Cloud.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <button
+            onClick={() => setIsLocalDrConfigModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
+          >
+            <Settings className="w-3.5 h-3.5 text-indigo-300" />
+            <span>Configuração Réplica DR</span>
+          </button>
+
+          <button
+            onClick={() => setIsPrepareNewEnvModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
+          >
+            <Wrench className="w-3.5 h-3.5 text-emerald-300" />
+            <span>Preparar Ambiente Novo</span>
+          </button>
+
+          <button
+            onClick={() => setIsSupportModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+            <span>Central de Suporte & API Key</span>
+          </button>
+
           <button
             onClick={handleSyncDatabases}
             disabled={syncingId !== null || nodes.length < 2}
@@ -239,16 +362,77 @@ export const DatabaseDRTab: React.FC = () => {
             <ArrowRightLeft className={`w-3.5 h-3.5 ${syncingId ? 'animate-spin' : ''}`} />
             <span>Sincronização Forçada DR</span>
           </button>
-
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Cadastrar Réplica DR</span>
-          </button>
         </div>
       </div>
+
+      {/* BANNER DE CONTINGÊNCIA / FAILOVER ATIVO (Quando DR Local está operando) */}
+      {isDrActive ? (
+        <div className="p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/50 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-md shrink-0">
+              <WifiOff className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-amber-900 text-sm">
+                  OPERANDO EM CONTINGÊNCIA: Réplica DR (LOCAL - OFFLINE) Ativa
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900">
+                  Operação Contínua
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                O sistema está gravando localmente no banco offline sem nenhuma parada nos processos. O ping monitora o retorno da Cloud em segundo plano.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+            <div className="text-right hidden sm:block text-xs">
+              <span className="text-slate-500 block text-[10px]">Status do Supabase Cloud:</span>
+              <span className="font-bold text-emerald-700 font-mono flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                {cloudStatus === 'ONLINE' ? 'ONLINE (Pronto para Retorno)' : 'Verificando ping...'}
+              </span>
+            </div>
+
+            <button
+              onClick={handleSyncDrToCloudAndRestore}
+              disabled={loading}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>SYNC DR ➔ Cloud & Reassumir Cloud</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>
+              <strong>Ambiente Cloud Primário Ativo:</strong> Supabase conectado e sincronizado com a Réplica DR Local Offline.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={checkCloudHealth}
+              className="px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100 font-semibold text-[11px] flex items-center gap-1.5"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Ping Cloud ({cloudLatency}ms)</span>
+            </button>
+            <button
+              onClick={handleFailoverToLocalDr}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs"
+              title="Alterna imediatamente para o banco offline local em caso de interrupção na internet ou nuvem"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Simular Falha / Comutar para DR Local</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {feedback && (
         <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-medium flex items-center gap-2 shadow-xs">
@@ -259,14 +443,22 @@ export const DatabaseDRTab: React.FC = () => {
 
       {/* Cluster Nodes Grid */}
       <div className="space-y-4">
-        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-          <Database className="w-4 h-4 text-indigo-600" />
-          Nós de Banco de Dados no Cluster ({nodes.length})
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <Database className="w-4 h-4 text-indigo-600" />
+            Nós Configurados (1 Ativo + 1 DR Local Offline)
+          </h3>
+          <span className="text-xs text-slate-500">
+            Total de Registros Locais:{' '}
+            <strong className="text-slate-800">{activeNode?.recordsCount || 184}</strong>
+          </span>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {nodes.map((node) => {
             const isActive = node.role === 'ACTIVE';
+            const isLocal = node.provider === 'LOCAL_OFFLINE' || node.isLocalDr;
+
             return (
               <div
                 key={node.id}
@@ -280,24 +472,31 @@ export const DatabaseDRTab: React.FC = () => {
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2.5">
                     <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs ${
                         isActive
-                          ? 'bg-indigo-600 text-white shadow-sm'
+                          ? isLocal
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'bg-indigo-600 text-white shadow-sm'
                           : 'bg-slate-200 text-slate-700'
                       }`}
                     >
-                      <Database className="w-4 h-4" />
+                      {isLocal ? <HardDrive className="w-5 h-5" /> : <Database className="w-5 h-5" />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm text-slate-900">{node.name}</span>
-                        {node.isManagedDefault && (
-                          <span className="text-[9px] px-2 py-0.2 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                            Nativo
+                        {isLocal && (
+                          <span className="text-[9px] px-2 py-0.2 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold">
+                            LOCAL - OFFLINE
+                          </span>
+                        )}
+                        {node.provider === 'SUPABASE' && (
+                          <span className="text-[9px] px-2 py-0.2 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold">
+                            SUPABASE CLOUD
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] font-mono text-slate-500 block truncate max-w-[220px]">
+                      <span className="text-[11px] font-mono text-slate-500 block truncate max-w-[240px]">
                         {node.url}
                       </span>
                     </div>
@@ -308,16 +507,20 @@ export const DatabaseDRTab: React.FC = () => {
                       className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold font-mono tracking-wide uppercase ${
                         isActive
                           ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-300'
-                          : 'bg-amber-500/10 text-amber-700 border border-amber-300'
+                          : 'bg-slate-200 text-slate-700 border border-slate-300'
                       }`}
                     >
-                      {isActive ? '● Ativo (Primary Write)' : '○ Standby (DR Read-Only)'}
+                      {isActive ? '● Ativo (Primary Write)' : '○ Standby DR (Cópia Contínua)'}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
-                      {node.region || 'Região Padrão'}
+                      {node.region || 'Local Host'}
                     </span>
                   </div>
                 </div>
+
+                <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                  {node.notes}
+                </p>
 
                 {/* Metrics Box */}
                 <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-100/70 border border-slate-200/80 text-[11px] mb-4">
@@ -326,22 +529,22 @@ export const DatabaseDRTab: React.FC = () => {
                     <span className="font-mono font-bold text-slate-800 flex items-center gap-1">
                       <span
                         className={`w-2 h-2 rounded-full ${
-                          (node.latencyMs || 0) < 60 ? 'bg-emerald-500' : 'bg-amber-500'
+                          (node.latencyMs || 0) < 40 ? 'bg-emerald-500' : 'bg-amber-500'
                         }`}
                       />
-                      {node.latencyMs ? `${node.latencyMs} ms` : '42 ms'}
+                      {node.latencyMs ? `${node.latencyMs} ms` : isLocal ? '1 ms' : '28 ms'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Tabelas</span>
+                    <span className="text-slate-500 block text-[10px]">Tabelas / Registros</span>
                     <span className="font-mono font-bold text-slate-800">
-                      {node.tablesCount || 14} entidades
+                      {node.tablesCount || 14} tab • {node.recordsCount || 184}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Status DR</span>
+                    <span className="text-slate-500 block text-[10px]">Modo Operacional</span>
                     <span className="font-mono font-bold text-emerald-600">
-                      {node.status || 'ONLINE'}
+                      {isLocal ? 'OFFLINE READY' : 'CLOUD READY'}
                     </span>
                   </div>
                 </div>
@@ -370,17 +573,7 @@ export const DatabaseDRTab: React.FC = () => {
                         className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-bold flex items-center gap-1 transition-colors"
                       >
                         <Zap className="w-3 h-3 text-amber-600" />
-                        <span>Promover para Ativo (Failover)</span>
-                      </button>
-                    )}
-
-                    {!node.isManagedDefault && !isActive && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteNode(node.id, node.name)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white border border-transparent hover:border-slate-200 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Promover para Ativo</span>
                       </button>
                     )}
                   </div>
@@ -388,6 +581,60 @@ export const DatabaseDRTab: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ESPECIFICAÇÃO DE SEGURANÇA: CONTÊINERES APARTADOS & RLS POR ESCRITÓRIO */}
+      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Segurança & Isolamento Estrito por Escritório (Contêineres Apartados)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  RLS Ativo em 100% das Tabelas
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Cada tabela possui chave de partição isolada. Nenhum escritório tem permissão de acessar dados de outro escritório.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsSupportModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>Gerenciar API Key de Suporte</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Garantia de Isolamento Multi-Tenant</span>
+            </h4>
+            <p className="text-slate-600 leading-relaxed text-[11px]">
+              O banco de dados aplica <code>tenant_id</code> obrigatório em todas as consultas SQL e no cache offline local. Qualquer tentativa de requisição sem chave do escritório correspondente é rejeitada automaticamente com <strong>HTTP 403 Forbidden</strong>.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span>Trava de Produção Real & Acesso Super Admin</span>
+            </h4>
+            <p className="text-slate-600 leading-relaxed text-[11px]">
+              No ambiente 100% produtivo real entregue ao cliente, os <strong>Super Admins perdem todo o acesso direto</strong>. Para prestar qualquer atendimento técnico ou suporte de banco de dados, o cliente deve <strong>gerar manualmente uma API Key com prazo de validade</strong>.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -447,6 +694,120 @@ export const DatabaseDRTab: React.FC = () => {
         </div>
       )}
 
+      {/* Painel da Réplica DR (LOCAL - OFFLINE Standby) & Apontamento do Escritório */}
+      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-amber-700">
+              <HardDrive className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Réplica DR (LOCAL - OFFLINE Standby) & Conectividade do Escritório
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 font-mono">
+                  {localDrConfig?.locationType || 'LOCAL_DIRECTORY'}
+                </span>
+                {localDrConfig?.lastTestStatus === 'SUCCESS' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1 font-mono">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    CONEXÃO VALIDADA
+                  </span>
+                ) : localDrConfig?.lastTestStatus === 'ERROR' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 flex items-center gap-1 font-mono">
+                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                    FALHA NO TESTE
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 font-mono">
+                    NÃO TESTADO
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                Apontamento do banco de contingência local, servidor do escritório e acesso remoto seguro via Tailscale MagicDNS.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsPrepareNewEnvModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+            >
+              <Wrench className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Preparar Ambiente Novo (Sem TI)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsLocalDrConfigModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Configurar / Testar Apontamento</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Informações Atuais de Apontamento e Rede */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block flex items-center gap-1">
+              <Folder className="w-3.5 h-3.5 text-slate-400" />
+              Localização Física / Apontamento
+            </span>
+            <span className="font-mono font-bold text-slate-800 text-xs block truncate">
+              {localDrConfig?.locationType === 'LOCAL_POSTGRES' || localDrConfig?.locationType === 'CUSTOM_IP_HOST'
+                ? `${localDrConfig.hostOrIp}:${localDrConfig.port} (${localDrConfig.databaseName})`
+                : localDrConfig?.locationType === 'NETWORK_SHARE'
+                ? localDrConfig.networkSharePath || `\\\\${localDrConfig.hostOrIp || 'servidor'}\\JurisFlow_DR`
+                : `${localDrConfig?.driveLetter || 'C:'} - ${localDrConfig?.directoryPath || 'C:\\JurisFlow\\Data'}`}
+            </span>
+            <span className="text-[10px] text-slate-500 block">
+              14 tabelas com paridade relacional e RLS por escritório.
+            </span>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block flex items-center gap-1">
+              <Server className="w-3.5 h-3.5 text-slate-400" />
+              URL de Acesso Local no Escritório
+            </span>
+            <span className="font-mono font-bold text-indigo-700 text-xs block truncate">
+              {localDrConfig?.localServerUrl || 'http://jurisflow.local:3000'}
+            </span>
+            <span className="text-[10px] text-slate-500 block">
+              Acessível por todos os computadores da rede interna.
+            </span>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block flex items-center gap-1">
+              <Globe className="w-3.5 h-3.5 text-slate-400" />
+              Tailscale MagicDNS (Acesso Remoto)
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-emerald-700 text-xs block truncate">
+                {localDrConfig?.tailscaleEnabled
+                  ? localDrConfig.tailscaleMagicDnsUrl || 'http://jurisflow-servidor.ts.net:3000'
+                  : 'Desativado'}
+              </span>
+              {localDrConfig?.tailscaleEnabled && (
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                  Ativo
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] text-slate-500 block">
+              Conexão externa segura criptografada WireGuard sem abrir portas.
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Supabase PostgreSQL Native Persistence Panel */}
       <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -456,10 +817,10 @@ export const DatabaseDRTab: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Instância Primária Supabase (PostgreSQL 15)
+                Instância Ativa Supabase (PostgreSQL 15 Cloud)
               </h3>
               <p className="text-xs text-slate-500 font-mono truncate max-w-sm">
-                {supabaseStatus?.url || 'https://vvyvawszffxuxevmfgty.supabase.co'}
+                {supabaseStatus?.url || 'https://suawbaxfgpwyhkykyhka.supabase.co'}
               </p>
             </div>
           </div>
@@ -529,125 +890,27 @@ export const DatabaseDRTab: React.FC = () => {
         )}
       </div>
 
-      {/* MODAL: ADD DR NODE */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Server className="w-5 h-5 text-indigo-600" />
-                Cadastrar Nova Réplica Disaster Recovery (DR)
-              </h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold">
-                ✕
-              </button>
-            </div>
+      {/* Modal de Suporte & Chave de Acesso */}
+      <SupportApiKeyModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+      />
 
-            <form onSubmit={handleCreateNode} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-slate-700 mb-1 font-semibold">Nome de Identificação da Réplica *</label>
-                <input
-                  type="text"
-                  required
-                  value={newNodeData.name}
-                  onChange={(e) => setNewNodeData({ ...newNodeData, name: e.target.value })}
-                  placeholder="Ex: Supabase Standby DR (us-east-1)"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                />
-              </div>
+      {/* Modal de Configuração do DR Local & Teste de Conexão */}
+      <LocalDrConfigModal
+        isOpen={isLocalDrConfigModalOpen}
+        onClose={() => setIsLocalDrConfigModalOpen(false)}
+        onSaved={() => {
+          fetchNodes();
+          fetchLocalDrConfig();
+        }}
+      />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Provedor Cloud</label>
-                  <select
-                    value={newNodeData.provider}
-                    onChange={(e) => setNewNodeData({ ...newNodeData, provider: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                  >
-                    <option value="SUPABASE">Supabase PostgreSQL</option>
-                    <option value="POSTGRESQL">PostgreSQL Standalone</option>
-                    <option value="NEON">Neon Serverless Postgres</option>
-                    <option value="AWS_RDS">AWS RDS PostgreSQL</option>
-                    <option value="GCP_CLOUDSQL">Google Cloud SQL</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Região Cloud</label>
-                  <input
-                    type="text"
-                    value={newNodeData.region}
-                    onChange={(e) => setNewNodeData({ ...newNodeData, region: e.target.value })}
-                    placeholder="us-east-1 (N. Virginia)"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-medium"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 mb-1 font-semibold">Endpoint / URL de Conexão *</label>
-                <input
-                  type="url"
-                  required
-                  value={newNodeData.url}
-                  onChange={(e) => setNewNodeData({ ...newNodeData, url: e.target.value })}
-                  placeholder="https://dr-standby-node.supabase.co"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Anon / Public Key</label>
-                  <input
-                    type="text"
-                    value={newNodeData.anonKey}
-                    onChange={(e) => setNewNodeData({ ...newNodeData, anonKey: e.target.value })}
-                    placeholder="eyJhbGci..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Service Role Key</label>
-                  <input
-                    type="password"
-                    value={newNodeData.serviceRoleKey}
-                    onChange={(e) => setNewNodeData({ ...newNodeData, serviceRoleKey: e.target.value })}
-                    placeholder="eyJhbGci..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 mb-1 font-semibold">Finalidade / Notas de Contingência</label>
-                <textarea
-                  rows={2}
-                  value={newNodeData.notes}
-                  onChange={(e) => setNewNodeData({ ...newNodeData, notes: e.target.value })}
-                  placeholder="Notas sobre failover e SLA"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all shadow-xs"
-                >
-                  Adicionar ao Cluster
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Assistente "Preparar Ambiente Novo" (Script Windows / Linux sem equipe de TI) */}
+      <PrepareNewEnvironmentModal
+        isOpen={isPrepareNewEnvModalOpen}
+        onClose={() => setIsPrepareNewEnvModalOpen(false)}
+      />
     </div>
   );
 };

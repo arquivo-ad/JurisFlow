@@ -35,6 +35,8 @@ import {
   FileSignature,
   Loader2,
   X,
+  Download,
+  FileCode,
 } from 'lucide-react';
 import { Tenant, TenantVisualIdentity } from '../../types';
 import { api } from '../../services/api';
@@ -131,22 +133,70 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
   // Template Modal State
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  const [templateForm, setTemplateForm] = useState({
+  const [templateForm, setTemplateForm] = useState<{
+    name: string;
+    category: string;
+    content: string;
+    htmlContent?: string;
+    isDefault: boolean;
+    attachedFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    layoutStyle?: {
+      fontFamily?: string;
+      fontSize?: string;
+      lineSpacing?: string;
+      accentColor?: string;
+      headerIncluded?: boolean;
+      footerIncluded?: boolean;
+    };
+  }>({
     name: '',
     category: 'PETICAO',
     content: '',
+    htmlContent: '',
     isDefault: false,
   });
 
   // AI Import / Sanitize Modal State
+  const [templateModalViewMode, setTemplateModalViewMode] = useState<'TEXT' | 'HTML'>('TEXT');
+  const [aiResultViewMode, setAiResultViewMode] = useState<'TEXT' | 'HTML'>('TEXT');
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiMode, setAiMode] = useState<'SANITIZE' | 'SUGGEST' | 'GENERATE'>('SANITIZE');
   const [aiCategory, setAiCategory] = useState<'PETICAO' | 'PROCURACAO' | 'CONTRATO'>('PETICAO');
   const [aiModelName, setAiModelName] = useState('');
   const [aiRawInput, setAiRawInput] = useState('');
+  const [aiRawHtml, setAiRawHtml] = useState<string>('');
+  const [aiAttachedFile, setAiAttachedFile] = useState<{
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    dataUrl?: string;
+    uploadedAt: string;
+  } | null>(null);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [aiResult, setAiResult] = useState<{
     sanitizedContent: string;
+    sanitizedHtmlContent?: string;
+    attachedFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    layoutStyle?: {
+      fontFamily?: string;
+      fontSize?: string;
+      lineSpacing?: string;
+      accentColor?: string;
+      headerIncluded?: boolean;
+      footerIncluded?: boolean;
+    };
     extractedVariables: string[];
     titleSuggestion: string;
     summary: string;
@@ -158,10 +208,29 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
   const [isExtractingDoc, setIsExtractingDoc] = useState(false);
   const [extractSuccessMsg, setExtractSuccessMsg] = useState<string | null>(null);
 
+  // PDF / Image Visual Identity Clone States
+  const [isVisualIdentityImportModalOpen, setIsVisualIdentityImportModalOpen] = useState(false);
+  const [isAnalyzingVisualIdentity, setIsAnalyzingVisualIdentity] = useState(false);
+  const [visualIdentityAnalysisResult, setVisualIdentityAnalysisResult] = useState<{
+    visualIdentity: Partial<TenantVisualIdentity>;
+    attachedLetterheadFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    extractedImages: Array<{ dataUrl: string; width?: number; height?: number; isPrimaryLogo?: boolean }>;
+    summary: string;
+    detectedLawFirmName?: string;
+  } | null>(null);
+  const [selectedLogoFromPdf, setSelectedLogoFromPdf] = useState<string | null>(null);
+
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const sigFileInputRef = useRef<HTMLInputElement>(null);
   const docImportFileRef = useRef<HTMLInputElement>(null);
   const manualTmplFileRef = useRef<HTMLInputElement>(null);
+  const viImportFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (currentTenant?.visualIdentity) {
@@ -260,6 +329,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
       name: '',
       category,
       content: '',
+      htmlContent: '',
+      attachedFile: undefined,
+      layoutStyle: undefined,
       isDefault: false,
     });
     setIsTemplateModalOpen(true);
@@ -270,7 +342,10 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setTemplateForm({
       name: tmpl.name || tmpl.title,
       category: tmpl.category,
-      content: tmpl.content,
+      content: tmpl.content || '',
+      htmlContent: tmpl.htmlContent || '',
+      attachedFile: tmpl.attachedFile,
+      layoutStyle: tmpl.layoutStyle,
       isDefault: !!tmpl.isDefault,
     });
     setIsTemplateModalOpen(true);
@@ -299,6 +374,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
           name: templateForm.name,
           category: templateForm.category,
           content: templateForm.content,
+          htmlContent: templateForm.htmlContent,
+          attachedFile: templateForm.attachedFile,
+          layoutStyle: templateForm.layoutStyle,
           isDefault: templateForm.isDefault,
           variables: extractedVars.length > 0 ? extractedVars : currentTemplates[idx].variables,
         };
@@ -309,6 +387,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         name: templateForm.name,
         category: templateForm.category,
         content: templateForm.content,
+        htmlContent: templateForm.htmlContent,
+        attachedFile: templateForm.attachedFile,
+        layoutStyle: templateForm.layoutStyle,
         isDefault: templateForm.isDefault,
         variables: extractedVars.length > 0 ? extractedVars : ['NOME_CLIENTE', 'CPF_CLIENTE'],
       });
@@ -332,6 +413,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         : 'Contrato de Honorários'
     );
     setAiRawInput('');
+    setAiRawHtml('');
+    setAiAttachedFile(null);
     setAiResult(null);
     setIsAiModalOpen(true);
   };
@@ -343,12 +426,21 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setExtractSuccessMsg(null);
     try {
       const res = await api.extractDocumentText(file);
-      if (res && res.text) {
-        setAiRawInput(res.text);
+      if (res && (res.text || res.htmlContent)) {
+        setAiRawInput(res.text || '');
+        setAiRawHtml(res.htmlContent || '');
+        const attached = res.attachedFile || (res.dataUrl ? {
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          dataUrl: res.dataUrl,
+          uploadedAt: new Date().toISOString(),
+        } : undefined);
+        setAiAttachedFile(attached || null);
         if (!aiModelName || aiModelName.includes('Petição') || aiModelName.includes('Procuração') || aiModelName.includes('Contrato') || aiModelName.trim() === '') {
           setAiModelName(res.suggestedTitle || file.name.replace(/\.[^/.]+$/, ''));
         }
-        setExtractSuccessMsg(`Arquivo "${file.name}" carregado com sucesso (${res.charCount.toLocaleString('pt-BR')} caracteres extraídos)`);
+        setExtractSuccessMsg(`Arquivo original "${file.name}" anexado com sucesso! Formatação, fontes, estilos e cabeçalhos preservados.`);
       } else {
         alert('Não foi possível extrair o texto deste documento.');
       }
@@ -368,13 +460,24 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setExtractSuccessMsg(null);
     try {
       const res = await api.extractDocumentText(file);
-      if (res && res.text) {
+      if (res && (res.text || res.htmlContent)) {
+        const attached = res.attachedFile || (res.dataUrl ? {
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          dataUrl: res.dataUrl,
+          uploadedAt: new Date().toISOString(),
+        } : undefined);
+
         setTemplateForm((prev) => ({
           ...prev,
-          content: res.text,
-          name: prev.name.trim() ? prev.name : res.suggestedTitle,
+          content: res.text || prev.content,
+          htmlContent: res.htmlContent || prev.htmlContent,
+          attachedFile: attached,
+          layoutStyle: res.layoutStyle || prev.layoutStyle,
+          name: prev.name.trim() ? prev.name : res.suggestedTitle || file.name.replace(/\.[^/.]+$/, ''),
         }));
-        setExtractSuccessMsg(`Arquivo "${file.name}" importado com sucesso (${res.charCount.toLocaleString('pt-BR')} caracteres).`);
+        setExtractSuccessMsg(`Arquivo original "${file.name}" anexado e formatado com sucesso! Estrutura visual, fontes e cabeçalhos preservados.`);
       } else {
         alert('Não foi possível extrair texto legível deste documento.');
       }
@@ -385,6 +488,55 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
       setIsExtractingDoc(false);
       e.target.value = '';
     }
+  };
+
+  const handleVisualIdentityFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setIsAnalyzingVisualIdentity(true);
+    setExtractSuccessMsg(null);
+
+    try {
+      const res = await api.analyzeVisualIdentityFromDoc(file);
+      if (res && res.visualIdentity) {
+        setVisualIdentityAnalysisResult(res);
+        if (res.visualIdentity.logoUrl) {
+          setSelectedLogoFromPdf(res.visualIdentity.logoUrl);
+        } else if (res.extractedImages && res.extractedImages.length > 0) {
+          setSelectedLogoFromPdf(res.extractedImages[0].dataUrl);
+        } else {
+          setSelectedLogoFromPdf(null);
+        }
+        setIsVisualIdentityImportModalOpen(true);
+      } else {
+        alert('Não foi possível obter a análise de identidade visual deste arquivo.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao analisar arquivo para identidade visual:', err);
+      alert('Não foi possível processar o arquivo: ' + (err.message || 'Verifique se o arquivo PDF ou Imagem é válido.'));
+    } finally {
+      setIsAnalyzingVisualIdentity(false);
+    }
+  };
+
+  const handleApplyAnalyzedVisualIdentity = () => {
+    if (!visualIdentityAnalysisResult?.visualIdentity) return;
+
+    const analyzed = visualIdentityAnalysisResult.visualIdentity;
+    const updatedVi: TenantVisualIdentity = {
+      ...vi,
+      ...analyzed,
+      logoUrl: selectedLogoFromPdf !== null ? selectedLogoFromPdf : vi.logoUrl,
+      attachedLetterheadFile: visualIdentityAnalysisResult.attachedLetterheadFile || vi.attachedLetterheadFile,
+    };
+
+    setVi(updatedVi);
+    setIsVisualIdentityImportModalOpen(false);
+    setExtractSuccessMsg('Identidade visual, cores, fontes e arquivo real do papel timbrado anexados com sucesso!');
+    setTimeout(() => setExtractSuccessMsg(null), 6000);
+    handleSave(updatedVi);
   };
 
   const handleRunAiAction = async () => {
@@ -407,6 +559,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         category: aiCategory,
         modelName: aiModelName,
         rawContent: aiRawInput,
+        rawHtmlContent: aiRawHtml,
+        attachedFile: aiAttachedFile || undefined,
       });
 
       setAiResult(response);
@@ -425,9 +579,19 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
     currentTemplates.push({
       id: newTemplateId,
-      name: aiResult.titleSuggestion || aiModelName || 'Modelo Forense Otimizado',
+      name: aiResult.titleSuggestion || aiModelName || 'Modelo Forense Higienizado',
       category: aiCategory,
       content: aiResult.sanitizedContent,
+      htmlContent: aiResult.sanitizedHtmlContent || aiRawHtml || undefined,
+      attachedFile: aiResult.attachedFile || aiAttachedFile || undefined,
+      layoutStyle: aiResult.layoutStyle || {
+        fontFamily: vi.fontFamily || 'Times New Roman',
+        fontSize: vi.bodyFontSize || '12pt',
+        lineSpacing: vi.lineSpacing || '1.5',
+        accentColor: vi.accentColor || '#1e3a8a',
+        headerIncluded: true,
+        footerIncluded: true,
+      },
       variables: aiResult.extractedVariables || ['NOME_CLIENTE', 'CPF_CLIENTE'],
       isDefault: false,
     });
@@ -604,60 +768,173 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
       {/* TAB 1: DESIGNER & LIVE A4 PREVIEW */}
       {activeMainTab === 'DESIGNER' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT: Controls (7 cols) */}
-          <div className="lg:col-span-7 space-y-5">
-            {/* SECTION 1: LOGO & CHANCELA */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Award className="w-4 h-4 text-indigo-600" />
-                  1. Logotipo Oficial & Chancela da Advogada
+        <div className="space-y-6">
+          {/* BANNER CLONAGEM VISUAL DE PDF PRONTO */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-indigo-500/30 relative overflow-hidden">
+            <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5 max-w-3xl">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-400/40 text-[10px] font-bold text-indigo-200 tracking-wide uppercase flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-300" />
+                    Importador Inteligente de Papel Timbrado
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                    PDF • PNG • JPG
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Importar e Copiar Papel Timbrado de Arquivo PDF Pronto
                 </h3>
-                <span className="text-[10px] text-slate-400 font-medium">Persistência em Disco e Banco</span>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Envie o arquivo original (PDF ou Imagem) da petição, procuração ou papel timbrado da sua banca: nossa inteligência artificial forense extrai automaticamente o <strong>logotipo</strong>, as <strong>cores (#hex)</strong>, a <strong>família de fontes</strong> (Times, Arial, Garamond), os <strong>tamanhos</strong>, o <strong>cabeçalho</strong> e o alinhamento completo.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {/* Logo Upload & Positioning */}
-                <div className="space-y-3 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800">Logotipo do Escritório</label>
-                    <input
-                      ref={logoFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleImageUpload(file, 'logo');
-                        e.target.value = '';
-                      }}
-                    />
-                    <div className="flex items-center gap-1.5">
-                      {vi.logoUrl && (
+              <div className="shrink-0 flex items-center gap-2">
+                <input
+                  ref={viImportFileRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  className="hidden"
+                  onChange={handleVisualIdentityFileUpload}
+                />
+                <button
+                  type="button"
+                  disabled={isAnalyzingVisualIdentity}
+                  onClick={() => viImportFileRef.current?.click()}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs transition-all flex items-center gap-2 shadow-lg disabled:opacity-50"
+                >
+                  {isAnalyzingVisualIdentity ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Analisando PDF & Extraindo Design...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 text-white" />
+                      <span>Importar PDF / Imagem Pronta</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ARQUIVO REAL ANEXADO DO PAPEL TIMBRADO */}
+          {vi.attachedLetterheadFile && (
+            <div className="p-4 rounded-2xl bg-white border border-indigo-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center text-indigo-600 shrink-0">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">
+                      Arquivo Matriz de Papel Timbrado Vinculado
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Formato Real Preservado
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    <strong>{vi.attachedLetterheadFile.fileName}</strong> • {(vi.attachedLetterheadFile.fileSize / 1024).toFixed(1)} KB • Carregado em {new Date(vi.attachedLetterheadFile.uploadedAt).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {vi.attachedLetterheadFile.dataUrl && (
+                  <a
+                    href={vi.attachedLetterheadFile.dataUrl}
+                    download={vi.attachedLetterheadFile.fileName}
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Baixar Arquivo Matriz</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Deseja desvincular este arquivo de papel timbrado?')) {
+                      const updatedVi = { ...vi, attachedLetterheadFile: undefined };
+                      setVi(updatedVi);
+                      handleSave(updatedVi);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-semibold"
+                >
+                  Desvincular
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* LEFT: Controls (7 cols) */}
+            <div className="lg:col-span-7 space-y-5">
+              {/* SECTION 1: LOGO & CHANCELA */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Award className="w-4 h-4 text-indigo-600" />
+                    1. Logotipo Oficial & Chancela da Advogada
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-medium">Persistência em Disco e Banco</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Logo Upload & Positioning */}
+                  <div className="space-y-3 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800">Logotipo do Escritório</label>
+                      <input
+                        ref={logoFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageUpload(file, 'logo');
+                          e.target.value = '';
+                        }}
+                      />
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleRemoveImage('logo')}
-                          title="Remover logotipo e manter apenas o nome do escritório"
-                          className="text-[11px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                          disabled={isAnalyzingVisualIdentity}
+                          onClick={() => viImportFileRef.current?.click()}
+                          title="Importar logotipo e design diretamente de um PDF pronto"
+                          className="text-[11px] px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold transition-all flex items-center gap-1 shadow-2xs disabled:opacity-50"
                         >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Remover</span>
+                          <Sparkles className="w-3 h-3 text-indigo-600" />
+                          <span>Do PDF</span>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => logoFileInputRef.current?.click()}
-                        className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
-                      >
-                        <Upload className="w-3 h-3" />
-                        <span>{vi.logoUrl ? 'Alterar' : 'Upload Imagem'}</span>
-                      </button>
+                        {vi.logoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage('logo')}
+                            title="Remover logotipo e manter apenas o nome do escritório"
+                            className="text-[11px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remover</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => logoFileInputRef.current?.click()}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>{vi.logoUrl ? 'Alterar' : 'Upload'}</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="relative h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden group">
-                    {vi.logoUrl ? (
+                    <div className="relative h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden group">
+                      {vi.logoUrl ? (
                       <>
                         <img src={vi.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
                         <button
@@ -1329,6 +1606,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
             </div>
           </div>
         </div>
+        </div>
       )}
 
       {/* TAB 2: MODELOS OFICIAIS (PETIÇÃO, PROCURAÇÃO, CONTRATO) & IA LGPD */}
@@ -1462,6 +1740,49 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                                 </span>
                               )}
                             </div>
+
+                            {/* Attached File & Layout Style Badges */}
+                            {tmpl.attachedFile && (
+                              <div className="p-2 rounded-lg bg-indigo-50/80 border border-indigo-150 flex items-center justify-between gap-1 text-[10px]">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <FileCode className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  <span className="font-semibold text-indigo-950 truncate">
+                                    {tmpl.attachedFile.fileName}
+                                  </span>
+                                  <span className="text-[9px] text-indigo-600 font-mono">
+                                    ({(tmpl.attachedFile.fileSize / 1024).toFixed(0)}KB)
+                                  </span>
+                                </div>
+                                {tmpl.attachedFile.dataUrl && (
+                                  <a
+                                    href={tmpl.attachedFile.dataUrl}
+                                    download={tmpl.attachedFile.fileName}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-1 rounded hover:bg-indigo-100 text-indigo-700 transition-colors"
+                                    title="Baixar arquivo original formatado"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {tmpl.layoutStyle && (
+                              <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-mono">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                                  {tmpl.layoutStyle.fontFamily || 'Fonte Preservada'}
+                                </span>
+                                <span>•</span>
+                                <span>{tmpl.layoutStyle.fontSize || '12pt'}</span>
+                                {tmpl.layoutStyle.accentColor && (
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full inline-block border border-slate-300 ml-1"
+                                    style={{ backgroundColor: tmpl.layoutStyle.accentColor }}
+                                    title={`Cor de destaque: ${tmpl.layoutStyle.accentColor}`}
+                                  />
+                                )}
+                              </div>
+                            )}
 
                             <p className="text-[11px] text-slate-500 line-clamp-2 font-mono">
                               {tmpl.content.slice(0, 110)}...
@@ -1651,21 +1972,129 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                 </div>
               )}
 
+              {/* Attached File Display in Modal */}
+              {templateForm.attachedFile && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                      <FileCode className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-800 text-xs truncate max-w-[260px]">
+                          {templateForm.attachedFile.fileName}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                          Arquivo Matriz Anexado
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Tamanho: {(templateForm.attachedFile.fileSize / 1024).toFixed(1)} KB • Formato original e cabeçalhos preservados
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {templateForm.attachedFile.dataUrl && (
+                      <a
+                        href={templateForm.attachedFile.dataUrl}
+                        download={templateForm.attachedFile.fileName}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-[11px] flex items-center gap-1 transition-all shadow-2xs"
+                      >
+                        <Download className="w-3 h-3 text-indigo-600" />
+                        <span>Baixar Original</span>
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          attachedFile: undefined,
+                          htmlContent: undefined,
+                        }))
+                      }
+                      className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-[11px] font-semibold"
+                    >
+                      Remover Vínculo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Layout / Typography Info */}
+              {templateForm.layoutStyle && (
+                <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-indigo-50/50 border border-indigo-100 text-[10px] text-indigo-900 font-mono">
+                  <span>
+                    Tipografia Preservada: <strong>{templateForm.layoutStyle.fontFamily || 'Padrão'}</strong> ({templateForm.layoutStyle.fontSize || '12pt'}, entrelinhas {templateForm.layoutStyle.lineSpacing || '1.5'})
+                  </span>
+                  {templateForm.layoutStyle.accentColor && (
+                    <span className="flex items-center gap-1">
+                      Cor:{' '}
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block border border-slate-300"
+                        style={{ backgroundColor: templateForm.layoutStyle.accentColor }}
+                      />
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-700 font-semibold">Conteúdo da Minuta / Template</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <label className="text-slate-700 font-semibold">Conteúdo da Minuta / Template</label>
+                    {templateForm.htmlContent && (
+                      <div className="flex items-center rounded-lg bg-slate-100 p-0.5 text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setTemplateModalViewMode('TEXT')}
+                          className={`px-2 py-0.5 rounded-md transition-all ${
+                            templateModalViewMode === 'TEXT'
+                              ? 'bg-white text-indigo-700 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Texto & Variáveis
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTemplateModalViewMode('HTML')}
+                          className={`px-2 py-0.5 rounded-md transition-all ${
+                            templateModalViewMode === 'HTML'
+                              ? 'bg-white text-indigo-700 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Formatação Real (HTML)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-[10px] text-slate-500">
                     Use placeholders &#123;&#123;NOME_CLIENTE&#125;&#125;, &#123;&#123;CPF_CLIENTE&#125;&#125;, etc.
                   </span>
                 </div>
-                <textarea
-                  rows={10}
-                  required
-                  value={templateForm.content}
-                  onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
-                  placeholder="Insira o texto forense padronizado com as variáveis..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                />
+
+                {templateModalViewMode === 'HTML' && templateForm.htmlContent ? (
+                  <div
+                    className="w-full bg-white border border-slate-200 rounded-lg p-4 text-slate-900 max-h-[350px] overflow-y-auto shadow-inner text-xs leading-relaxed"
+                    style={{
+                      fontFamily: templateForm.layoutStyle?.fontFamily || vi.fontFamily || 'Times New Roman',
+                      lineHeight: templateForm.layoutStyle?.lineSpacing || vi.lineSpacing || '1.5',
+                    }}
+                    dangerouslySetInnerHTML={{ __html: templateForm.htmlContent }}
+                  />
+                ) : (
+                  <textarea
+                    rows={10}
+                    required
+                    value={templateForm.content}
+                    onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
+                    placeholder="Insira o texto forense padronizado com as variáveis..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
@@ -1857,6 +2286,61 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                     </div>
                   )}
 
+                  {/* Attached File in AI Modal */}
+                  {aiAttachedFile && (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                          <FileCheck className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 truncate max-w-[280px]">
+                              {aiAttachedFile.fileName}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                              Matriz Original Vinculada
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500">
+                            {(aiAttachedFile.fileSize / 1024).toFixed(1)} KB • Formatação, fontes e cabeçalhos preservados
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {aiAttachedFile.dataUrl && (
+                          <a
+                            href={aiAttachedFile.dataUrl}
+                            download={aiAttachedFile.fileName}
+                            className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-[11px] flex items-center gap-1 shadow-2xs"
+                          >
+                            <Download className="w-3 h-3 text-indigo-600" />
+                            <span>Baixar</span>
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiAttachedFile(null);
+                            setAiRawHtml('');
+                          }}
+                          className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-[11px] font-semibold"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LGPD Preservation Note */}
+                  <div className="p-2.5 rounded-lg bg-indigo-50/50 border border-indigo-100 text-[11px] text-indigo-950 flex items-start gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Higienização Real de Dados Pessoais (LGPD):</strong> Os dados de clientes e partes (CPF, RG, endereços, etc.) serão substituídos por variáveis automáticas &#123;&#123;...&#125;&#125;. Os dados do escritório/advogada, logotipo, formatação, fontes, cores, cabeçalhos e rodapés serão 100% mantidos no arquivo final.
+                    </div>
+                  </div>
+
                   <textarea
                     rows={8}
                     value={aiRawInput}
@@ -1925,16 +2409,83 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                     </div>
                   )}
 
+                  {/* Attached File Confirmation */}
+                  {(aiResult.attachedFile || aiAttachedFile) && (
+                    <div className="p-2.5 rounded-lg bg-white border border-emerald-200 flex items-center justify-between gap-2 text-xs shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-slate-800 truncate">
+                          {(aiResult.attachedFile || aiAttachedFile)?.fileName}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                          Matriz Vinculada ao Modelo
+                        </span>
+                      </div>
+                      {(aiResult.attachedFile?.dataUrl || aiAttachedFile?.dataUrl) && (
+                        <a
+                          href={(aiResult.attachedFile || aiAttachedFile)?.dataUrl}
+                          download={(aiResult.attachedFile || aiAttachedFile)?.fileName}
+                          className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1"
+                        >
+                          <Download className="w-3 h-3 text-indigo-600" />
+                          <span>Baixar</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   <div>
-                    <label className="text-slate-800 font-bold block mb-1">
-                      Minuta Higienizada & Pronta para o Escritório:
-                    </label>
-                    <textarea
-                      rows={8}
-                      value={aiResult.sanitizedContent}
-                      onChange={(e) => setAiResult({ ...aiResult, sanitizedContent: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-slate-800 font-bold block">
+                        Minuta Higienizada & Pronta para o Escritório:
+                      </label>
+                      {(aiResult.sanitizedHtmlContent || aiRawHtml) && (
+                        <div className="flex items-center rounded-lg bg-slate-200/70 p-0.5 text-[10px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setAiResultViewMode('TEXT')}
+                            className={`px-2 py-0.5 rounded-md transition-all ${
+                              aiResultViewMode === 'TEXT'
+                                ? 'bg-white text-indigo-700 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Texto & Variáveis
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAiResultViewMode('HTML')}
+                            className={`px-2 py-0.5 rounded-md transition-all ${
+                              aiResultViewMode === 'HTML'
+                                ? 'bg-white text-indigo-700 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Formatação Real (HTML)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {aiResultViewMode === 'HTML' && (aiResult.sanitizedHtmlContent || aiRawHtml) ? (
+                      <div
+                        className="w-full bg-white border border-slate-300 rounded-lg p-4 text-slate-900 max-h-[300px] overflow-y-auto shadow-inner text-xs leading-relaxed"
+                        style={{
+                          fontFamily: aiResult.layoutStyle?.fontFamily || vi.fontFamily || 'Times New Roman',
+                          lineHeight: aiResult.layoutStyle?.lineSpacing || vi.lineSpacing || '1.5',
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: aiResult.sanitizedHtmlContent || aiRawHtml,
+                        }}
+                      />
+                    ) : (
+                      <textarea
+                        rows={8}
+                        value={aiResult.sanitizedContent}
+                        onChange={(e) => setAiResult({ ...aiResult, sanitizedContent: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    )}
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2">
@@ -1956,6 +2507,289 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL: REVISÃO E APLICAÇÃO DE IDENTIDADE VISUAL EXTRAÍDA DE PDF / IMAGEM */}
+      {isVisualIdentityImportModalOpen && visualIdentityAnalysisResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                  <Sparkles className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Design e Identidade Visual Extraídos do Arquivo
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Revise o logotipo, fontes, cores e layout detectados antes de aplicar ao papel timbrado
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVisualIdentityImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 overflow-y-auto text-xs">
+              {/* Summary banner */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-100 flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-indigo-950">Resumo da Extração Forense:</span>
+                  <p className="text-[11px] text-indigo-900/80 leading-relaxed">
+                    {visualIdentityAnalysisResult.summary}
+                  </p>
+                </div>
+              </div>
+
+              {/* 1. Logotipo Extraído */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Award className="w-4 h-4 text-indigo-600" />
+                    1. Logotipo Detectado no Documento
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {visualIdentityAnalysisResult.extractedImages.length} imagem(ns) encontrada(s) no arquivo
+                  </span>
+                </div>
+
+                {visualIdentityAnalysisResult.extractedImages.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {visualIdentityAnalysisResult.extractedImages.map((img, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedLogoFromPdf(img.dataUrl)}
+                          className={`relative p-2.5 rounded-xl border transition-all bg-white flex items-center justify-center ${
+                            selectedLogoFromPdf === img.dataUrl
+                              ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <img
+                            src={img.dataUrl}
+                            alt={`Logo candidato ${idx + 1}`}
+                            className="max-h-16 max-w-[140px] object-contain"
+                          />
+                          {selectedLogoFromPdf === img.dataUrl && (
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLogoFromPdf(null)}
+                        className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                          selectedLogoFromPdf === null
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                            : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        Deixar sem logotipo
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Clique na imagem que corresponde ao logotipo oficial da sua banca para utilizá-la em todos os documentos.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-center gap-2">
+                    <Info className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>Nenhuma imagem rasterizada de logotipo foi identificada no PDF. O papel timbrado utilizará o cabeçalho institucional tipográfico.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Cores & Tipografia */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Colors Card */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3 shadow-2xs">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Palette className="w-4 h-4 text-indigo-600" />
+                    2. Cores & Linhas Detectadas
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Cor de Destaque:</span>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-5 h-5 rounded-md border border-black/10 shadow-2xs"
+                          style={{ backgroundColor: visualIdentityAnalysisResult.visualIdentity.accentColor || '#1e3a8a' }}
+                        />
+                        <span className="font-mono font-bold text-slate-800 uppercase">
+                          {visualIdentityAnalysisResult.visualIdentity.accentColor || '#1e3a8a'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Estilo de Borda:</span>
+                      <span className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.borderStyle || 'SOLID'} ({visualIdentityAnalysisResult.visualIdentity.borderWidth || '2px'})
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Estilo do Cabeçalho:</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                        {visualIdentityAnalysisResult.visualIdentity.headerStyle}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Typography Card */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3 shadow-2xs">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Type className="w-4 h-4 text-indigo-600" />
+                    3. Tipografia & Dimensões Forenses
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Fonte Principal:</span>
+                      <span className="font-bold text-slate-900" style={{ fontFamily: visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman' }}>
+                        {visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Tamanho do Corpo:</span>
+                      <span className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.bodyFontSize || '12pt'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Espaçamento Entrelinhas:</span>
+                      <span className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.lineSpacing || '1.5'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Dados Oficiais Identificados */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 shadow-2xs">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  4. Dados Cadastrais Identificados no Documento
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  {visualIdentityAnalysisResult.detectedLawFirmName && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Escritório / Sociedade:</span>
+                      <span className="font-bold text-slate-800">{visualIdentityAnalysisResult.detectedLawFirmName}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.signatoryName && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Advogado(a) Titular:</span>
+                      <span className="font-bold text-slate-800">{visualIdentityAnalysisResult.visualIdentity.signatoryName}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.signatoryOab && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Inscrição OAB:</span>
+                      <span className="font-mono font-bold text-indigo-700">{visualIdentityAnalysisResult.visualIdentity.signatoryOab}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.contactPhone && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Telefone / WhatsApp:</span>
+                      <span className="font-bold text-slate-800">{visualIdentityAnalysisResult.visualIdentity.contactPhone}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.headerAddress && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 sm:col-span-2">
+                      <span className="text-slate-500 block">Endereço:</span>
+                      <span className="font-medium text-slate-800">{visualIdentityAnalysisResult.visualIdentity.headerAddress}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 4. Live Mini Preview */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                  <Eye className="w-4 h-4 text-indigo-600" />
+                  5. Prévia do Papel Timbrado com as Configurações Extraídas
+                </label>
+                <div
+                  className="p-5 rounded-lg border border-slate-300 bg-white shadow-xs space-y-4"
+                  style={{ fontFamily: visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman' }}
+                >
+                  <div
+                    className={`flex items-center justify-between pb-3 ${
+                      visualIdentityAnalysisResult.visualIdentity.borderStyle !== 'NONE'
+                        ? 'border-b'
+                        : ''
+                    }`}
+                    style={{
+                      borderColor: visualIdentityAnalysisResult.visualIdentity.accentColor || '#1e3a8a',
+                      borderBottomWidth: visualIdentityAnalysisResult.visualIdentity.borderWidth || '2px',
+                    }}
+                  >
+                    {selectedLogoFromPdf ? (
+                      <img
+                        src={selectedLogoFromPdf}
+                        alt="Logo Preview"
+                        className="max-h-11 object-contain"
+                      />
+                    ) : (
+                      <div>
+                        <div className="font-bold text-sm text-slate-900">
+                          {visualIdentityAnalysisResult.detectedLawFirmName || currentTenant?.name || 'Escritório de Advocacia'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-sans">
+                          {visualIdentityAnalysisResult.visualIdentity.signatoryOab || 'OAB/SP 478.370'}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-right text-[10px] text-slate-600 font-sans">
+                      <div className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.signatoryName || 'Dra. Gabriela M. Manni Capitani'}
+                      </div>
+                      <div className="font-mono text-[9px]" style={{ color: visualIdentityAnalysisResult.visualIdentity.accentColor || '#1e3a8a' }}>
+                        {visualIdentityAnalysisResult.visualIdentity.signatoryOab || 'OAB/SP 478.370'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-slate-700 leading-relaxed italic">
+                    Texto do documento com tipografia {visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman'}, tamanho {visualIdentityAnalysisResult.visualIdentity.bodyFontSize || '12pt'} e espaçamento {visualIdentityAnalysisResult.visualIdentity.lineSpacing || '1.5'}.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsVisualIdentityImportModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-200 font-semibold text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApplyAnalyzedVisualIdentity}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all flex items-center gap-2 shadow-md"
+              >
+                <Check className="w-4 h-4 text-emerald-300" />
+                <span>Aplicar Design no Escritório & Salvar</span>
+              </button>
             </div>
           </div>
         </div>

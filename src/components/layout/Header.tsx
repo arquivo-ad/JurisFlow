@@ -18,10 +18,13 @@ import {
   LogOut,
   Building2,
   Camera,
+  KeyRound,
+  LifeBuoy,
 } from 'lucide-react';
 import { Tenant, Branch, User, Role, Notification } from '../../types';
 import { canAccessModule } from '../../utils/rbac';
 import { ChangeProfilePhotoModal } from '../common/ChangeProfilePhotoModal';
+import { SupportApiKeyModal } from '../support/SupportApiKeyModal';
 
 interface HeaderProps {
   currentTenant: Tenant | null;
@@ -38,6 +41,7 @@ interface HeaderProps {
   onSwitchUser?: (userId: string) => void;
   onOpenNewTenantModal?: () => void;
   onOpenLoginModal?: () => void;
+  onOpenSupportModal?: () => void;
   onOpenSearch?: () => void;
   onNavigate?: (module: string) => void;
   onQuickAction?: (action: 'NEW_CASE' | 'NEW_DEADLINE' | 'NEW_CLIENT' | 'AI_PROMPT') => void;
@@ -60,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSwitchUser = (_userId: string) => {},
   onOpenNewTenantModal,
   onOpenLoginModal,
+  onOpenSupportModal,
   onOpenSearch = () => {},
   onNavigate = (_module: string) => {},
   onQuickAction = (_action: 'NEW_CASE' | 'NEW_DEADLINE' | 'NEW_CLIENT' | 'AI_PROMPT') => {},
@@ -72,6 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isChangePhotoOpen, setIsChangePhotoOpen] = useState(false);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   const activeBranchToUse = activeBranch || currentBranch || (branches && branches[0]) || null;
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
@@ -542,6 +548,22 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
+                {/* SUPORTE (Gerar API Key de Acesso Temporário) - Conforme especificação */}
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setIsSupportModalOpen(true);
+                    if (onOpenSupportModal) onOpenSupportModal();
+                  }}
+                  className="w-full text-left p-2 rounded-lg text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 flex items-center gap-2 transition-colors border border-amber-200/80 shadow-xs"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-600" />
+                  <div className="flex flex-col">
+                    <span>SUPORTE</span>
+                    <span className="text-[10px] font-normal text-amber-700">Gerar API Key de Acesso</span>
+                  </div>
+                </button>
+
                 {onOpenLoginModal && (
                   <button
                     onClick={() => {
@@ -571,6 +593,13 @@ export const Header: React.FC<HeaderProps> = ({
             await onUpdateAvatar(newUrl);
           }
         }}
+      />
+
+      {/* Modal de Suporte & Chave de Acesso */}
+      <SupportApiKeyModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        tenantName={currentTenant?.name}
       />
     </header>
   );
