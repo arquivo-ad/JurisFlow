@@ -12,7 +12,7 @@ import { INITIAL_LEGAL_SOURCE_REGISTRY } from './sourceRegistry.ts';
 
 /**
  * REPOSITÓRIO PERSISTENTE DE CONHECIMENTO JURÍDICO E PRECEDENTES OFICIAIS
- * 
+ *
  * Garante:
  * 1. Idempotência por Hash SHA-256
  * 2. Isolamento estrito Multi-Tenant (Repositório Público vs Acervo Privado do Escritório)

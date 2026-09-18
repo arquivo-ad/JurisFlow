@@ -4,7 +4,7 @@ import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
- * 
+ *
  * Regra de Ouro: Prompt não é verificação.
  * Somente o código determinístico deste verificador pode conceder o status
  * 'VERIFIED_OFFICIAL' ou rejeitar citações inconsistentes/alucinadas.

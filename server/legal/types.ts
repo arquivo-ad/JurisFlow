@@ -1,6 +1,6 @@
 /**
  * JURISFLOW ENTERPRISE LEGAL - MODELO CANÔNICO E TIPAGENS DE PRECEDENTES
- * 
+ *
  * Estrutura formalizada de entidades jurídicas, fontes oficiais,
  * verificador de precedentes e proteção anti-alucinação.
  */
