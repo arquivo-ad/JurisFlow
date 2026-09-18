@@ -1,4 +1,4 @@
-import { User, Role, ModuleMetadata, FeatureFlag, ModuleId } from '../types';
+import { User, Role, ModuleMetadata, FeatureFlag, ModuleId } from '../types/index.ts';
 import { hasPermission, isSuperAdmin } from './rbac';
 
 export interface EntitlementContext {

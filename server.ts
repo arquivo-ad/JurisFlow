@@ -2125,6 +2125,32 @@ async function startServer() {
     res.json(tenantUsers.length > 0 ? tenantUsers : db.users);
   });
 
+  function checkRequesterIsSuperAdmin(req: Request): boolean {
+    const userId = (req as any).userId;
+    if (!userId) return false;
+    const user = db.users.find((u) => u.id === userId);
+    if (user?.id === 'u-superadmin' || user?.email?.includes('superadmin')) return true;
+    if (user?.roleCode === 'SUPER_ADMIN' || user?.roleId === 'role-super-admin') return true;
+    const userMems = db.memberships.filter((m) => m.userId === userId);
+    return userMems.some((m) => {
+      if (m.roleId === 'role-super-admin') return true;
+      const r = db.roles.find((role) => role.id === m.roleId);
+      return r?.code === 'SUPER_ADMIN';
+    });
+  }
+
+  function isTargetUserSuperAdmin(targetUserId: string): boolean {
+    if (targetUserId === 'u-superadmin') return true;
+    const user = db.users.find((u) => u.id === targetUserId);
+    if (user?.email?.includes('superadmin') || user?.roleCode === 'SUPER_ADMIN' || user?.roleId === 'role-super-admin') return true;
+    const mems = db.memberships.filter((m) => m.userId === targetUserId);
+    return mems.some((m) => {
+      if (m.roleId === 'role-super-admin') return true;
+      const r = db.roles.find((role) => role.id === m.roleId);
+      return r?.code === 'SUPER_ADMIN';
+    });
+  }
+
   app.post('/api/users', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const defaultBranchId = db.branches.find((b) => b.tenantId === tenantId)?.id || db.branches[0]?.id;
@@ -2142,6 +2168,19 @@ async function startServer() {
             isPrimary: true,
           },
         ];
+
+    // Strict RBAC: Only Super Admin of the SaaS platform can assign the SaaS Admin (SUPER_ADMIN) role
+    const assignsSuperAdmin = rawAffiliations.some((aff: any) => {
+      if (aff.roleId === 'role-super-admin') return true;
+      const r = db.roles.find((role) => role.id === aff.roleId);
+      return r?.code === 'SUPER_ADMIN';
+    });
+
+    if (assignsSuperAdmin && !checkRequesterIsSuperAdmin(req)) {
+      return res.status(403).json({
+        error: 'Acesso negado: Somente o Super Admin da plataforma SaaS pode atribuir a função de Admin da plataforma SaaS para outro usuário.',
+      });
+    }
 
     // Ensure at least one has isPrimary true
     const hasPrimary = rawAffiliations.some((a: any) => Boolean(a.isPrimary));
@@ -2236,6 +2275,40 @@ async function startServer() {
     if (userIndex === -1) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
+
+    const requesterIsSuperAdmin = checkRequesterIsSuperAdmin(req);
+    const targetIsSuperAdmin = isTargetUserSuperAdmin(req.params.id);
+
+    // Strict RBAC: Non-superadmin cannot alter an existing SaaS Platform Super Admin
+    if (targetIsSuperAdmin && !requesterIsSuperAdmin) {
+      return res.status(403).json({
+        error: 'Acesso negado: Somente o Super Admin da plataforma SaaS pode alterar dados ou funções de um Administrador da plataforma SaaS.',
+      });
+    }
+
+    // Strict RBAC: Only Super Admin can assign the SaaS Platform Admin role (SUPER_ADMIN)
+    let assignsSuperAdmin = false;
+    if (Array.isArray(req.body.branchAffiliations) && req.body.branchAffiliations.length > 0) {
+      assignsSuperAdmin = req.body.branchAffiliations.some((aff: any) => {
+        if (aff.roleId === 'role-super-admin') return true;
+        const r = db.roles.find((role) => role.id === aff.roleId);
+        return r?.code === 'SUPER_ADMIN';
+      });
+    } else if (req.body.roleId) {
+      if (req.body.roleId === 'role-super-admin') {
+        assignsSuperAdmin = true;
+      } else {
+        const r = db.roles.find((role) => role.id === req.body.roleId);
+        assignsSuperAdmin = r?.code === 'SUPER_ADMIN';
+      }
+    }
+
+    if (assignsSuperAdmin && !requesterIsSuperAdmin) {
+      return res.status(403).json({
+        error: 'Acesso negado: Somente o Super Admin da plataforma SaaS pode atribuir a função de Admin da plataforma SaaS para outro usuário.',
+      });
+    }
+
     const current = db.users[userIndex];
     const updatedUser: User = {
       ...current,
@@ -2383,6 +2456,16 @@ async function startServer() {
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
+
+    const requesterIsSuperAdmin = checkRequesterIsSuperAdmin(req);
+    const targetIsSuperAdmin = isTargetUserSuperAdmin(req.params.id);
+
+    if (targetIsSuperAdmin && !requesterIsSuperAdmin) {
+      return res.status(403).json({
+        error: 'Acesso negado: Somente o Super Admin da plataforma SaaS pode desvincular ou excluir o Administrador da plataforma SaaS.',
+      });
+    }
+
     db.memberships = db.memberships.filter((m) => !(m.userId === req.params.id && m.tenantId === tenantId));
     await deleteFromSupabase('memberships', 'user_id', req.params.id);
     logAudit(req, 'AUTH', user.id, 'DELETE', `Removeu membro da equipe do escritório: ${user.name}`);
@@ -2393,6 +2476,15 @@ async function startServer() {
     const tenantId = (req as any).tenantId;
     const user = db.users.find((u) => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+    const requesterIsSuperAdmin = checkRequesterIsSuperAdmin(req);
+    const targetIsSuperAdmin = isTargetUserSuperAdmin(req.params.id);
+
+    if (targetIsSuperAdmin && !requesterIsSuperAdmin) {
+      return res.status(403).json({
+        error: 'Acesso negado: Somente o Super Admin da plataforma SaaS pode alterar o status do Administrador da plataforma SaaS.',
+      });
+    }
     const newStatus = req.body.status || (user.active !== false ? 'SUSPENDED' : 'ACTIVE');
     user.status = newStatus;
     user.active = newStatus === 'ACTIVE';
