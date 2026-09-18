@@ -52,6 +52,14 @@ export class LegalKnowledgeStorage {
             d.verificationStatus = 'DEMO_UNVERIFIED';
             d.environment = 'development';
           }
+          if (
+            d.sourceId === 'stj-dados-abertos'
+            && (/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber || '') || /\/dataset(?:\/|$)/i.test(d.officialUrl || ''))
+          ) {
+            d.verificationStatus = 'DEMO_UNVERIFIED';
+            d.environment = 'development';
+            d.rejectionReasons = Array.from(new Set([...(d.rejectionReasons || []), 'REGISTRO_DE_CATALOGO_NAO_E_PRECEDENTE']));
+          }
           // Bloqueio de sementes de desenvolvimento não auditadas por HTTP real.
           // Precedentes com VERIFIED_OFFICIAL devidamente auditados são preservados.
           if (d.sourceId === 'stj-dados-abertos' && d.verificationStatus !== 'VERIFIED_OFFICIAL') {

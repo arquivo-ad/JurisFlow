@@ -648,6 +648,27 @@ ${contextPrompt}`;
     const citationReport = this.citationGuard.validateAndSanitize(cleanedText, verifiedDecisionsForThisQuery);
     const finalCleanText = GeminiLegalService.stripMarkdown(citationReport.sanitizedText).replace(/\bDr\.\s*Gabriela\b/g, 'Dra. Gabriela');
 
+    if (!citationReport.isPassed) {
+      const blockedText = `Olá, ${lawyerGreeting}!\n\nA síntese gerada foi bloqueada pelo controle de citações porque mencionou referência não comprovada no conjunto oficial recuperado para esta consulta. Nenhum precedente dessa resposta deve ser utilizado em peça.`;
+      return {
+        answer: blockedText,
+        salutation: `Olá, ${lawyerGreeting}!`,
+        summary: 'Resposta bloqueada pelo CitationGuard; nenhuma citação foi liberada.',
+        searchResults: [],
+        citationReport: { ...citationReport, sanitizedText: blockedText },
+        hasPrecedentsFound: false,
+        verificationNotice: 'Não verificado — proibido usar em peça.',
+        status: 'FAIL_CLOSED',
+        failureCode: 'DOCUMENT_REJECTED',
+        failureReason: citationReport.blockedReasons.join(' '),
+        diagnostic: stjDiagnostic,
+        routingReport,
+        isModelAvailable: true,
+        modelStatus: 'MODEL_READY',
+        modelName: this.activeModel,
+      };
+    }
+
     return {
       answer: finalCleanText,
       salutation: `Olá, ${lawyerGreeting}!`,

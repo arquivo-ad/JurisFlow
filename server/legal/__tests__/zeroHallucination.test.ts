@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
 import { BnpAdapter } from '../adapters/BnpAdapter.ts';
+import { PrecedentVerifier } from '../verifier.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalSearchEngine } from '../searchEngine.ts';
 import { LegalKnowledgeStorage } from '../storage.ts';
@@ -56,4 +57,27 @@ test('sementes BNP legadas não recebem selo de precedente verificado', () => {
   const engine = new LegalSearchEngine(new LegalKnowledgeStorage());
   const result = engine.search({ query: 'Súmula Vinculante 10 STF', onlyVerified: true });
   assert.equal(result.results.some((item) => item.sourceId === 'cnj-bnp-pangea'), false);
+});
+
+test('página de catálogo do STJ não pode ser verificada como acórdão', () => {
+  const result = PrecedentVerifier.verifyDecision({
+    rawCaseNumber: 'Espelhos de acórdãos - Corte Especial',
+    officialUrl: 'https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-corte-especial',
+    court: 'Superior Tribunal de Justiça',
+    courtCode: 'STJ',
+    documentType: 'ACORDAO',
+    judgmentDate: '2026-09-18',
+    officialHeadnote: 'Descrição institucional extensa de um catálogo de dados abertos.',
+    precedentSituation: 'VIGENTE',
+  });
+  assert.equal(result.isPassed, false);
+  assert.ok(result.issues.includes('IDENTIFICADOR_NAO_JUDICIAL: página de catálogo, dataset ou descrição institucional não é precedente judicial.'));
+  assert.ok(result.issues.includes('URL_DE_CATALOGO: URL aponta para catálogo de dados, não para o acórdão ou precedente individualizado.'));
+});
+
+test('consulta exata a tema não aceita coincidência textual genérica de catálogo', () => {
+  const engine = new LegalSearchEngine(new LegalKnowledgeStorage());
+  const result = engine.search({ query: 'Qual é a tese do Tema 27 do STJ?', onlyVerified: true });
+  assert.equal(result.total, 0);
+  assert.deepEqual(result.results, []);
 });

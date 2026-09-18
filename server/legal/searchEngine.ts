@@ -25,7 +25,8 @@ const LEGAL_STOP_WORDS = new Set([
   'às', 'minha', 'têm', 'numa', 'pelos', 'elas', 'havia', 'seja', 'qual', 'será',
   'nós', 'tenho', 'fui', 'todas', 'todos', 'direito', 'direitos', 'existem',
   'jurisprudências', 'jurisprudencia', 'jurisprudência', 'precedente', 'precedentes',
-  'acórdão', 'acórdãos', 'processo', 'decisão', 'sobre', 'caso', 'artigo', 'lei'
+  'acórdão', 'acórdãos', 'processo', 'decisão', 'sobre', 'caso', 'artigo', 'lei',
+  'qual', 'tese', 'tema', 'enunciado', 'tribunal', 'stj', 'stf', 'tst', 'trt'
 ]);
 
 export class LegalSearchEngine {
@@ -167,7 +168,8 @@ export class LegalSearchEngine {
       // Regra de Admissibilidade Material:
       // Exige ao menos 2 termos substantivos coincidentes OU 1 instituto jurídico completo
       // E proíbe falso match genérico
-      if (matchedEntitiesCount >= 1 || (substantiveTokens.length > 0 && matchedSubstantive.length >= 2)) {
+      const isExactIdentifierQuery = classification.isSpecificCaseNumberQuery || classification.isSpecificThemeOrSumulaQuery;
+      if (!isExactIdentifierQuery && (matchedEntitiesCount >= 1 || (substantiveTokens.length > 0 && matchedSubstantive.length >= 2))) {
         // Se a consulta possui entidades específicas da área trabalhista, exige que a tese ou ementa tenha aderência material
         if (classification.isLaborDispute) {
           const hasLaborConcept = /\b(clt|trabalhador|empregado|cargo de confiança|função de confiança|fundação|verbas rescisórias|rescisão|dispensa|tst|trt)\b/i.test(
@@ -199,7 +201,9 @@ export class LegalSearchEngine {
         && /^[a-f0-9]{64}$/i.test(d.contentSha256)
         && Boolean(d.lastVerifiedAt)
         && Boolean(d.rawPayloadPreserved)
-        && officialUrlIsDirect;
+        && officialUrlIsDirect
+        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
+        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
 
       if (queryInput.onlyVerified && !hasAuditableEvidence) continue;
       sourcesActuallyConsulted.add(d.sourceId);
@@ -262,7 +266,9 @@ export class LegalSearchEngine {
         && /^[a-f0-9]{64}$/i.test(d.contentSha256)
         && Boolean(d.lastVerifiedAt)
         && Boolean(d.rawPayloadPreserved)
-        && officialUrlIsDirect;
+        && officialUrlIsDirect
+        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
+        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
       const evidenceState = hasAuditableEvidence
         ? 'VERIFIED_OFFICIAL'
         : d.officialUrl

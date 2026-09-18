@@ -48,6 +48,19 @@ export class PrecedentVerifier {
     if (!rawCaseNum.trim()) {
       issues.push('IDENTIFICADOR_AUSENTE: Processo, Súmula ou Tema sem número de identificação judicial.');
     }
+    const qualifiedTypes = new Set([
+      'SUMULA_VINCULANTE', 'SUMULA', 'TEMA_REPETITIVO', 'TEMA_REPERCUSSAO_GERAL',
+      'IRDR', 'IAC', 'ORIENTACAO_JURISPRUDENCIAL', 'PRECEDENTE_NORMATIVO',
+    ]);
+    const hasJudicialIdentifier = Boolean(decision.normalizedCnjNumber)
+      || /\b(?:REsp|AREsp|AgInt|EREsp|RE|HC|RMS|MS|CC|RR|AIRR|RO|Tema|S[úu]mula|OJ)\s*[\d.-]+/i.test(rawCaseNum)
+      || (qualifiedTypes.has(decision.documentType || '') && Number.isInteger(decision.themeNumber));
+    if (!hasJudicialIdentifier) {
+      issues.push('IDENTIFICADOR_NAO_JUDICIAL: página de catálogo, dataset ou descrição institucional não é precedente judicial.');
+    }
+    if (/\/dataset(?:\/|$)/i.test(officialUrl) && decision.documentType === 'ACORDAO') {
+      issues.push('URL_DE_CATALOGO: URL aponta para catálogo de dados, não para o acórdão ou precedente individualizado.');
+    }
 
     // 3. Normalização Processual
     if (decision.normalizedCnjNumber) {
