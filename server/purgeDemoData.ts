@@ -15,11 +15,11 @@ export const PROD_TENANT: Tenant = {
   status: 'ACTIVE',
   contactEmail: 'gabriela.capitani@adv.oab.sp.org.br',
   contactPhone: '(12) 99148-6012',
-  logoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=200&auto=format&fit=crop&q=80',
+  logoUrl: '',
   visualIdentity: {
-    logoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=200&auto=format&fit=crop&q=80',
+    logoUrl: '',
     logoPosition: 'left',
-    signatureImageUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80',
+    signatureImageUrl: '',
     signatoryName: 'Dra. Gabriela M. Manni Capitani',
     signatoryOab: 'OAB/SP 478.370',
     signatoryRole: 'Advogada Sócia e Titular',
@@ -273,9 +273,22 @@ export async function executePurgeDemoData(db?: any) {
     summary.demo_tenants = eTen ? `Error: ${eTen.message}` : `Purged ${cTen ?? 'all'}`;
 
     // Ensure production tenant, branch, users, and memberships are properly persisted in Supabase
-    await syncTenantToSupabase(PROD_TENANT);
+    // Preserve custom avatar / logo if set by the user
+    const existingLawyer = db?.users?.find((u: any) => u.id === PROD_LAWYER.id);
+    const existingTenant = db?.tenants?.find((t: any) => t.id === PROD_TENANT.id);
+    const lawyerToPersist = {
+      ...PROD_LAWYER,
+      avatarUrl: existingLawyer?.avatarUrl || PROD_LAWYER.avatarUrl,
+    };
+    const tenantToPersist = {
+      ...PROD_TENANT,
+      logoUrl: existingTenant?.logoUrl || PROD_TENANT.logoUrl,
+      visualIdentity: existingTenant?.visualIdentity || PROD_TENANT.visualIdentity,
+    };
+
+    await syncTenantToSupabase(tenantToPersist);
     await syncBranchToSupabase(PROD_BRANCH);
-    await syncUserToSupabase(PROD_LAWYER);
+    await syncUserToSupabase(lawyerToPersist);
     await syncUserToSupabase(PROD_SUPERADMIN);
     for (const mem of PROD_MEMBERSHIPS) {
       await syncMembershipToSupabase(mem);
@@ -286,6 +299,18 @@ export async function executePurgeDemoData(db?: any) {
 
   // If in-memory db instance is passed, clean in-memory state too
   if (db) {
+    const existingLawyer = db.users?.find((u: any) => u.id === PROD_LAWYER.id);
+    const existingTenant = db.tenants?.find((t: any) => t.id === PROD_TENANT.id);
+    const lawyerToKeep = {
+      ...PROD_LAWYER,
+      avatarUrl: existingLawyer?.avatarUrl || PROD_LAWYER.avatarUrl,
+    };
+    const tenantToKeep = {
+      ...PROD_TENANT,
+      logoUrl: existingTenant?.logoUrl || PROD_TENANT.logoUrl,
+      visualIdentity: existingTenant?.visualIdentity || PROD_TENANT.visualIdentity,
+    };
+
     db.cases = [];
     db.deadlines = [];
     db.feeContracts = [];
@@ -304,9 +329,9 @@ export async function executePurgeDemoData(db?: any) {
     db.auditLogs = [];
 
     // Ensure only real tenant, branch, users, and memberships exist in memory
-    db.tenants = [PROD_TENANT];
+    db.tenants = [tenantToKeep];
     db.branches = [PROD_BRANCH];
-    db.users = [PROD_LAWYER, PROD_SUPERADMIN];
+    db.users = [lawyerToKeep, PROD_SUPERADMIN];
     db.memberships = [...PROD_MEMBERSHIPS];
 
     summary.inMemory = {

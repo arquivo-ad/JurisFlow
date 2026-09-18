@@ -13,8 +13,30 @@ export interface TenantVisualIdentity {
   signatoryOab?: string;
   signatoryRole?: string;
   headerAddress?: string;
+  contactPhone?: string;
+  contactEmail?: string;
   footerText?: string;
-  headerStyle?: 'MODERN' | 'CLASSIC' | 'MINIMALIST' | 'OFFICIAL_EMBLEM';
+  // Discrete field display toggles (address, phone, email, etc are optional)
+  showHeaderAddress?: boolean;
+  showHeaderPhone?: boolean;
+  showHeaderEmail?: boolean;
+  showHeaderCnpj?: boolean;
+  showHeaderOab?: boolean;
+  showFooterAddress?: boolean;
+  showFooterPhone?: boolean;
+  showFooterEmail?: boolean;
+  showFooterText?: boolean;
+  showDigitalSignatureSeal?: boolean;
+  // Visual layout & design customization
+  headerStyle?: 'FULL_BANNER' | 'MINIMALIST' | 'MODERN_BAR' | 'CLASSIC_CENTERED' | 'SIDE_BY_SIDE' | 'CUSTOM_DESIGN' | 'OFFICIAL_EMBLEM' | 'MODERN' | 'CLASSIC';
+  headerBannerUrl?: string; // High-resolution cropped official header banner
+  pageBackgroundUrl?: string; // Full official letterhead page background
+  bannerHeightRatio?: number;
+  accentColor?: string;
+  borderStyle?: 'SOLID' | 'DOUBLE' | 'DASHED' | 'NONE';
+  borderWidth?: '1px' | '2px' | '3px' | '4px';
+  logoMaxHeight?: number; // in px
+  headerPadding?: 'COMPACT' | 'NORMAL' | 'SPACIOUS';
   fontFamily?: 'Arial' | 'Times New Roman' | 'Calibri' | 'Garamond' | 'Georgia';
   bodyFontSize?: '11pt' | '12pt' | '13pt';
   lineSpacing?: '1.0' | '1.15' | '1.5';
@@ -23,12 +45,43 @@ export interface TenantVisualIdentity {
   closingFormula?: string;
   jurisprudenceStyle?: 'EMENDA_INTEGRAL' | 'DESTAQUE_ENXUTO';
   editorialTone?: 'TECNICO_DIRETO' | 'COMBATIVO_ELOQUENTE' | 'CONCILIATORIO';
+  attachedLetterheadFile?: {
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    dataUrl?: string;
+    headerBannerUrl?: string;
+    pageBackgroundUrl?: string;
+    uploadedAt: string;
+    detectedFonts?: string[];
+    detectedColors?: string[];
+    headerHtml?: string;
+    footerHtml?: string;
+  };
   templates?: {
     id: string;
     name: string;
     category: string;
     content: string;
+    htmlContent?: string;
     isDefault?: boolean;
+    description?: string;
+    variables?: string[];
+    attachedFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    layoutStyle?: {
+      fontFamily?: string;
+      fontSize?: string;
+      lineSpacing?: string;
+      accentColor?: string;
+      headerIncluded?: boolean;
+      footerIncluded?: boolean;
+    };
   }[];
 }
 
@@ -249,7 +302,7 @@ export interface LGPDPortalConfig {
 export interface DatabaseNode {
   id: string;
   name: string;
-  provider: 'SUPABASE' | 'POSTGRESQL' | 'NEON' | 'AWS_RDS' | 'GCP_CLOUDSQL' | 'CUSTOM';
+  provider: 'SUPABASE' | 'POSTGRESQL' | 'NEON' | 'AWS_RDS' | 'GCP_CLOUDSQL' | 'CUSTOM' | 'LOCAL_OFFLINE';
   url: string;
   anonKey?: string;
   serviceRoleKey?: string;
@@ -261,8 +314,37 @@ export interface DatabaseNode {
   tablesCount?: number;
   recordsCount?: number;
   isManagedDefault?: boolean;
+  isLocalDr?: boolean;
+  pendingOfflineSyncCount?: number;
+  offlineStorageBytes?: number;
   notes?: string;
   createdAt: string;
+}
+
+// --- SUPPORT API KEY & STRICT TENANT ISOLATION ---
+export interface SupportApiKey {
+  id: string;
+  tenantId: string;
+  key: string; // Ex: sec-sup-xxxx-xxxx-xxxx
+  createdByName: string;
+  createdByEmail: string;
+  createdAt: string;
+  expiresAt: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+  durationHours: number;
+  reason: string;
+  scope: 'FULL_ADMIN_SUPPORT' | 'READ_ONLY_AUDIT';
+  lastUsedAt?: string;
+  usedByIp?: string;
+}
+
+export interface TenantSecurityConfig {
+  tenantId: string;
+  isProductionLocked: boolean; // Quando true, o ambiente é 100% produtivo e Super Admin perde acesso sem API Key
+  isolationMode: 'STRICT_CONTAINER_RLS' | 'HYBRID';
+  activeSupportKey?: SupportApiKey | null;
+  supportKeysHistory: SupportApiKey[];
+  lastAuditVerification?: string;
 }
 
 export interface DatabaseSyncResult {
@@ -283,6 +365,109 @@ export interface DatabaseSyncResult {
   checksumVerified: boolean;
   message: string;
 }
+
+// --- CONFIGURAÇÃO AVANÇADA DA RÉPLICA DR LOCAL (OFFLINE STANDBY) ---
+export type DrLocationType = 'LOCAL_POSTGRES' | 'LOCAL_DIRECTORY' | 'NETWORK_SHARE' | 'CUSTOM_IP_HOST';
+
+export interface LocalDrConfig {
+  id: string;
+  tenantId: string;
+  locationType: DrLocationType;
+  // Conexão e Localização
+  hostOrIp: string; // Ex: localhost, 127.0.0.1, 192.168.1.150
+  port: number; // Padrão 5432
+  databaseName: string; // Ex: jurisflow_dr
+  username: string; // Ex: jurisflow_master
+  password?: string;
+  directoryPath: string; // Ex: C:\JurisFlow\Gabriela_Capitani_Advocacia\Data
+  networkSharePath?: string; // Ex: \\192.168.1.200\JurisFlow_DR
+  driveLetter: string; // Ex: C:, D:, E:
+  // Acesso Local do Escritório & Tailscale MagicDNS
+  localServerUrl: string; // Ex: http://jurisflow.local:3000 ou http://192.168.1.100:3000
+  tailscaleEnabled: boolean;
+  tailscaleHostname: string; // Ex: jurisflow-escritorio
+  tailscaleMagicDnsUrl: string; // Ex: http://jurisflow-escritorio.ts.net:3000
+  tailscaleAuthKey?: string;
+  autoFailoverEnabled: boolean;
+  syncIntervalMinutes: number;
+  lastTestedAt?: string;
+  lastTestStatus?: 'SUCCESS' | 'ERROR' | 'UNTESTED';
+  lastTestLogs?: string[];
+  updatedAt: string;
+}
+
+export interface LocalDrTestStep {
+  name: string;
+  status: 'SUCCESS' | 'FAILED' | 'WARNING';
+  message: string;
+  durationMs: number;
+}
+
+export interface LocalDrTestResult {
+  success: boolean;
+  latencyMs: number;
+  steps: LocalDrTestStep[];
+  details: {
+    resolvedIp?: string;
+    portOpen?: boolean;
+    authValid?: boolean;
+    tablesValidCount?: number;
+    tablesMissing?: string[];
+    storageWriteOk?: boolean;
+    tailscaleStatus?: 'ACTIVE' | 'INACTIVE' | 'UNCONFIGURED';
+    magicDnsReachable?: boolean;
+    directoryExists?: boolean;
+  };
+  logs: string[];
+  diagnosis?: string;
+  troubleshootingSuggestions?: string[];
+}
+
+export type SupportedLinuxDistro = 'UBUNTU_DEBIAN' | 'RHEL_CENTOS_ALMA' | 'FEDORA' | 'ARCH';
+
+export interface EnvironmentSetupScriptRequest {
+  os: 'WINDOWS' | 'LINUX';
+  linuxDistro?: SupportedLinuxDistro;
+  driveLetter?: string; // Ex: "C:", "D:", "E:"
+  basePath?: string; // Ex: "C:\JurisFlow" ou "/opt/jurisflow"
+  tenantName?: string;
+  serverHostname?: string;
+  localPort?: number;
+  dbPort?: number;
+  dbUser?: string;
+  dbName?: string;
+  tailscaleEnabled?: boolean;
+  tailscaleHostname?: string;
+}
+
+export interface EnvironmentSetupScriptResponse {
+  os: 'WINDOWS' | 'LINUX';
+  linuxDistro?: SupportedLinuxDistro;
+  fileName: string;
+  scriptContent: string;
+  installationPath: string;
+  secretsPath: string;
+  desktopLogPath: string;
+  generatedPassword?: string;
+  instructions: string[];
+}
+
+export interface PortCheckRequest {
+  port: number;
+  host?: string;
+}
+
+export interface PortCheckResponse {
+  available: boolean;
+  port: number;
+  status: 'AVAILABLE' | 'OCCUPIED' | 'ERROR';
+  latencyMs?: number;
+  message: string;
+  suggestedPort?: number;
+  isHighPort: boolean;
+  warning?: string;
+}
+
 
 // --- MULTIMODAL AI ATTACHMENT ---
 export interface AIFileAttachment {
@@ -632,9 +817,25 @@ export interface DocumentTemplate {
   title?: string;
   category: DocumentCategory;
   templateContent: string;
+  htmlContent?: string;
   placeholders?: string[];
   variables?: string[];
   description: string;
+  attachedFile?: {
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    dataUrl?: string;
+    uploadedAt: string;
+  };
+  layoutStyle?: {
+    fontFamily?: string;
+    fontSize?: string;
+    lineSpacing?: string;
+    accentColor?: string;
+    headerIncluded?: boolean;
+    footerIncluded?: boolean;
+  };
 }
 
 export type CaseMovement = Movement;

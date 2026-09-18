@@ -30,12 +30,14 @@ import {
 } from 'lucide-react';
 import { DocumentItem, DocumentTemplate, Case, Person, DocumentCategory, DigitalSignatureInfo } from '../../types';
 import { api } from '../../services/api';
+import { formatLawyerNameInBody } from '../../utils/forensicFormatter';
 
 interface DocumentsViewProps {
   documents: DocumentItem[];
   templates: DocumentTemplate[];
   cases: Case[];
   persons: Person[];
+  currentTenant?: any;
   onSaveDocument: (data: Partial<DocumentItem>) => Promise<void>;
   onOpenAiGateway: (tab: string, prompt?: string) => void;
   onRefresh?: () => void;
@@ -66,6 +68,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   templates = [],
   cases = [],
   persons = [],
+  currentTenant,
   onSaveDocument = async (_data: Partial<DocumentItem>) => {},
   onOpenAiGateway = (_tab: string, _prompt?: string) => {},
   onRefresh = () => {},
@@ -77,6 +80,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Selected Document Detail/Drawer State
+  const vi = currentTenant?.visualIdentity || {};
+  const currentLawyerName = vi.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
   const [isEditingDoc, setIsEditingDoc] = useState(false);
   const [editDocContent, setEditDocContent] = useState('');
@@ -85,9 +91,15 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   // Digital Signature Modal State
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
-  const [signerName, setSignerName] = useState('Dr. Carlos Silveira');
+  const [signerName, setSignerName] = useState(
+    currentTenant?.visualIdentity?.signatoryName || 'Dra. Gabriela M. Manni Capitani'
+  );
   const [signerCpf, setSignerCpf] = useState('123.456.789-00');
-  const [signerRole, setSignerRole] = useState('Advogado Titular - OAB/SP 412.890');
+  const [signerRole, setSignerRole] = useState(
+    currentTenant?.visualIdentity?.signatoryOab
+      ? `Advogada Titular - ${currentTenant.visualIdentity.signatoryOab}`
+      : 'Advogada Titular - OAB/SP 478.370'
+  );
   const [isSigning, setIsSigning] = useState(false);
 
   // New Document Modal State
@@ -202,6 +214,8 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     try {
       const relatedCase = cases.find((c) => c.id === templateCaseId);
       const relatedPerson = persons.find((p) => p.id === templatePersonId);
+      const lawyerToFormat = vi.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+      const formattedToSave = formatLawyerNameInBody(renderedContent, lawyerToFormat);
 
       await onSaveDocument({
         title: `${selectedTemplate.title || selectedTemplate.name || 'Documento'} - ${relatedPerson?.name || 'Cliente'} (${new Date().toLocaleDateString('pt-BR')})`,
@@ -211,7 +225,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
         caseNumber: relatedCase?.cnjNumber,
         personId: relatedPerson?.id,
         personName: relatedPerson?.name,
-        content: renderedContent,
+        content: formattedToSave,
         status: 'DRAFT',
       });
       setIsRenderModalOpen(false);
@@ -356,6 +370,44 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
       return;
     }
 
+    const vi = currentTenant?.visualIdentity || {};
+    const lawFirmName = currentTenant?.name || 'Gabriela Capitani Advocacia';
+    const lawyerName = vi.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+    const lawyerOab = vi.signatoryOab || currentTenant?.oabOfficeRegister || 'OAB/SP 478.370';
+    const accentColor = vi.accentColor || '#4338ca';
+    const fontFamily = vi.fontFamily || 'Times New Roman';
+    const logoUrl = vi.logoUrl !== undefined ? vi.logoUrl : (currentTenant?.logoUrl || '');
+
+    // Selective visibility toggles according to user requirements
+    const showHeaderOab = vi.showHeaderOab !== false; // Default true (clean OAB without "Registro:")
+    const showHeaderAddress = !!vi.showHeaderAddress && !!vi.headerAddress;
+    const showHeaderPhone = !!vi.showHeaderPhone && !!(vi.contactPhone || currentTenant?.contactPhone);
+    const showHeaderEmail = !!vi.showHeaderEmail && !!(vi.contactEmail || currentTenant?.contactEmail);
+
+    let headerMetaItems: string[] = [];
+    if (showHeaderOab && lawyerOab) headerMetaItems.push(lawyerOab);
+    if (showHeaderAddress) headerMetaItems.push(vi.headerAddress);
+    if (showHeaderPhone) headerMetaItems.push(`Tel: ${vi.contactPhone || currentTenant?.contactPhone}`);
+    if (showHeaderEmail) headerMetaItems.push(vi.contactEmail || currentTenant?.contactEmail);
+
+    // Footer items (Phone, Email, Address, Custom institutional text)
+    const showFooterText = vi.showFooterText !== false;
+    const showFooterAddress = !!vi.showFooterAddress && !!vi.headerAddress;
+    const showFooterPhone = !!vi.showFooterPhone && !!(vi.contactPhone || currentTenant?.contactPhone);
+    const showFooterEmail = !!vi.showFooterEmail && !!(vi.contactEmail || currentTenant?.contactEmail);
+
+    let footerMetaItems: string[] = [];
+    if (showFooterAddress) footerMetaItems.push(vi.headerAddress);
+    if (showFooterPhone) footerMetaItems.push(`Tel: ${vi.contactPhone || currentTenant?.contactPhone}`);
+    if (showFooterEmail) footerMetaItems.push(vi.contactEmail || currentTenant?.contactEmail);
+
+    const borderStyle = vi.borderStyle === 'NONE' ? 'none' : vi.borderStyle === 'DOUBLE' ? 'double' : vi.borderStyle === 'DASHED' ? 'dashed' : 'solid';
+    const borderWidth = vi.borderWidth || '2px';
+    const logoHeight = vi.logoMaxHeight || 44;
+
+    // Regra forense estrita: o nome do(a) advogado(a) no corpo de petições, procurações e contratos deve SEMPRE estar em MAIÚSCULO, NEGRITO e SUBLINHADO
+    const formattedDocumentBody = formatLawyerNameInBody(doc.content || '', lawyerName);
+
     const signatureBlock = doc.digitalSignature
       ? `
       <div style="margin-top: 40px; padding: 16px; border: 2px solid #10b981; border-radius: 8px; background: #ecfdf5; font-family: sans-serif; font-size: 12px; color: #065f46;">
@@ -366,33 +418,65 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
         <div><strong>Hash SHA-256:</strong> <code style="word-break: break-all; font-family: monospace;">${doc.digitalSignature.hashSha256}</code></div>
         <div><strong>Código de Verificação:</strong> ${doc.digitalSignature.verificationCode} (${doc.digitalSignature.certificateAuthority})</div>
       </div>`
-      : '';
+      : `
+      <div style="margin-top: 36px; text-align: center; font-family: ${fontFamily}, serif;">
+        ${vi.signatureImageUrl ? `<img src="${vi.signatureImageUrl}" style="height: 44px; object-fit: contain; margin-bottom: 6px;" alt="Assinatura" /><br/>` : ''}
+        <div style="font-weight: bold; font-size: 11pt; color: #111;">${lawyerName}</div>
+        <div style="font-size: 10pt; color: #4338ca; font-family: monospace; font-weight: 600;">${lawyerOab}</div>
+        <div style="font-size: 9pt; color: #666; font-family: sans-serif;">${vi.signatoryRole || 'Advogada'}</div>
+        <div style="margin-top: 14px; display: inline-flex; flex-direction: column; align-items: center;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1.5px solid #10b981; background-color: #ecfdf5; border-radius: 8px; color: #065f46; font-family: sans-serif; font-size: 8.5pt; font-weight: bold; letter-spacing: 0.5px;">
+            <span>🔒 ASSINADO DIGITALMENTE</span>
+            <span style="font-weight: normal; color: #047857; font-size: 8pt;">• Certificado ICP-Brasil / Token OAB</span>
+          </div>
+          <div style="margin-top: 4px; font-size: 7pt; color: #9ca3af; font-family: sans-serif;">
+            (Documento assinado digitalmente nos termos da Lei nº 14.063/2020 e MP 2.200-2/2001)
+          </div>
+        </div>
+      </div>
+      `;
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${doc.title} - Silveira & Associados</title>
+          <title>${doc.title} - ${lawFirmName}</title>
           <style>
-            @page { margin: 20mm; size: A4; }
-            body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.6; color: #111; margin: 0; padding: 20px; }
-            .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 25px; }
-            .header h1 { margin: 0; font-size: 16pt; text-transform: uppercase; letter-spacing: 1px; color: #1e1b4b; }
-            .header p { margin: 4px 0 0 0; font-size: 9pt; color: #555; font-family: sans-serif; }
+            @page { margin: 15mm 20mm; size: A4; }
+            body { font-family: "${fontFamily}", Times, serif; font-size: 12pt; line-height: 1.6; color: #111; margin: 0; padding: 15px; }
+            .header-banner { width: 100%; max-height: 170px; object-fit: contain; display: block; margin: 0 auto 12px auto; }
+            .header-container { border-bottom: ${borderWidth} ${borderStyle} ${accentColor}; padding-bottom: 14px; margin-bottom: 25px; }
+            .header-content { display: flex; flex-direction: column; align-items: ${vi.logoPosition === 'center' ? 'center' : vi.logoPosition === 'right' ? 'flex-end' : 'flex-start'}; text-align: ${vi.logoPosition === 'center' ? 'center' : vi.logoPosition === 'right' ? 'right' : 'left'}; }
+            .header-logo { max-height: ${logoHeight}px; object-fit: contain; margin-bottom: 8px; }
+            .header-title { margin: 0; font-size: 14pt; text-transform: uppercase; letter-spacing: 1.2px; color: ${accentColor}; font-weight: bold; }
+            .header-meta { margin: 4px 0 0 0; font-size: 9pt; color: #4b5563; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
             .content { white-space: pre-wrap; word-break: break-word; text-align: justify; }
-            .footer { margin-top: 50px; text-align: center; font-size: 8pt; color: #777; border-top: 1px solid #ccc; padding-top: 10px; font-family: sans-serif; }
+            .footer { margin-top: 50px; text-align: center; font-size: 8pt; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 10px; font-family: sans-serif; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>SILVEIRA & ASSOCIADOS ADVOCACIA</h1>
-            <p>Excelência Jurídica • OAB/SP 412.890 • Av. Paulista, 1000 - Bela Vista, São Paulo/SP</p>
-          </div>
-          <div class="content">${doc.content || ''}</div>
+          ${vi.headerStyle === 'FULL_BANNER' && (vi.headerBannerUrl || logoUrl) ? `
+            <div style="margin-bottom: 24px;">
+              <img src="${vi.headerBannerUrl || logoUrl}" class="header-banner" alt="Cabeçalho Timbrado Oficial" />
+              ${headerMetaItems.length > 0 ? `<p class="header-meta" style="text-align: center; margin-top: -6px; margin-bottom: 20px; font-size: 8.5pt; color: #555;">${headerMetaItems.join(' • ')}</p>` : ''}
+            </div>
+          ` : `
+            <div class="header-container">
+              <div class="header-content">
+                ${logoUrl ? `<img src="${logoUrl}" class="header-logo" alt="Logo" />` : ''}
+                <h1 class="header-title">${lawFirmName}</h1>
+                ${headerMetaItems.length > 0 ? `<p class="header-meta">${headerMetaItems.join(' • ')}</p>` : ''}
+              </div>
+            </div>
+          `}
+          <div class="content">${formattedDocumentBody}</div>
           ${signatureBlock}
-          <div class="footer">
-            Documento emitido via Sistema JurisFlow ERP em ${new Date().toLocaleString('pt-BR')} • Categoria: ${doc.category}
-          </div>
+          ${showFooterText ? `
+            <div class="footer">
+              <div style="font-weight: 500;">${vi.footerText || `${lawFirmName} • Documento emitido eletronicamente`}</div>
+              ${footerMetaItems.length > 0 ? `<div style="margin-top: 4px; font-size: 7.5pt; color: #777;">${footerMetaItems.join(' • ')}</div>` : ''}
+            </div>
+          ` : ''}
           <script>
             window.onload = function() { window.print(); }
           </script>
@@ -871,9 +955,12 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                   </button>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text shadow-2xs">
-                  {renderedContent}
-                </div>
+                <div
+                  className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text shadow-2xs"
+                  dangerouslySetInnerHTML={{
+                    __html: formatLawyerNameInBody(renderedContent, currentLawyerName)
+                  }}
+                />
               </div>
             </div>
 
@@ -1081,9 +1168,12 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                   />
                 </div>
               ) : (
-                <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed whitespace-pre-wrap max-h-[55vh] overflow-y-auto select-text shadow-2xs">
-                  {selectedDoc.content || 'Nenhum conteúdo salvo neste documento.'}
-                </div>
+                <div
+                  className="p-5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed whitespace-pre-wrap max-h-[55vh] overflow-y-auto select-text shadow-2xs"
+                  dangerouslySetInnerHTML={{
+                    __html: formatLawyerNameInBody(selectedDoc.content || 'Nenhum conteúdo salvo neste documento.', currentLawyerName)
+                  }}
+                />
               )}
             </div>
 

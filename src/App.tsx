@@ -118,8 +118,23 @@ export default function App() {
       setCurrentTenant(data.currentTenant || null);
       setBranches(data.branches || []);
       setCurrentBranch(data.currentBranch || null);
-      setUsers(data.users || []);
-      setCurrentUser(data.currentUser || null);
+      const initialUsers = (data.users || []).map((u) => {
+        const cached = typeof window !== 'undefined' ? localStorage.getItem(`juris_avatar_${u.id}`) : null;
+        if (cached && (!u.avatarUrl || u.avatarUrl.includes('images.unsplash.com'))) {
+          return { ...u, avatarUrl: cached };
+        }
+        return u;
+      });
+      setUsers(initialUsers);
+
+      let initialCurrent = data.currentUser || null;
+      if (initialCurrent) {
+        const cached = typeof window !== 'undefined' ? localStorage.getItem(`juris_avatar_${initialCurrent.id}`) : null;
+        if (cached && (!initialCurrent.avatarUrl || initialCurrent.avatarUrl.includes('images.unsplash.com'))) {
+          initialCurrent = { ...initialCurrent, avatarUrl: cached };
+        }
+      }
+      setCurrentUser(initialCurrent);
 
       setDashboardMetrics(data.dashboard);
       setFinancialMetrics(data.financial);
@@ -420,10 +435,13 @@ export default function App() {
   const handleUpdateCurrentUserAvatar = async (avatarUrl: string) => {
     if (!currentUser) return;
     try {
-      const updated = await api.updateUser(currentUser.id, { avatarUrl });
+      const updated = await api.updateUserAvatar(currentUser.id, avatarUrl);
       setCurrentUser((prev) => (prev ? { ...prev, avatarUrl: updated.avatarUrl } : updated));
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, avatarUrl: updated.avatarUrl } : u)));
-      showToast('Foto de perfil atualizada com sucesso!');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`juris_avatar_${currentUser.id}`, updated.avatarUrl || '');
+      }
+      showToast('Foto de perfil gravada e sincronizada no Banco de Dados com sucesso!');
     } catch (err: any) {
       showToast('Erro ao atualizar foto de perfil: ' + (err.message || 'Falha na conexão'));
     }
@@ -566,6 +584,7 @@ export default function App() {
                   templates={templates}
                   cases={cases}
                   persons={persons}
+                  currentTenant={currentTenant}
                   onSaveDocument={handleSaveDocument}
                   onOpenAiGateway={handleOpenAiGateway}
                   onRefresh={loadBootstrapData}
