@@ -134,7 +134,7 @@ export class GeminiLegalService {
     return new GoogleGenAI({
       apiKey: key,
       httpOptions: {
-        timeout: 15000,
+        timeout: 65000,
         headers: {
           'User-Agent': 'aistudio-build',
         },
@@ -169,10 +169,15 @@ export class GeminiLegalService {
         const resp = await Promise.race([
           ai.models.generateContent({
             model,
-            contents: ['Verificação de prontidão operacional.'],
+            contents: ['Responda apenas com a palavra OK.'],
+            config: {
+              temperature: 0,
+              maxOutputTokens: 256,
+              thinkingConfig: { thinkingBudget: 0 },
+            },
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout de 8000ms excedido no modelo ${model}`)), 8000)
+            setTimeout(() => reject(new Error(`Timeout de 30000ms excedido no modelo ${model}`)), 30000)
           ),
         ]);
 
@@ -571,7 +576,7 @@ ${contextPrompt}`;
               },
             }),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`Timeout de 15000ms excedido no modelo ${modelName}`)), 15000)
+              setTimeout(() => reject(new Error(`Timeout de 60000ms excedido no modelo ${modelName}`)), 60000)
             ),
           ]);
           const text = resp.text || '';
