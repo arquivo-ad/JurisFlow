@@ -74,6 +74,17 @@ import {
   saveLocalDb,
 } from './server/localDb.ts';
 
+import { syncCoordinator } from './server/legal/syncCoordinator.ts';
+import { legalStorage } from './server/legal/storage.ts';
+import { LegalSearchEngine } from './server/legal/searchEngine.ts';
+import { CitationGuard } from './server/legal/citationGuard.ts';
+import { geminiLegalService } from './server/legal/geminiLegalService.ts';
+import { DataJudAdapter } from './server/legal/adapters/DataJudAdapter.ts';
+import { LegalSearchQuery } from './server/legal/types.ts';
+
+const legalSearchEngine = new LegalSearchEngine(legalStorage);
+const legalCitationGuard = new CitationGuard();
+
 import {
   PROD_TENANT,
   PROD_BRANCH,
@@ -684,7 +695,7 @@ class MemoryDatabase {
       timestamp: 'Hoje, 10:45:12 BRT',
       source: 'DJEN / CNJ Webhook Inbound',
       event: 'INTIMACAO_RECEBIDA',
-      payloadSummary: 'Publicação identificada para Dr. Carlos Silveira (OAB/SP 184.920) no Proc. 1092834-12.2026.8.26.0100',
+      payloadSummary: 'Publicação identificada para Dra. Gabriela M. Manni Capitani (OAB/SP 478.370) no Proc. 1092834-12.2026.8.26.0100',
       status: 'SUCCESS',
     },
     {
@@ -876,9 +887,31 @@ ensureDatabaseDrArchitecture();
 // ==========================================
 // GEMINI ENTERPRISE FOR LEGAL (GOOGLE GENAI SDK)
 // ==========================================
-// Primary Model: gemini-3.8-flash with Legal Grounding and Zero-Hallucination Protocol
-const GEMINI_LEGAL_MODEL = 'gemini-3.8-flash';
-const GEMINI_LEGAL_FALLBACK_MODEL = 'gemini-flash-latest';
+// Primary Model: gemini-3.1-flash-lite (fast, deterministic, zero 503 latency) with fallback to gemini-3.8-flash
+const GEMINI_LEGAL_MODEL = 'gemini-3.1-flash-lite';
+const GEMINI_LEGAL_FALLBACK_MODEL = 'gemini-3.8-flash';
+const GEMINI_LEGAL_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+
+async function generateGeminiLegalContent(ai: GoogleGenAI, request: any): Promise<any> {
+  const modelsToTry = [
+    request.model || GEMINI_LEGAL_MODEL,
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+  ];
+  let lastError: any = null;
+  for (const model of modelsToTry) {
+    try {
+      return await ai.models.generateContent({
+        ...request,
+        model,
+      });
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Gemini API] Falha no modelo ${model} (${err?.message || err}), tentando fallback...`);
+    }
+  }
+  throw lastError;
+}
 
 let aiClient: GoogleGenAI | null = null;
 let lastTestedKey: string | null = null;
@@ -1032,6 +1065,13 @@ async function startServer() {
 
     // Sync audit log to Supabase in background
     syncAuditLogToSupabase(newLog);
+  }
+
+  function resolveUserName(tenantId?: string, userId?: string, explicitName?: string): string {
+    if (explicitName && explicitName.trim().length > 0) return explicitName.trim();
+    const user = db.users.find((u) => u.id === userId) || db.users.find((u) => u.tenantId === tenantId && u.active) || db.users[0];
+    const tenant = db.tenants.find((t) => t.id === tenantId) || db.tenants[0];
+    return user?.name || tenant?.visualIdentity?.signatoryName || 'Dra. Gabriela M. Manni Capitani';
   }
 
   // ==========================================
@@ -2661,7 +2701,7 @@ async function startServer() {
       distributionDate: req.body.distributionDate || formatDateToYMD(new Date()),
       phase: req.body.phase || 'INICIAL',
       responsibleLawyerId: lawyerId,
-      responsibleLawyerName: lawyer?.name || 'Dr. Carlos Silveira',
+      responsibleLawyerName: lawyer?.name || resolveUserName(tenantId, lawyerId),
       parties: req.body.parties || [],
       movementsCount: 1,
       deadlinesCount: 0,
@@ -2799,7 +2839,7 @@ async function startServer() {
       daysCount: Number(req.body.daysCount) || 15,
       calculationType: req.body.calculationType || 'DIAS_UTEIS_CPC',
       responsibleUserId: req.body.responsibleUserId || (req as any).userId,
-      responsibleUserName: user?.name || 'Dr. Carlos Silveira',
+      responsibleUserName: user?.name || resolveUserName(tenantId, req.body.responsibleUserId || (req as any).userId),
       status: 'PENDING',
       createdAt: new Date().toISOString(),
     };
@@ -2826,7 +2866,7 @@ async function startServer() {
     db.deadlines[idx].status = req.body.status;
     if (req.body.status === 'COMPLETED') {
       db.deadlines[idx].completedAt = new Date().toISOString();
-      db.deadlines[idx].completedBy = 'Dr. Carlos Silveira';
+      db.deadlines[idx].completedBy = resolveUserName(tenantId, (req as any).userId);
     }
 
     // Supabase Persistence
@@ -2858,7 +2898,7 @@ async function startServer() {
       addressOrLink: req.body.addressOrLink || '',
       courtName: req.body.courtName || 'TJSP',
       responsibleLawyerId: req.body.responsibleLawyerId || (req as any).userId,
-      responsibleLawyerName: lawyer?.name || 'Dr. Carlos Silveira',
+      responsibleLawyerName: lawyer?.name || resolveUserName(tenantId, req.body.responsibleLawyerId || (req as any).userId),
       status: 'SCHEDULED',
       notes: req.body.notes || '',
       createdAt: new Date().toISOString(),
@@ -2926,7 +2966,7 @@ async function startServer() {
       priority: req.body.priority || 'MEDIUM',
       dueDate: req.body.dueDate || relatedDeadline?.dueDate || formatDateToYMD(new Date()),
       assignedUserId: req.body.assignedUserId || (req as any).userId,
-      assignedUserName: assignedUser?.name || 'Dr. Carlos Silveira',
+      assignedUserName: assignedUser?.name || resolveUserName(tenantId, req.body.assignedUserId || (req as any).userId),
       status: req.body.status || 'TODO',
       checklist: Array.isArray(req.body.checklist) ? req.body.checklist : [],
       tags: Array.isArray(req.body.tags) ? req.body.tags : [],
@@ -3693,7 +3733,7 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
       isDraft: req.body.isDraft ?? false,
       content: req.body.content || '',
       status: req.body.status || 'DRAFT',
-      createdBy: 'Dr. Carlos Silveira',
+      createdBy: resolveUserName(tenantId, (req as any).userId),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -3736,9 +3776,9 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
     const doc = db.documents.find((d) => d.id === req.params.id && d.tenantId === tenantId);
     if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
 
-    const signerName = req.body.signerName || 'Dr. Carlos Silveira';
+    const signerName = req.body.signerName || resolveUserName(tenantId, (req as any).userId);
     const signerCpf = req.body.signerCpf || '***.458.918-**';
-    const signerRole = req.body.signerRole || 'Advogado Titular - OAB/SP 412.890';
+    const signerRole = req.body.signerRole || 'Advogada Titular - OAB/SP 478.370';
     const randomHex = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
     const verificationCode = `JURIS-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -4548,7 +4588,7 @@ Texto da Publicação / Conteúdo Analisado:
       id: `ai-log-${Date.now()}`,
       tenantId,
       userId,
-      userName: 'Dr. Carlos Silveira',
+      userName: resolveUserName(tenantId, userId),
       feature: 'DEADLINE_EXTRACT',
       promptTokens: Math.round(publicationText.length / 4),
       completionTokens: 250,
@@ -4731,10 +4771,11 @@ ${signatoryOab} • ${vi?.signatoryRole || 'Advogada Titular'}
         doDireito: legalThesis || 'Fundamentação jurídica no Código Civil de 2002 e CPC/2015...',
         dosPedidos: 'Procedência dos pedidos, tutela provisória e condenação em honorários (Art. 85 CPC).',
         valorCausaSugerido: 50000,
-        jurisprudenciaCitada: [
-          'STJ - REsp 1.896.678/RS - Rel. Min. Marco Aurélio Bellizze (Jurisprudência Pacífica)',
-          'STF - Tema 69 de Repercussão Geral',
-        ],
+        jurisprudenciaCitada: legalSearchEngine.search({
+          query: legalThesis || pieceType || 'processo civil tutela',
+          pageSize: 2,
+          onlyVerified: true,
+        }).results.map((it) => it.officialCitation),
         artigosLei: ['Art. 300 do CPC/2015', 'Art. 422 do Código Civil/2002', 'Art. 85 do CPC/2015'],
         provasRequeridas: ['Juntada de documentos comprobatórios', 'Depoimento pessoal', 'Perícia técnica'],
         textoCompletoFormatado: fullText,
@@ -4849,7 +4890,7 @@ Contexto Adicional: ${customContext || 'Nenhum'}`;
       id: `ai-log-${Date.now()}`,
       tenantId,
       userId,
-      userName: 'Dr. Carlos Silveira',
+      userName: resolveUserName(tenantId, userId),
       feature: 'CASE_SUMMARY',
       promptTokens: 380,
       completionTokens: 320,
@@ -5030,20 +5071,20 @@ Texto / Conteúdo Analisado:
           'Lei nº 13.105/2015 (CPC/2015), Art. 219, Art. 300, Art. 319',
           'Lei nº 10.406/2002 (Código Civil), Art. 422',
         ],
-        precedentsVerified: [
-          {
-            precedent: 'STJ - REsp 1.896.678 (Tese Consolidada)',
-            court: 'STJ',
-            status: 'VALID',
-            verificationNotes: 'Acórdão verificado no repositório de jurisprudência do STJ. Não consta overruling.',
-          },
-          {
-            precedent: 'STF - Súmula Vinculante 37',
-            court: 'STF',
-            status: 'VALID',
-            verificationNotes: 'Súmula Vinculante ativa sem pedidos de cancelamento.',
-          },
-        ],
+        precedentsVerified: (() => {
+          const report = legalCitationGuard.validateAndSanitize(rawContent, legalStorage.getDecisions());
+          if (report.citationsFound.length === 0) {
+            return [];
+          }
+          return report.citationsFound.map((c) => ({
+            precedent: c.rawCitation,
+            court: c.rawCitation.toUpperCase().includes('STF') ? 'STF' : c.rawCitation.toUpperCase().includes('TST') ? 'TST' : 'STJ',
+            status: c.isVerified ? 'VALID' : c.verificationStatus === 'CANCELLED' ? 'OVERRULED' : 'UNVERIFIED',
+            verificationNotes: c.isVerified
+              ? 'Precedente localizado e validado no acervo oficial canônico.'
+              : c.reason || 'Citação não verificada em repositório oficial.',
+          }));
+        })(),
         issues,
         auditedTextWithImprovements: `${documentContent}\n\n[ADITAMENTO DE CONFORMIDADE GEMINI ENTERPRISE FOR LEGAL]: Manifesta, para fins do Art. 319, VII do CPC/2015, a manifestação expressa quanto à realização de audiência conciliatória.`,
       };
@@ -5054,7 +5095,7 @@ Texto / Conteúdo Analisado:
       id: `ai-log-${Date.now()}`,
       tenantId,
       userId,
-      userName: 'Dr. Carlos Silveira',
+      userName: resolveUserName(tenantId, userId),
       feature: 'DOCUMENT_AUDIT_ERROR_REDUCTION',
       promptTokens: 520,
       completionTokens: 680,
@@ -5192,8 +5233,13 @@ Fica eleito o Foro da Comarca de {{FORO_ELEITO}} para dirimir qualquer dúvida o
 
 {{CIDADE_DATA}}.
 
-___________________________             ___________________________
-CONTRATANTE                             CONTRATADA: ${lawyerNameFormatted}`;
+___________________________
+{{NOME_CLIENTE}} - CONTRATANTE
+
+CONTRATADA: ${lawyerNameFormatted}
+${lawyerOab}
+
+[Espaço reservado para validação do Token OAB / Selo ICP-Brasil]`;
     } else {
       baseContent = `EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA {{VARA_COMARCA}}
 
@@ -5353,6 +5399,11 @@ Responda em JSON:
       sc = sc.replace(re, upperTarget);
 
       sc = sc.replace(new RegExp(SAFE_TOKEN, 'g'), upperTarget);
+
+      // Remove estritamente linha/traço obsoleto manual que existia acima do nome e OAB da advogada
+      sc = sc.replace(/(?:_{6,}|-{6,})\s*\n+(\s*(?:CONTRATADA:\s*)?<u><strong>)/gi, '$1');
+      sc = sc.replace(/(?:_{6,}|-{6,})\s*\n+(\s*(?:Dra?\.|[A-ZÀ-Ú\s]{4,})\s*\n+\s*OAB\/)/gi, '$1');
+
       result.sanitizedContent = sc;
     }
 
@@ -5403,22 +5454,35 @@ Responda em JSON:
     res.json(result);
   });
 
-  // 5. Base de Conhecimento e Grounding de Legislação Brasileira
+  // 5. Base de Conhecimento e Grounding de Fontes Oficiais do Judiciário
   app.get('/api/ai/legal-knowledge', (req: Request, res: Response) => {
+    const sources = legalStorage.getSources();
+    const decisions = legalStorage.getDecisions();
+    const qualified = legalStorage.getQualifiedPrecedents();
+    const syncJobs = legalStorage.getSyncJobs(10);
+
+    const verifiedDecisionsCount = decisions.filter((d) => d.verificationStatus === 'VERIFIED_OFFICIAL').length;
+    const cancelledDecisionsCount = decisions.filter((d) => d.verificationStatus === 'CANCELLED' || d.precedentSituation === 'CANCELADO').length;
+
     const overview = {
-      enterpriseEngineVersion: 'Gemini Enterprise for Legal 2026.8 (Zero-Hallucination Grounding)',
+      enterpriseEngineVersion: 'JurisFlow Enterprise Legal 2026.8 (Grounding Verificável com Fontes Oficiais)',
       activeModel: GEMINI_LEGAL_MODEL,
       zeroHallucinationPolicy: true,
-      totalNormsIndexed: 7853,
-      totalPrecedentsIndexed: 3450,
+      totalNormsIndexed: decisions.length,
+      totalPrecedentsIndexed: qualified.length + verifiedDecisionsCount,
+      verifiedDecisionsCount,
+      cancelledDecisionsCount,
       sources: db.legalKnowledgeSources,
+      officialRegistrySources: sources,
       syncConnectors: db.legalSyncConnectors,
       webhookLogs: db.legalWebhookLogs,
+      recentSyncJobs: syncJobs,
       supportedJurisdictions: [
-        'Supremo Tribunal Federal (STF)',
-        'Superior Tribunal de Justiça (STJ)',
-        'Tribunal Superior do Trabalho (TST)',
-        'Tribunal Superior Eleitoral (TSE)',
+        'Superior Tribunal de Justiça (STJ) - Dados Abertos',
+        'Conselho Nacional de Justiça (CNJ) - DataJud API',
+        'Banco Nacional de Precedentes (BNP / Pangea - Justiça 4.0)',
+        'Supremo Tribunal Federal (STF) - Corte Aberta & Súmulas Vinculantes',
+        'Tribunal Superior do Trabalho (TST) - Jurisprudência',
         'Tribunais de Justiça Estaduais (TJSP, TJRJ, TJMG, TJRS, etc.)',
         'Tribunais Regionais Federais (TRF1 a TRF6)',
         'Portal da Legislação da Presidência da República (Planalto)',
@@ -5427,40 +5491,71 @@ Responda em JSON:
     res.json(overview);
   });
 
-  // 5.1 Disparo Manual / Sincronização Sob Demanda das Bases Oficiais
-  app.post('/api/ai/legal-knowledge/sync', (req: Request, res: Response) => {
-    const now = new Date();
-    const nowFormatted = `${formatDateToYMD(now)} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} BRT`;
+  // 5.1 Disparo Real de Sincronização Incremental das Bases Oficiais
+  app.post('/api/ai/legal-knowledge/sync', async (req: Request, res: Response) => {
+    try {
+      const syncResult = await syncCoordinator.syncAllOfficialSources();
+      const decisions = legalStorage.getDecisions();
+      const sources = legalStorage.getSources();
 
-    // Update connector status and timestamps
-    db.legalSyncConnectors.forEach((conn) => {
-      conn.lastSyncAt = `Agora (${nowFormatted})`;
-      conn.status = 'CONNECTED';
-      conn.recordsSynced += Math.floor(Math.random() * 8) + 1;
-    });
+      logAudit(req, 'CASE', 'ai-legal-sync', 'UPDATE', syncResult.summary);
 
-    const newLog: AILegalWebhookLog = {
-      id: `wh-log-${Date.now()}`,
-      timestamp: `Agora, ${now.toLocaleTimeString('pt-BR')} BRT`,
-      source: 'Sincronizador Multibases JurisFlow',
-      event: 'SINCRONIZACAO_COMPLETA_MANUAL',
-      payloadSummary: 'Varredura forçada concluída com sucesso nas APIs do Planalto, DJEN/CNJ e STF/STJ. Nenhuma inconsistência encontrada.',
-      status: 'SUCCESS',
-    };
-    db.legalWebhookLogs.unshift(newLog);
-
-    logAudit(req, 'CASE', 'ai-legal-sync', 'UPDATE', 'Disparou sincronização forçada das bases de leis oficiais e diários de justiça');
-
-    res.json({
-      success: true,
-      message: 'Sincronização com o Portal do Planalto e Diários de Justiça concluída com sucesso!',
-      syncedAt: nowFormatted,
-      totalNormsIndexed: 7853 + db.legalSyncConnectors.length * 3,
-      totalPrecedentsIndexed: 3450 + 12,
-    });
+      res.json({
+        success: true,
+        message: syncResult.summary,
+        syncedAt: new Date().toISOString(),
+        jobs: syncResult.jobs,
+        totalDecisionsIndexed: decisions.length,
+        sourcesUpdated: sources.filter((s) => s.connectorStatus === 'HEALTHY').length,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: `Erro ao executar sincronização oficial: ${err.message || String(err)}`,
+      });
+    }
   });
 
-  // 5.2 Endpoint Webhook Inbound para Diários Oficiais (DJEN / Tribunais)
+  // 5.2 Endpoint Canônico de Pesquisa Jurisprudencial Real
+  app.post('/api/legal-search', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const searchBody: LegalSearchQuery = req.body || { query: '' };
+
+    if (!searchBody.query || !searchBody.query.trim()) {
+      return res.status(400).json({ error: 'Parâmetro query é obrigatório para pesquisa jurisprudencial' });
+    }
+
+    const response = legalSearchEngine.search(searchBody, tenantId);
+    res.json(response);
+  });
+
+  // 5.3 Consulta Oficial de Metadados Processuais via CNJ DataJud
+  app.post('/api/ai/query-process-datajud', async (req: Request, res: Response) => {
+    const { cnjNumber } = req.body;
+    if (!cnjNumber) {
+      return res.status(400).json({ error: 'Número CNJ é obrigatório' });
+    }
+
+    const adapter = syncCoordinator.getDataJudAdapter();
+    const result = await adapter.queryProcessByCnj(cnjNumber);
+
+    if (result.success && result.metadata) {
+      legalStorage.saveCaseMetadata(result.metadata);
+      if (result.movements) {
+        legalStorage.saveCourtMovements(result.movements);
+      }
+    }
+
+    res.json(result);
+  });
+
+  // 5.4 Registro de Fontes Oficiais
+  app.get('/api/legal-sources', (req: Request, res: Response) => {
+    const sources = legalStorage.getSources();
+    res.json(sources);
+  });
+
+  // 5.5 Endpoint Webhook Inbound para Diários Oficiais (DJEN / Tribunais)
   app.post('/api/webhooks/djen-intimacoes', (req: Request, res: Response) => {
     const payload = req.body || {};
     const now = new Date();
@@ -5493,7 +5588,7 @@ Responda em JSON:
       officialSource: officialSource || 'Repositório Privado de Teses do Escritório',
       lastUpdated: formatDateToYMD(new Date()),
       groundingStatus: 'ACTIVE',
-      articlesIndexed: Math.floor(Math.random() * 50) + 10,
+      articlesIndexed: 12,
       description,
       isCustomOfficeTesis: true,
     };
@@ -5504,78 +5599,63 @@ Responda em JSON:
     res.status(201).json({ success: true, item: newItem });
   });
 
-  // 7. Chat Jurídico Especializado (Gemini Enterprise for Legal)
+  // 7. Chat Jurídico Especializado (Com RAG Canônico e CitationGuard)
   app.post('/api/ai/chat', async (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).userId;
-    const { message, caseContext, fileAttachment } = req.body;
+    const { message, caseContext, fileAttachment, userName, honorific } = req.body;
+
+    const tenant = db.tenants.find((t) => t.id === tenantId) || db.tenants[0];
+    const effectiveUserName = resolveUserName(tenantId, userId, userName);
 
     const startTime = Date.now();
-    const ai = getGeminiClient();
 
-    let reply = '';
+    try {
+      const researchResult = await geminiLegalService.researchAndSynthesize(message || '', {
+        tenantId,
+        userName: effectiveUserName,
+        honorific,
+        officeName: tenant?.name || 'Gabriela Capitani Advocacia',
+      });
 
-    if (ai) {
-      try {
-        let attachmentNotice = '';
-        if (fileAttachment) {
-          attachmentNotice = `\n[ARQUIVO ANEXADO PELO ADVOGADO]: Nome: ${fileAttachment.name} (${fileAttachment.type}, ${fileAttachment.size} bytes).\n` +
-            (fileAttachment.extractedText ? `Conteúdo extraído do arquivo:\n"""${fileAttachment.extractedText}"""\n` : `Arquivo de mídia/áudio/imagem anexado para análise pericial.\n`);
-        }
+      const execTime = Date.now() - startTime;
+      db.aiLogs.push({
+        id: `ai-log-${Date.now()}`,
+        tenantId,
+        userId,
+        userName: effectiveUserName,
+        feature: 'LEGAL_CHAT',
+        promptTokens: 240,
+        completionTokens: 420,
+        estimatedCostBRL: 0.009,
+        executionTimeMs: execTime,
+        status: 'SUCCESS',
+        modelUsed: GEMINI_LEGAL_MODEL,
+        createdAt: new Date().toISOString(),
+      });
 
-        const systemInstruction = `${GEMINI_ENTERPRISE_LEGAL_SYSTEM_PROMPT}
-
-Você está respondendo a um advogado em sessão de consulta jurídica interativa.
-Contexto do Caso Atual do Usuário: ${caseContext || 'Nenhum processo específico selecionado'}
-Instruções:
-- Seja conciso, técnico e direto ao ponto.
-- Fundamente sempre no CPC/2015, Código Civil/2002 ou CLT.
-- Se houver arquivo anexado, examine minuciosamente seus dados fáticos e jurídicos.
-- Se o usuário perguntar sobre aprendizado ou treinamento de leis brasileiras, explique com clareza o funcionamento do Grounding, RAG e da arquitetura do Gemini Enterprise for Legal.`;
-
-        const fullMessage = (message || 'Por favor, analise as informações fornecidas.') + attachmentNotice;
-
-        const chat = ai.chats.create({
-          model: GEMINI_LEGAL_MODEL,
-          config: {
-            systemInstruction,
-          },
-        });
-
-        const response = await chat.sendMessage({
-          message: fullMessage,
-        });
-        reply = response.text || '';
-      } catch (err) {
-        console.error('Gemini Enterprise for Legal error on ai/chat:', err);
-      }
+      res.json({
+        reply: researchResult.answer,
+        salutation: researchResult.salutation,
+        summary: researchResult.summary,
+        searchResults: researchResult.searchResults,
+        citationReport: researchResult.citationReport,
+        verificationNotice: researchResult.verificationNotice,
+        status: researchResult.status,
+        failureCode: researchResult.failureCode,
+        failureReason: researchResult.failureReason,
+        diagnostic: researchResult.diagnostic,
+        isModelAvailable: researchResult.isModelAvailable,
+        modelStatus: researchResult.modelStatus,
+        modelName: researchResult.modelName,
+      });
+    } catch (err: any) {
+      console.error('Erro no Legal Chat:', err);
+      res.status(500).json({
+        error: 'Falha ao processar consulta jurídica com fontes oficiais.',
+        details: err.message,
+      });
     }
-
-    if (!reply) {
-      if (fileAttachment) {
-        reply = `Recebi e processei com sucesso o arquivo "${fileAttachment.name}" (${fileAttachment.type || 'documento'}).\n\nCom base na análise jurídica preliminar dos dados fornecidos e no cotejo com a legislação processual civil vigente (CPC/2015) e normas aplicáveis:\n\n1. **Natureza do Documento**: O arquivo foi indexado para fundamentação e pode ser incluído diretamente no repositório probatório do cliente.\n2. **Conformidade Legal**: Não foram identificadas violações a normas de ordem pública.\n3. **Próximos Passos**: Você pode utilizar este documento para embasar petições na aba "Redator de Peças" ou extrair prazos decorrentes na aba "Extrator de Prazos".`;
-      } else {
-        reply = `Com base nas normas processuais vigentes do CPC/2015 (art. 219 e seguintes), na jurisprudência consolidada do Superior Tribunal de Justiça e nas diretrizes anti-alucinação do Gemini Enterprise for Legal:\n\nA conduta processual recomendada deve priorizar a tempestividade dos atos em dias úteis, o cumprimento rigoroso dos requisitos do Art. 319 do CPC para peças iniciais e a verificação prévia de precedentes vinculantes (Art. 927 do CPC).\n\nComo motor do Gemini Enterprise for Legal, estou apto a auditar peças contra artigos revogados, extrair prazos do Diário de Justiça e redigir minutas alinhadas às súmulas vigentes dos Tribunais Superiores.`;
-      }
-    }
-
-    const execTime = Date.now() - startTime;
-    db.aiLogs.push({
-      id: `ai-log-${Date.now()}`,
-      tenantId,
-      userId,
-      userName: 'Dr. Carlos Silveira',
-      feature: 'LEGAL_CHAT',
-      promptTokens: 200,
-      completionTokens: 400,
-      estimatedCostBRL: 0.009,
-      executionTimeMs: execTime,
-      status: 'SUCCESS',
-      modelUsed: GEMINI_LEGAL_MODEL,
-      createdAt: new Date().toISOString(),
-    });
-
-    res.json({ reply });
   });
 
   // AI Usage & Grounding Stats
@@ -7639,6 +7719,18 @@ exit 0
         }
       } catch (err) {
         console.warn('[Supabase] Startup background hydration/sync skipped:', err);
+      }
+
+      try {
+        await syncCoordinator.ensureBootstrapped();
+      } catch (err) {
+        console.warn('[LegalTech] Startup bootstrap error:', err);
+      }
+
+      try {
+        await geminiLegalService.initModelHealthCheck();
+      } catch (err) {
+        console.warn('[Gemini Health] Startup model check error:', err);
       }
     })();
   });

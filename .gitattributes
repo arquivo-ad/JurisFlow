@@ -1,0 +1,3 @@
+# Preserve raw STJ cache exports exactly as downloaded. Their CRLF endings and
+# padded fields are source data, not code-formatting errors.
+data/stj_cache/*.csv -text -whitespace

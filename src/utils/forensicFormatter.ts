@@ -65,3 +65,60 @@ export function formatLawyerNameInBody(
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+export interface LawyerSalutation {
+  honorific: 'Dr.' | 'Dra.';
+  shortName: string;
+  displayName: string;
+  fullNameWithTitle: string;
+  greeting: string;
+}
+
+export function getLawyerSalutation(
+  rawName?: string,
+  roleOrGenderHint?: string
+): LawyerSalutation {
+  const fallback = 'Dra. Gabriela M. Manni Capitani';
+  const effective = (rawName && rawName.trim().length > 0) ? rawName.trim() : fallback;
+
+  // 1. Detect if explicitly "Dra." or "Dr."
+  let honorific: 'Dr.' | 'Dra.' = 'Dra.';
+  if (/^dra\.?\b/i.test(effective)) {
+    honorific = 'Dra.';
+  } else if (/^dr\.?\b/i.test(effective)) {
+    honorific = 'Dr.';
+  } else if (/advogada|sócia|diretora|doutora/i.test(roleOrGenderHint || '')) {
+    honorific = 'Dra.';
+  } else if (/advogado|sócio|diretor|doutor/i.test(roleOrGenderHint || '')) {
+    honorific = 'Dr.';
+  } else {
+    // Check first name heuristics in Portuguese
+    const firstName = effective.split(/\s+/)[0]?.toLowerCase() || '';
+    const maleExceptions = ['luca', 'lucas', 'alexandre', 'andré', 'felipe', 'guilherme', 'jorge', 'josé', 'tomé', 'carlos', 'roberto', 'joão', 'marcelo', 'paulo', 'ricardo', 'gabriel'];
+    if (maleExceptions.includes(firstName)) {
+      honorific = 'Dr.';
+    } else if (firstName.endsWith('a') || /^(alice|beatriz|mariane|cleide|simone|inês|raquel|carmen|ruth|ester)/i.test(firstName) || /^(maria|ana|gabriela|marina|helena|juliana|fernanda|patricia|carolina|larissa|camila|paula|vanessa|luiza|isabela|claudia)/i.test(firstName)) {
+      honorific = 'Dra.';
+    } else {
+      honorific = 'Dr.';
+    }
+  }
+
+  // Clean name of Dr./Dra. prefixes
+  const cleanName = effective.replace(/^(?:Dra?\.|Dr\.|Doutor(?:a)?)\s+/i, '').trim();
+  const nameParts = cleanName.split(/\s+/).filter(Boolean);
+  const shortName = nameParts[0] || 'Gabriela';
+
+  // Ex: "Dra. Gabriela"
+  const displayName = `${honorific} ${shortName}`;
+  const fullNameWithTitle = `${honorific} ${cleanName}`;
+  const greeting = `Olá, ${displayName}!`;
+
+  return {
+    honorific,
+    shortName,
+    displayName,
+    fullNameWithTitle,
+    greeting,
+  };
+}

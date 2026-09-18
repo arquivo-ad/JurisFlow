@@ -611,6 +611,8 @@ export default function App() {
               {activeModule === 'ai-gateway' && (
                 <AIGatewayView
                   cases={cases}
+                  currentUser={currentUser}
+                  currentTenant={currentTenant}
                   initialTab={aiInitialTab}
                   onSaveExtractedDeadline={handleSaveDeadline}
                   onSaveDraftedDoc={(title, cat, content) =>

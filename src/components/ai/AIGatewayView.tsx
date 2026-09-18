@@ -23,6 +23,10 @@ import {
   Globe,
   Activity,
   CheckCircle,
+  ExternalLink,
+  Database,
+  Server,
+  Info,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import {
@@ -34,10 +38,15 @@ import {
   AILegalKnowledgeItem,
   Case,
   Deadline,
+  User,
+  Tenant,
 } from '../../types';
+import { getLawyerSalutation } from '../../utils/forensicFormatter';
 
 interface AIGatewayViewProps {
   cases: Case[];
+  currentUser?: User | null;
+  currentTenant?: Tenant | null;
   initialTab?: string;
   onSaveExtractedDeadline: (data: Partial<Deadline>) => Promise<void>;
   onSaveDraftedDoc: (title: string, category: string, content: string) => Promise<void>;
@@ -45,10 +54,17 @@ interface AIGatewayViewProps {
 
 export const AIGatewayView: React.FC<AIGatewayViewProps> = ({
   cases = [],
+  currentUser = null,
+  currentTenant = null,
   initialTab = 'audit',
   onSaveExtractedDeadline = async (_data: Partial<Deadline>) => {},
   onSaveDraftedDoc = async (_title: string, _cat: string, _content: string) => {},
 }) => {
+  const lawyerSalutation = getLawyerSalutation(
+    currentUser?.name || currentTenant?.visualIdentity?.signatoryName,
+    currentUser?.roleName || currentTenant?.visualIdentity?.signatoryRole
+  );
+
   const [activeTab, setActiveTab] = useState<'audit' | 'grounding' | 'extract' | 'draft' | 'summary' | 'chat'>(
     (initialTab as any) || 'audit'
   );
@@ -105,7 +121,7 @@ export const AIGatewayView: React.FC<AIGatewayViewProps> = ({
 3ª Vara Cível da Comarca da Capital. Processo nº 1048291-45.2026.8.26.0100.
 Ação de Cobrança proposta por Construtora Horizonte S/A em face de Vanguarda Logística & Distribuição Ltda.
 DESPACHO/DECISÃO: "Fica a parte ré intimada para, no prazo legal de 15 (quinze) dias úteis, querendo, apresentar contestação aos termos da petição inicial, sob pena de revelia e presunção de veracidade das alegações de fato (art. 335 c/c art. 344 do CPC/2015). Publique-se. Registre-se. Intimem-se."
-São Paulo, 31 de agosto de 2026. Advogados: Dr. Carlos Silveira (OAB/SP 184.920), Dra. Mariana Costa (OAB/SP 221.450).`
+São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitle} (OAB/SP 478.370), Dra. Mariana Costa (OAB/SP 221.450).`
   );
   const [extractResult, setExtractResult] = useState<AIExtractDeadlineResponse | null>(null);
   const [loadingExtract, setLoadingExtract] = useState(false);
@@ -133,14 +149,50 @@ São Paulo, 31 de agosto de 2026. Advogados: Dr. Carlos Silveira (OAB/SP 184.920
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // --- 4. CHAT STATE ---
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([
+  const buildInitialGreeting = (displayName: string) =>
+    `Olá, ${displayName}! Consulte jurisprudência e legislação nas fontes oficiais atualmente disponíveis. O estado de cada fonte será informado em cada pesquisa.`;
+
+  const [chatMessages, setChatMessages] = useState<
+    Array<{
+      sender: 'user' | 'ai';
+      text: string;
+      salutation?: string;
+      summary?: string;
+      searchResults?: any[];
+      citationReport?: any;
+      verificationNotice?: string;
+      status?: 'SUCCESS' | 'FAIL_CLOSED';
+      failureCode?: string;
+      failureReason?: string;
+      diagnostic?: any;
+      isModelAvailable?: boolean;
+      modelStatus?: string;
+      modelName?: string;
+    }>
+  >([
     {
       sender: 'ai',
-      text: 'Olá, Dr. Carlos! Sou o Gemini Enterprise for Legal com Grounding em tempo real nas leis e jurisprudência do Brasil (CPC/2015, Código Civil, CLT e Tribunais Superiores). Como posso auditar suas peças ou esclarecer dúvidas jurídicas hoje?',
+      text: buildInitialGreeting(lawyerSalutation.displayName),
     },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
+
+  // Sincroniza saudação inicial caso o usuário seja carregado assincronamente
+  useEffect(() => {
+    setChatMessages((prev) => {
+      if (
+        prev.length === 1 &&
+        prev[0].sender === 'ai' &&
+        (prev[0].text.includes('Copiloto de Inteligência Forense') ||
+          prev[0].text.includes('Gemini Enterprise for Legal') ||
+          prev[0].text.includes('Consulte jurisprudência'))
+      ) {
+        return [{ sender: 'ai', text: buildInitialGreeting(lawyerSalutation.displayName) }];
+      }
+      return prev;
+    });
+  }, [lawyerSalutation.displayName]);
 
   // --- 5. STATS ---
   const [aiStats, setAiStats] = useState<any>(null);
@@ -321,13 +373,40 @@ São Paulo, 31 de agosto de 2026. Advogados: Dr. Carlos Silveira (OAB/SP 184.920
     setLoadingChat(true);
 
     try {
-      const res = await api.aiChat(userMsg);
-      setChatMessages((prev) => [...prev, { sender: 'ai', text: res.reply }]);
+      const res = await api.aiChat(userMsg, {
+        userName: lawyerSalutation.fullNameWithTitle,
+        honorific: lawyerSalutation.honorific,
+      });
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'ai',
+          text: res.reply,
+          salutation: res.salutation,
+          summary: res.summary,
+          searchResults: res.searchResults,
+          citationReport: res.citationReport,
+          verificationNotice: res.verificationNotice,
+          status: res.status,
+          failureCode: res.failureCode,
+          failureReason: res.failureReason,
+          diagnostic: res.diagnostic,
+          isModelAvailable: res.isModelAvailable,
+          modelStatus: res.modelStatus,
+          modelName: res.modelName,
+        },
+      ]);
       loadStats();
     } catch (err) {
       setChatMessages((prev) => [
         ...prev,
-        { sender: 'ai', text: 'Desculpe, ocorreu um erro ao consultar o modelo jurídico.' },
+        {
+          sender: 'ai',
+          text: `Desculpe, ${lawyerSalutation.displayName}, ocorreu um erro temporário ao consultar as bases jurídicas oficiais.`,
+          status: 'FAIL_CLOSED',
+          failureCode: 'INTERNAL_ERROR',
+          failureReason: 'Falha na comunicação com o backend ou indisponibilidade de rede.',
+        },
       ]);
     } finally {
       setLoadingChat(false);
@@ -348,7 +427,7 @@ São Paulo, 31 de agosto de 2026. Advogados: Dr. Carlos Silveira (OAB/SP 184.920
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-200 text-xs font-semibold mb-2 border border-indigo-400/30 backdrop-blur-xs">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Gemini Enterprise for Legal • Zero-Hallucination Grounding</span>
+              <span>Gemini Enterprise for Legal • Pesquisa Jurisprudencial Rastreável</span>
             </div>
             <h1 className="text-xl lg:text-2xl font-bold text-white tracking-tight">
               Inteligência Artificial Forense & Redução de Erros
@@ -362,7 +441,7 @@ São Paulo, 31 de agosto de 2026. Advogados: Dr. Carlos Silveira (OAB/SP 184.920
           <div className="grid grid-cols-2 gap-2 text-xs font-mono self-start md:self-auto">
             <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
               <span className="text-[10px] text-slate-400 block">Grounding Leis BR</span>
-              <span className="text-emerald-400 font-bold text-sm">99.4% Confiável</span>
+              <span className="text-emerald-400 font-bold text-sm">Fontes Canônicas</span>
             </div>
             <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
               <span className="text-[10px] text-slate-400 block">Erros Prevenidos</span>
@@ -1458,13 +1537,131 @@ São Paulo, 31 de agosto de 2026. Advogados: Dr. Carlos Silveira (OAB/SP 184.920
                   </div>
                 )}
                 <div
-                  className={`p-3 rounded-xl max-w-[80%] whitespace-pre-wrap leading-relaxed ${
+                  className={`p-3.5 rounded-xl max-w-[85%] leading-relaxed space-y-3 ${
                     msg.sender === 'user'
                       ? 'bg-indigo-600 text-white font-medium shadow-xs'
                       : 'bg-slate-50 border border-slate-200 text-slate-800'
                   }`}
                 >
-                  {msg.text}
+                  {/* Renderização Limpa sem Markdown nem escapes literais */}
+                  <div className="space-y-2">
+                    {msg.text
+                      .replace(/\*\*(.*?)\*\*/g, '$1')
+                      .replace(/\*(.*?)\*/g, '$1')
+                      .replace(/\\\[/g, '[')
+                      .replace(/\\\]/g, ']')
+                      .replace(/\\\(/g, '(')
+                      .replace(/\\\)/g, ')')
+                      .replace(/\\([*_{}[\]()#+\-.!])/g, '$1')
+                      .split('\n\n')
+                      .map((para, pIdx) => (
+                        <p key={pIdx} className="leading-relaxed">
+                          {para}
+                        </p>
+                      ))}
+                  </div>
+
+                  {/* Card de Diagnóstico do Fail-Closed (se aplicável) */}
+                  {msg.status === 'FAIL_CLOSED' && (
+                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 space-y-1 text-[11px]">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                        <AlertOctagon className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+                        <span>Controle de Pertinência Ativo (Fail-Closed)</span>
+                        <span className="ml-auto font-mono text-[9px] px-1.5 py-0.5 rounded bg-amber-200/70 text-amber-950 font-bold">
+                          {msg.failureCode || 'NO_RELEVANT_PRECEDENT'}
+                        </span>
+                      </div>
+                      <p className="text-amber-800 text-[10.5px]">
+                        {msg.failureReason || 'Apenas precedentes oficiais estritamente pertinentes e auditados na fonte são admitidos.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Aviso de Síntese por IA Indisponível (quando resultados oficiais existem) */}
+                  {msg.failureCode === 'MODEL_UNAVAILABLE' && (
+                    <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                      <span>Síntese por IA temporariamente indisponível. Os resultados oficiais recuperados continuam disponíveis abaixo.</span>
+                    </div>
+                  )}
+
+                  {/* Diagnóstico Técnico da Fonte Oficial (se disponível) */}
+                  {msg.diagnostic && (
+                    <div className="p-2.5 rounded-lg bg-white border border-slate-200 text-[10.5px] space-y-1 text-slate-700 font-mono shadow-2xs">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-800 pb-1 border-b border-slate-100">
+                        <span className="flex items-center gap-1">
+                          <Server className="w-3 h-3 text-slate-600" />
+                          Fonte: {msg.diagnostic.adapter === 'stj-dados-abertos' ? 'STJ (Dados Abertos)' : msg.diagnostic.adapter}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${msg.diagnostic.httpStatus === 200 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                          HTTP {msg.diagnostic.httpStatus} • {msg.diagnostic.latencyMs}ms
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-600 space-y-0.5 pt-0.5">
+                        <div className="truncate">
+                          <span className="text-slate-400">Endpoint/Arquivo:</span>{' '}
+                          <a href={msg.diagnostic.officialUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">
+                            {msg.diagnostic.officialUrl}
+                          </a>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Registros:</span> {msg.diagnostic.documentsReceived?.toLocaleString('pt-BR')} lidos |{' '}
+                          <span className="text-slate-400">Normalizados:</span> {msg.diagnostic.documentsNormalized}
+                        </div>
+                        {msg.diagnostic.normalizedQueryNumber && (
+                          <div>
+                            <span className="text-slate-400">Termo Normalizado:</span> {msg.diagnostic.normalizedQueryNumber}
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-slate-400">Timestamp:</span> {msg.diagnostic.timestamp}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Componente Estruturado de Precedentes Oficiais Auditados */}
+                  {msg.searchResults && msg.searchResults.length > 0 && (
+                    <div className="pt-2 border-t border-slate-200 space-y-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Precedentes Oficiais Vinculados ({msg.searchResults.length}):</span>
+                      </div>
+                      <div className="space-y-2">
+                        {msg.searchResults.map((sr: any) => (
+                          <div
+                            key={sr.id}
+                            className="p-2.5 rounded-lg bg-white border border-slate-200 shadow-2xs space-y-1 text-[11px]"
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="font-bold text-indigo-950 font-mono">{sr.caseNumber}</span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle className="w-2.5 h-2.5" />
+                                {sr.verificationBadge || `${sr.courtCode} • VERIFICADO`}
+                              </span>
+                            </div>
+                            <p className="text-slate-600 text-[10.5px] leading-relaxed line-clamp-3">
+                              {sr.rulingThesis || sr.relevantSnippet}
+                            </p>
+                            <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400">
+                              <span>Rel. {sr.rapporteur} • {sr.courtCode}</span>
+                              {sr.officialUrl && (
+                                <a
+                                  href={sr.officialUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-0.5"
+                                >
+                                  Fonte Oficial
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
