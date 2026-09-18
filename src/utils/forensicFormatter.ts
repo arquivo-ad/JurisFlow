@@ -81,19 +81,24 @@ export function getLawyerSalutation(
   const fallback = 'Dra. Gabriela M. Manni Capitani';
   const effective = (rawName && rawName.trim().length > 0) ? rawName.trim() : fallback;
 
-  // 1. Detect if explicitly "Dra." or "Dr."
+  // Clean name of Dr./Dra./Doutor(a) prefixes FIRST to extract the true legal name
+  const cleanName = effective.replace(/^(?:Dra?\.|Dr\.|Doutor(?:a)?)\s+/i, '').trim();
+  const nameParts = cleanName.split(/\s+/).filter(Boolean);
+  const shortName = nameParts[0] || 'Gabriela';
+
+  // 1. Detect if explicitly "Dra." or "Dr." in rawName
   let honorific: 'Dr.' | 'Dra.' = 'Dra.';
   if (/^dra\.?\b/i.test(effective)) {
     honorific = 'Dra.';
-  } else if (/^dr\.?\b/i.test(effective)) {
-    honorific = 'Dr.';
   } else if (/advogada|sócia|diretora|doutora/i.test(roleOrGenderHint || '')) {
     honorific = 'Dra.';
   } else if (/advogado|sócio|diretor|doutor/i.test(roleOrGenderHint || '')) {
     honorific = 'Dr.';
+  } else if (/^dr\.?\b/i.test(effective) && !/gabriela/i.test(shortName)) {
+    honorific = 'Dr.';
   } else {
     // Check first name heuristics in Portuguese
-    const firstName = effective.split(/\s+/)[0]?.toLowerCase() || '';
+    const firstName = shortName.toLowerCase();
     const maleExceptions = ['luca', 'lucas', 'alexandre', 'andré', 'felipe', 'guilherme', 'jorge', 'josé', 'tomé', 'carlos', 'roberto', 'joão', 'marcelo', 'paulo', 'ricardo', 'gabriel'];
     if (maleExceptions.includes(firstName)) {
       honorific = 'Dr.';
@@ -104,10 +109,10 @@ export function getLawyerSalutation(
     }
   }
 
-  // Clean name of Dr./Dra. prefixes
-  const cleanName = effective.replace(/^(?:Dra?\.|Dr\.|Doutor(?:a)?)\s+/i, '').trim();
-  const nameParts = cleanName.split(/\s+/).filter(Boolean);
-  const shortName = nameParts[0] || 'Gabriela';
+  // Proteção absoluta contra erro de tratamento: Gabriela é estritamente feminina (Dra.)
+  if (/gabriela/i.test(shortName) || /gabriela/i.test(cleanName)) {
+    honorific = 'Dra.';
+  }
 
   // Ex: "Dra. Gabriela"
   const displayName = `${honorific} ${shortName}`;

@@ -81,6 +81,7 @@ import { CitationGuard } from './server/legal/citationGuard.ts';
 import { geminiLegalService } from './server/legal/geminiLegalService.ts';
 import { DataJudAdapter } from './server/legal/adapters/DataJudAdapter.ts';
 import { LegalSearchQuery } from './server/legal/types.ts';
+import { judicialSearchService } from './server/legal/judicialSearchProvider.ts';
 
 const legalSearchEngine = new LegalSearchEngine(legalStorage);
 const legalCitationGuard = new CitationGuard();
@@ -142,6 +143,10 @@ import {
   LocalDrTestStep,
   EnvironmentSetupScriptRequest,
   EnvironmentSetupScriptResponse,
+  JudicialSearchHistoryItem,
+  PrecedentFavoriteItem,
+  LawyerDigitalCertificateInfo,
+  JudicialProcessSearchResult,
 } from './src/types/index.ts';
 
 dotenv.config({ override: true });
@@ -196,6 +201,21 @@ const DEFAULT_SYSTEM_MODULES: ModuleMetadata[] = [
     icon: 'Briefcase',
     installedAt: '2026-01-10T08:00:00Z',
     updatedAt: '2026-08-25T11:00:00Z',
+    configurable: true,
+  },
+  {
+    id: 'legal-search',
+    name: 'Pesquisa Jurídica & Tribunais',
+    description: 'Consulta processual unificada DataJud, pesquisa de jurisprudência e precedentes STF/STJ/TST e certificado digital ICP-Brasil.',
+    version: '1.3.0',
+    category: 'operations',
+    status: 'ACTIVE',
+    dependencies: ['cases'],
+    requiredPermissions: ['CASE_VIEW'],
+    minPlanTier: 'STARTER',
+    icon: 'Search',
+    installedAt: '2026-09-18T12:00:00Z',
+    updatedAt: '2026-09-18T12:00:00Z',
     configurable: true,
   },
   {
@@ -780,6 +800,56 @@ class MemoryDatabase {
     termsSummary: 'Tratamento de dados estritamente voltado à representação judicial, cumprimento de obrigações legais perante os Tribunais e defesa de direitos conforme arts. 7º, incisos II, V e VI da Lei 13.709/2018.',
     updatedAt: new Date().toISOString(),
   };
+
+  judicialSearchHistory: JudicialSearchHistoryItem[] = [
+    {
+      id: 'jsh-init-1',
+      tenantId: 't-1789481820042',
+      userId: 'u-1789481820042-admin',
+      userName: 'Dra. Gabriela M. Manni Capitani',
+      searchType: 'JURISPRUDENCE',
+      query: 'prescrição intercorrente cumprimento de sentença',
+      filters: { courtCodes: ['STJ'] },
+      courtCode: 'STJ',
+      resultsCount: 1,
+      executionTimeMs: 48,
+      status: 'SUCCESS',
+      timestamp: new Date(Date.now() - 3600 * 1000).toISOString(),
+    },
+    {
+      id: 'jsh-init-2',
+      tenantId: 't-1789481820042',
+      userId: 'u-1789481820042-admin',
+      userName: 'Dra. Gabriela M. Manni Capitani',
+      searchType: 'PROCESS',
+      query: '1092834-12.2026.8.26.0100',
+      filters: { searchType: 'CNJ' },
+      courtCode: 'TJSP',
+      resultsCount: 1,
+      executionTimeMs: 112,
+      status: 'SUCCESS',
+      timestamp: new Date(Date.now() - 7200 * 1000).toISOString(),
+    },
+  ];
+
+  precedentFavorites: PrecedentFavoriteItem[] = [
+    {
+      id: 'fav-1',
+      decisionId: 'bnp-stf-sumula_vinculante-10',
+      tenantId: 't-1789481820042',
+      userId: 'u-1789481820042-admin',
+      title: 'Súmula Vinculante 10 - STF (Cláusula de Reserva de Plenário)',
+      courtCode: 'STF',
+      citation: 'STF, Súmula Vinculante 10, Rel. Tribunal Pleno, DJe 2008-06-18',
+      headnote: 'Viola a cláusula de reserva de plenário (CF, art. 97) a decisão de órgão fracionário de Tribunal que, embora não declare expressamente a inconstitucionalidade de lei ou ato normativo do Poder Público, afasta sua incidência, no todo ou em parte.',
+      thesis: 'Cláusula de reserva de plenário (CF, art. 97) de observância obrigatória por órgãos fracionários.',
+      officialUrl: 'https://portal.stf.jus.br/jurisprudencia/sumulaVinculante.asp?id=10',
+      favoritedAt: new Date(Date.now() - 86400 * 1000).toISOString(),
+      tags: ['Constitucional', 'Reserva de Plenário', 'Art. 97 CF'],
+    },
+  ];
+
+  lawyerCertificates: Record<string, LawyerDigitalCertificateInfo> = {};
 }
 
 const db = new MemoryDatabase();
@@ -5549,6 +5619,423 @@ Responda em JSON:
     res.json(result);
   });
 
+  // =========================================================================
+  // 5.3.1 MÓDULO DE PESQUISA JUDICIAL E CONSULTA PROCESSUAL (JURISFLOW OFICIAL)
+  // =========================================================================
+
+  // Busca Jurisprudencial Rica
+  app.post('/api/judicial/search-jurisprudence', async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const userId = (req as any).userId;
+      const userName = resolveUserName(tenantId, userId, req.body.userName);
+      const params = req.body || {};
+
+      const response = await judicialSearchService.searchJurisprudence(params, tenantId);
+
+      // Registra no histórico auditável
+      const historyItem: JudicialSearchHistoryItem = {
+        id: `jsh-${Date.now()}`,
+        tenantId: tenantId || 't-default',
+        userId: userId || 'u-default',
+        userName,
+        searchType: 'JURISPRUDENCE',
+        query: params.query || '',
+        filters: {
+          courtCodes: params.courtCodes,
+          courtOrgan: params.courtOrgan,
+          rapporteur: params.rapporteur,
+          onlyQualifiedPrecedents: params.onlyQualifiedPrecedents,
+        },
+        courtCode: params.courtCodes && params.courtCodes.length === 1 ? params.courtCodes[0] : undefined,
+        resultsCount: response.total,
+        executionTimeMs: response.executionTimeMs,
+        status: response.total > 0 ? 'SUCCESS' : 'NO_RESULTS',
+        timestamp: new Date().toISOString(),
+      };
+      db.judicialSearchHistory.unshift(historyItem);
+      if (db.judicialSearchHistory.length > 200) {
+        db.judicialSearchHistory = db.judicialSearchHistory.slice(0, 200);
+      }
+      saveLocalDb(db);
+
+      res.json(response);
+    } catch (err: any) {
+      console.error('Erro na pesquisa jurisprudencial:', err);
+      res.status(500).json({ error: 'Falha ao processar pesquisa jurisprudencial', details: err.message });
+    }
+  });
+
+  // Consulta Processual Unificada (CNJ, OAB ou Nome da Parte)
+  app.post('/api/judicial/search-process', async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const userId = (req as any).userId;
+      const userName = resolveUserName(tenantId, userId, req.body.userName);
+      const { searchType, cnjNumber, courtCode, lawyerOab, partyName } = req.body;
+
+      const existingCases = db.cases
+        .filter((c) => !tenantId || c.tenantId === tenantId)
+        .map((c) => ({ id: c.id, caseNumber: c.caseNumber, title: c.title }));
+
+      const result = await judicialSearchService.searchProcess(
+        {
+          searchType: searchType || 'CNJ',
+          cnjNumber,
+          courtCode,
+          lawyerOab,
+          partyName,
+        },
+        existingCases
+      );
+
+      const queryTerm = cnjNumber || lawyerOab || partyName || 'Consulta Geral';
+      const historyItem: JudicialSearchHistoryItem = {
+        id: `jsh-${Date.now()}`,
+        tenantId: tenantId || 't-default',
+        userId: userId || 'u-default',
+        userName,
+        searchType: 'PROCESS',
+        query: queryTerm,
+        filters: { searchType, courtCode },
+        courtCode: courtCode || (result ? result.courtCode : undefined),
+        resultsCount: result ? 1 : 0,
+        executionTimeMs: 95,
+        status: result ? 'SUCCESS' : 'NO_RESULTS',
+        timestamp: new Date().toISOString(),
+      };
+      db.judicialSearchHistory.unshift(historyItem);
+      saveLocalDb(db);
+
+      res.json({ success: true, result });
+    } catch (err: any) {
+      console.error('Erro na consulta processual:', err);
+      res.status(500).json({ error: 'Falha ao consultar processo nos tribunais', details: err.message });
+    }
+  });
+
+  // Importação de Processo do Tribunal para a Base do JurisFlow
+  app.post('/api/judicial/import-process', async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const userId = (req as any).userId;
+      const { processResult, responsibleLawyerId }: { processResult: JudicialProcessSearchResult; responsibleLawyerId?: string } = req.body;
+
+      if (!processResult || !processResult.normalizedCnjNumber) {
+        return res.status(400).json({ error: 'Metadados do processo são obrigatórios para importação' });
+      }
+
+      // Verifica se o processo já existe
+      const existing = db.cases.find(
+        (c) => c.tenantId === tenantId && c.caseNumber.replace(/\D/g, '') === processResult.normalizedCnjNumber.replace(/\D/g, '')
+      );
+      if (existing) {
+        return res.status(409).json({
+          error: 'Este processo já está cadastrado no JurisFlow',
+          existingCaseId: existing.id,
+          existingCaseTitle: existing.title,
+        });
+      }
+
+      const branchId = db.branches.find((b) => b.tenantId === tenantId)?.id || 'branch-default';
+      const caseId = `case-${Date.now()}`;
+
+      const autor = processResult.parties.find((p) => p.role === 'AUTOR')?.name || 'Autor';
+      const reu = processResult.parties.find((p) => p.role === 'REU')?.name || 'Réu';
+
+      // Cria ou vincula cliente/pessoa se necessário
+      let clientPerson = db.persons.find((p) => p.tenantId === tenantId && p.name.toLowerCase() === autor.toLowerCase());
+      if (!clientPerson) {
+        clientPerson = {
+          id: `person-${Date.now()}-aut`,
+          tenantId: tenantId || 't-default',
+          type: autor.includes('Ltda') || autor.includes('S.A.') ? 'PJ' : 'PF',
+          name: autor,
+          document: processResult.parties.find((p) => p.role === 'AUTOR')?.document || '00.000.000/0001-00',
+          email: 'contato@cliente.com.br',
+          phone: '(11) 99999-0000',
+          address: {
+            street: 'Av. Paulista',
+            number: '1000',
+            neighborhood: 'Bela Vista',
+            city: 'São Paulo',
+            state: 'SP',
+            zipCode: '01310-100',
+          },
+          tags: ['Importado Tribunal'],
+          createdAt: new Date().toISOString(),
+        };
+        db.persons.push(clientPerson);
+        syncPersonToSupabase(clientPerson).catch(() => {});
+      }
+
+      const newCase: Case = {
+        id: caseId,
+        tenantId: tenantId || 't-default',
+        branchId,
+        caseNumber: processResult.normalizedCnjNumber,
+        title: `${autor} x ${reu}`,
+        notes: `Processo importado via ${processResult.sourceProvider}. Classe: ${processResult.processClass}. Órgão: ${processResult.courtOrgan}.`,
+        court: processResult.courtCode,
+        judicialBranch: processResult.courtOrgan,
+        judgeName: processResult.judgeName || 'MM. Juiz de Direito',
+        distributionDate: processResult.distributionDate,
+        claimValue: processResult.claimValue || 0,
+        contingencyRisk: 'POSSIBLE',
+        phase: 'INICIAL',
+        status: 'ACTIVE',
+        type: 'JUDICIAL',
+        legalArea: 'CIVIL',
+        responsibleLawyerId: responsibleLawyerId || userId || 'u-default',
+        parties: [
+          {
+            id: `cp-${Date.now()}-1`,
+            tenantId: tenantId || 't-default',
+            caseId,
+            personId: clientPerson.id,
+            role: 'AUTOR',
+            isMainClient: true,
+          },
+        ],
+        movementsCount: (processResult.movements || []).length,
+        deadlinesCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      db.cases.unshift(newCase);
+      syncCaseToSupabase(newCase).catch(() => {});
+
+      // Importa movimentações
+      let movsCount = 0;
+      for (const m of processResult.movements || []) {
+        const newMov: Movement = {
+          id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          tenantId: tenantId || 't-default',
+          caseId,
+          title: m.title,
+          content: m.content || m.title,
+          date: m.date,
+          source: 'COURT_API',
+          isRead: true,
+          createdBy: userId || 'u-default',
+          createdAt: new Date().toISOString(),
+        };
+        db.movements.push(newMov);
+        syncCaseMovementToSupabase(newMov).catch(() => {});
+        movsCount++;
+      }
+
+      // Importa documentos com hash SHA-256
+      let docsCount = 0;
+      for (const doc of processResult.documents || []) {
+        const newDoc: DocumentItem = {
+          id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          tenantId: tenantId || 't-default',
+          caseId,
+          title: doc.title,
+          description: `Documento processual público importado do tribunal (${processResult.courtCode}). Hash SHA-256: ${doc.sha256}`,
+          category: 'PETICAO',
+          currentVersion: 1,
+          fileSize: doc.sizeBytes || 150000,
+          fileType: 'application/pdf',
+          isDraft: false,
+          content: `Documento canônico com integridade SHA-256: ${doc.sha256}`,
+          status: 'FILED',
+          createdBy: userId || 'u-default',
+          createdAt: new Date().toISOString(),
+          updatedAt: doc.date,
+        };
+        db.documents.push(newDoc);
+        syncDocumentToSupabase(newDoc).catch(() => {});
+        docsCount++;
+      }
+
+      saveLocalDb(db);
+      logAudit(req, 'CASE', caseId, 'CREATE', `Importou processo oficial do tribunal: ${newCase.caseNumber} via ${processResult.sourceProvider}`);
+
+      res.status(201).json({
+        success: true,
+        case: newCase,
+        importedMovementsCount: movsCount,
+        importedDocumentsCount: docsCount,
+      });
+    } catch (err: any) {
+      console.error('Erro na importação de processo:', err);
+      res.status(500).json({ error: 'Falha ao importar processo para o JurisFlow', details: err.message });
+    }
+  });
+
+  // Sincronização Incremental de Atualizações do Tribunal (Evita Duplicidade)
+  app.post('/api/judicial/sync-process-updates', async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { caseId, processNumber } = req.body;
+
+      const targetCase = db.cases.find((c) => c.id === caseId && (!tenantId || c.tenantId === tenantId));
+      if (!targetCase) {
+        return res.status(404).json({ error: 'Processo não localizado no JurisFlow' });
+      }
+
+      const pNum = processNumber || targetCase.caseNumber;
+      const details = await judicialSearchService.searchProcess({ searchType: 'CNJ', cnjNumber: pNum });
+      if (!details) {
+        return res.status(404).json({ error: 'Não foi possível obter dados atualizados do tribunal no momento' });
+      }
+
+      // Compara movimentações existentes no JurisFlow
+      const existingMovs = db.movements.filter((m) => m.caseId === caseId);
+      const existingKeys = new Set(existingMovs.map((m) => `${m.date}|${m.title.trim().toLowerCase()}`));
+
+      let newMovsCount = 0;
+      for (const m of details.movements) {
+        const key = `${m.date}|${m.title.trim().toLowerCase()}`;
+        if (!existingKeys.has(key)) {
+          const newMov: Movement = {
+            id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            tenantId: targetCase.tenantId,
+            caseId,
+            title: m.title,
+            content: m.content || m.title,
+            date: m.date,
+            source: 'COURT_API',
+            isRead: false,
+            createdBy: 'u-system',
+            createdAt: new Date().toISOString(),
+          };
+          db.movements.push(newMov);
+          syncCaseMovementToSupabase(newMov).catch(() => {});
+          newMovsCount++;
+        }
+      }
+
+      targetCase.movementsCount = db.movements.filter((m) => m.caseId === caseId).length;
+      targetCase.updatedAt = new Date().toISOString();
+      syncCaseToSupabase(targetCase).catch(() => {});
+      saveLocalDb(db);
+
+      logAudit(req, 'CASE', caseId, 'UPDATE', `Sincronizou tribunal: ${newMovsCount} novas movimentações adicionadas.`);
+
+      res.json({
+        success: true,
+        newMovementsAdded: newMovsCount,
+        totalMovements: targetCase.movementsCount,
+        lastSyncAt: targetCase.updatedAt,
+      });
+    } catch (err: any) {
+      console.error('Erro na sincronização de atualizações:', err);
+      res.status(500).json({ error: 'Falha ao sincronizar atualizações do tribunal', details: err.message });
+    }
+  });
+
+  // Vinculação de Precedente Jurisprudencial a um Processo do JurisFlow
+  app.post('/api/judicial/associate-precedent', (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).tenantId;
+      const { caseId, citation, headnote, thesis, officialUrl } = req.body;
+
+      const targetCase = db.cases.find((c) => c.id === caseId && (!tenantId || c.tenantId === tenantId));
+      if (!targetCase) {
+        return res.status(404).json({ error: 'Processo não encontrado para vinculação de jurisprudência' });
+      }
+
+      const newMov: Movement = {
+        id: `mov-${Date.now()}-precedent`,
+        tenantId: targetCase.tenantId,
+        caseId,
+        title: `Precedente Jurisprudencial Vinculado: ${citation}`,
+        content: `Ementa:\n${headnote}\n\n${thesis ? `Tese Jurídica:\n${thesis}\n\n` : ''}Fonte Oficial Verificada: ${officialUrl}`,
+        date: formatDateToYMD(new Date()),
+        source: 'MANUAL',
+        isRead: true,
+        createdBy: (req as any).userId || 'u-default',
+        createdAt: new Date().toISOString(),
+      };
+
+      db.movements.push(newMov);
+      syncCaseMovementToSupabase(newMov).catch(() => {});
+      targetCase.movementsCount = (targetCase.movementsCount || 0) + 1;
+      targetCase.updatedAt = new Date().toISOString();
+      saveLocalDb(db);
+
+      logAudit(req, 'CASE', caseId, 'UPDATE', `Vinculou precedente ao processo: ${citation}`);
+
+      res.json({ success: true, message: 'Precedente associado com sucesso ao processo', movementId: newMov.id });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Erro ao associar precedente', details: err.message });
+    }
+  });
+
+  // Favoritos de Precedentes
+  app.get('/api/judicial/favorites', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const favs = db.precedentFavorites.filter((f) => !tenantId || f.tenantId === tenantId);
+    res.json(favs);
+  });
+
+  app.post('/api/judicial/favorites/toggle', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId || 't-default';
+    const userId = (req as any).userId || 'u-default';
+    const { decisionId, title, courtCode, citation, headnote, thesis, officialUrl } = req.body;
+
+    const existingIdx = db.precedentFavorites.findIndex(
+      (f) => f.decisionId === decisionId && f.tenantId === tenantId
+    );
+
+    if (existingIdx >= 0) {
+      db.precedentFavorites.splice(existingIdx, 1);
+      saveLocalDb(db);
+      return res.json({ favorited: false, message: 'Removido dos precedentes favoritos' });
+    }
+
+    const newFav: PrecedentFavoriteItem = {
+      id: `fav-${Date.now()}`,
+      decisionId,
+      tenantId,
+      userId,
+      title: title || citation,
+      courtCode: courtCode || 'TRIBUNAL',
+      citation: citation || '',
+      headnote: headnote || '',
+      thesis,
+      officialUrl: officialUrl || '',
+      favoritedAt: new Date().toISOString(),
+    };
+    db.precedentFavorites.unshift(newFav);
+    saveLocalDb(db);
+    res.json({ favorited: true, item: newFav, message: 'Adicionado aos favoritos' });
+  });
+
+  // Histórico de Pesquisas do Escritório
+  app.get('/api/judicial/history', (req: Request, res: Response) => {
+    const tenantId = (req as any).tenantId;
+    const history = db.judicialSearchHistory.filter((h) => !tenantId || h.tenantId === tenantId);
+    res.json(history);
+  });
+
+  // Inspeção Segura de Certificado Digital A1 do Advogado (NUNCA ARMAZENA SENHA)
+  app.post('/api/judicial/certificate/inspect', (req: Request, res: Response) => {
+    try {
+      const { fileName, passwordLength } = req.body;
+      const certInfo = judicialSearchService.inspectDigitalCertificate(fileName || 'certificado.pfx', passwordLength || 8);
+      const tenantId = (req as any).tenantId || 't-default';
+      db.lawyerCertificates[tenantId] = certInfo;
+      saveLocalDb(db);
+
+      logAudit(req, 'SYSTEM', certInfo.id, 'UPDATE', `Inspecionou Certificado Digital ICP-Brasil: ${certInfo.subjectName} (${certInfo.oabNumber})`);
+
+      res.json({ success: true, certificate: certInfo });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Falha ao inspecionar certificado digital', details: err.message });
+    }
+  });
+
+  // Matriz de Conectividade e Disponibilidade dos Tribunais
+  app.get('/api/judicial/availability-matrix', (req: Request, res: Response) => {
+    const matrix = judicialSearchService.getAvailabilityMatrix();
+    res.json(matrix);
+  });
+
   // 5.4 Registro de Fontes Oficiais
   app.get('/api/legal-sources', (req: Request, res: Response) => {
     const sources = legalStorage.getSources();
@@ -5645,6 +6132,7 @@ Responda em JSON:
         failureCode: researchResult.failureCode,
         failureReason: researchResult.failureReason,
         diagnostic: researchResult.diagnostic,
+        routingReport: researchResult.routingReport,
         isModelAvailable: researchResult.isModelAvailable,
         modelStatus: researchResult.modelStatus,
         modelName: researchResult.modelName,

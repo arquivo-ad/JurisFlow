@@ -4,6 +4,7 @@ export type AppModule =
   | 'dashboard'
   | 'crm'
   | 'cases'
+  | 'legal-search'
   | 'calendar'
   | 'tasks'
   | 'documents'
@@ -68,7 +69,11 @@ export function canAssignRole(
  */
 export function isSocioAdmin(user?: User | null, role?: Role | null): boolean {
   if (isSuperAdmin(user, role)) return true;
-  if (role?.code === 'SOCIO_ADMIN') return true;
+  if (role?.code === 'SOCIO_ADMIN' || role?.id === 'role-socio-admin') return true;
+  if (user?.roleCode === 'SOCIO_ADMIN' || user?.roleId === 'role-socio-admin') return true;
+  if (user?.roleName?.toLowerCase().includes('sócio') || user?.roleName?.toLowerCase().includes('titular')) return true;
+  if (user?.branchAffiliations?.some((a) => a.roleCode === 'SOCIO_ADMIN' || a.roleId === 'role-socio-admin')) return true;
+  if (user?.memberships?.some((m) => m.roleCode === 'SOCIO_ADMIN' || m.roleId === 'role-socio-admin')) return true;
   return false;
 }
 
@@ -78,9 +83,9 @@ export function isSocioAdmin(user?: User | null, role?: Role | null): boolean {
  * Strictest security rules:
  * - SUPER_ADMIN: All modules
  * - SOCIO_ADMIN: All modules
- * - ADVOGADO_SENIOR / ADVOGADO_PLENO: dashboard, crm, cases, calendar, documents, ai-gateway
- * - FINANCEIRO: dashboard, financial, crm (Strictly blocked from Cases, Calendar, AI Gateway, Settings)
- * - ESTAGIARIO: dashboard, calendar, cases, documents (Strictly blocked from Financial, AI Gateway, Settings)
+ * - ADVOGADO_SENIOR / ADVOGADO_PLENO: dashboard, crm, cases, legal-search, calendar, documents, ai-gateway
+ * - FINANCEIRO: dashboard, financial, crm (Strictly blocked from Cases, Legal-Search, Calendar, AI Gateway, Settings)
+ * - ESTAGIARIO: dashboard, calendar, cases, legal-search, documents (Strictly blocked from Financial, AI Gateway, Settings)
  * - SECRETARIA: dashboard, crm, calendar, documents
  */
 export function canAccessModule(
@@ -91,7 +96,7 @@ export function canAccessModule(
   if (isSuperAdmin(user, role)) return true;
   if (isSocioAdmin(user, role)) return true;
 
-  const roleCode = role?.code;
+  const roleCode = role?.code || user?.roleCode || (user?.roleName?.toUpperCase().replace(/\s+/g, '_'));
 
   switch (module) {
     case 'dashboard':
@@ -112,7 +117,23 @@ export function canAccessModule(
         roleCode === 'PARALEGAL_ESTAGIARIO' ||
         roleCode === 'SOCIO_ADMIN' ||
         roleCode === 'SUPER_ADMIN' ||
-        hasPermission(role, 'CASES', 'READ')
+        hasPermission(role, 'CASES', 'READ') ||
+        Boolean(user?.oabNumber) // Any verified lawyer in office
+      );
+
+    case 'legal-search':
+      // Legal team (Lawyers, Paralegals, Partners). Blocked for Financeiro
+      if (roleCode === 'FINANCEIRO') return false;
+      return (
+        roleCode === 'ADVOGADO_SENIOR' ||
+        roleCode === 'ADVOGADO_PLENO' ||
+        roleCode === 'ADVOGADO_JUNIOR' ||
+        roleCode === 'PARALEGAL_ESTAGIARIO' ||
+        roleCode === 'SOCIO_ADMIN' ||
+        roleCode === 'SUPER_ADMIN' ||
+        hasPermission(role, 'CASES', 'READ') ||
+        Boolean(user?.oabNumber) || // Any lawyer with OAB
+        !roleCode // Default safe fallback for authenticated legal staff
       );
 
     case 'calendar':

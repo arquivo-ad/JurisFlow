@@ -50,6 +50,12 @@ import {
   EnvironmentSetupScriptResponse,
   PortCheckRequest,
   PortCheckResponse,
+  JudicialProcessSearchResult,
+  JurisprudenceSearchParams,
+  JudicialSearchHistoryItem,
+  PrecedentFavoriteItem,
+  LawyerDigitalCertificateInfo,
+  CourtAvailabilityMatrixItem,
 } from '../types';
 
 const DEFAULT_TENANT_ID = 't-1789481820042';
@@ -587,6 +593,7 @@ export const api = {
       failureCode?: string;
       failureReason?: string;
       diagnostic?: any;
+      routingReport?: any;
       isModelAvailable?: boolean;
       modelStatus?: string;
       modelName?: string;
@@ -816,4 +823,95 @@ export const api = {
 
   // Observability & System Health
   getAdminHealth: () => request<SystemHealthReport>('/api/admin/health'),
+
+  // Judicial Research, Precedents & Process Consultation
+  searchJurisprudence: (params: JurisprudenceSearchParams) =>
+    request<{
+      query: string;
+      total: number;
+      page: number;
+      pageSize: number;
+      results: any[];
+      sourcesConsulted: string[];
+      executionTimeMs: number;
+      timestamp: string;
+    }>('/api/judicial/search-jurisprudence', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  searchProcess: (params: {
+    searchType: 'CNJ' | 'LAWYER_OAB' | 'PARTY_NAME';
+    cnjNumber?: string;
+    courtCode?: string;
+    lawyerOab?: string;
+    partyName?: string;
+  }) =>
+    request<{ success: boolean; result: JudicialProcessSearchResult | null }>('/api/judicial/search-process', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  importProcessToJurisFlow: (processResult: JudicialProcessSearchResult, responsibleLawyerId?: string) =>
+    request<{
+      success: boolean;
+      case: Case;
+      importedMovementsCount: number;
+      importedDocumentsCount: number;
+    }>('/api/judicial/import-process', {
+      method: 'POST',
+      body: JSON.stringify({ processResult, responsibleLawyerId }),
+    }),
+
+  syncProcessUpdates: (caseId: string, processNumber?: string) =>
+    request<{
+      success: boolean;
+      newMovementsAdded: number;
+      totalMovements: number;
+      lastSyncAt: string;
+    }>('/api/judicial/sync-process-updates', {
+      method: 'POST',
+      body: JSON.stringify({ caseId, processNumber }),
+    }),
+
+  associatePrecedentToCase: (data: {
+    caseId: string;
+    citation: string;
+    headnote: string;
+    thesis?: string;
+    officialUrl: string;
+  }) =>
+    request<{ success: boolean; message: string; movementId?: string }>('/api/judicial/associate-precedent', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getPrecedentFavorites: () =>
+    request<PrecedentFavoriteItem[]>('/api/judicial/favorites'),
+
+  togglePrecedentFavorite: (data: {
+    decisionId: string;
+    title?: string;
+    courtCode?: string;
+    citation?: string;
+    headnote?: string;
+    thesis?: string;
+    officialUrl?: string;
+  }) =>
+    request<{ favorited: boolean; item?: PrecedentFavoriteItem; message: string }>('/api/judicial/favorites/toggle', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getJudicialSearchHistory: () =>
+    request<JudicialSearchHistoryItem[]>('/api/judicial/history'),
+
+  inspectDigitalCertificate: (data: { fileName: string; passwordLength: number }) =>
+    request<{ success: boolean; certificate: LawyerDigitalCertificateInfo }>('/api/judicial/certificate/inspect', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getCourtAvailabilityMatrix: () =>
+    request<CourtAvailabilityMatrixItem[]>('/api/judicial/availability-matrix'),
 };

@@ -1151,6 +1151,7 @@ export interface GlobalSearchResult {
 export type ModuleId =
   | 'clients'
   | 'cases'
+  | 'legal-search'
   | 'deadlines'
   | 'calendar'
   | 'tasks'
@@ -1277,3 +1278,144 @@ export interface CapabilityCheck {
   allowed: boolean;
   reason?: string;
 }
+
+// --- JUDICIAL SEARCH & PROCESS CONSULTATION ---
+export type JudicialSearchTab = 'jurisprudence' | 'process' | 'certificate' | 'history' | 'sources';
+
+export interface JudicialProcessParty {
+  role: string;
+  name: string;
+  document?: string;
+  personType: 'INDIVIDUAL' | 'LEGAL_ENTITY';
+}
+
+export interface JudicialProcessLawyer {
+  name: string;
+  oabNumber: string;
+  oabUf: string;
+}
+
+export interface JudicialProcessMovementItem {
+  id: string;
+  date: string;
+  title: string;
+  content?: string;
+  complement?: string;
+  code?: number;
+  source?: string;
+}
+
+export interface JudicialProcessDocumentItem {
+  id: string;
+  title: string;
+  documentType: string;
+  date: string;
+  sizeBytes?: number;
+  sha256: string;
+  downloadUrl?: string;
+  isPublic: boolean;
+}
+
+export interface JudicialProcessSearchResult {
+  processNumber: string;
+  normalizedCnjNumber: string;
+  court: string;
+  courtCode: string;
+  judicialDegree: string;
+  processClass: string;
+  courtOrgan: string;
+  judgeName?: string;
+  distributionDate: string;
+  claimValue?: number;
+  isConfidential: boolean;
+  subjects: Array<{ code: number; name: string }>;
+  parties: JudicialProcessParty[];
+  lawyers: JudicialProcessLawyer[];
+  movements: JudicialProcessMovementItem[];
+  documents: JudicialProcessDocumentItem[];
+  retrievedAt: string;
+  sourceProvider: string;
+  sourceUrl: string;
+  isAlreadyImported: boolean;
+  existingCaseId?: string;
+  existingCaseTitle?: string;
+  newMovementsCount?: number;
+}
+
+export interface JurisprudenceSearchParams {
+  query: string;
+  courtCodes?: string[];
+  courtOrgan?: string;
+  rapporteur?: string;
+  caseNumber?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  subject?: string;
+  documentTypes?: string[];
+  onlyQualifiedPrecedents?: boolean;
+  onlyVerified?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface LawyerDigitalCertificateInfo {
+  id: string;
+  subjectName: string;
+  cpf?: string;
+  oabNumber?: string;
+  issuer: string;
+  validFrom: string;
+  validTo: string;
+  serialNumber: string;
+  algorithm: string;
+  thumbprintSha256: string;
+  status: 'VALID' | 'EXPIRED' | 'REVOKED' | 'EXPIRING_SOON';
+  isHardwareToken: boolean;
+  compatibleCourts: string[];
+  uploadedAt: string;
+}
+
+export interface JudicialSearchHistoryItem {
+  id: string;
+  tenantId: string;
+  userId: string;
+  userName: string;
+  searchType: 'JURISPRUDENCE' | 'PROCESS';
+  query: string;
+  filters: Record<string, any>;
+  courtCode?: string;
+  resultsCount: number;
+  executionTimeMs: number;
+  status: 'SUCCESS' | 'NO_RESULTS' | 'FAILED';
+  timestamp: string;
+}
+
+export interface PrecedentFavoriteItem {
+  id: string;
+  decisionId: string;
+  tenantId: string;
+  userId: string;
+  title: string;
+  courtCode: string;
+  citation: string;
+  headnote: string;
+  thesis?: string;
+  officialUrl: string;
+  favoritedAt: string;
+  tags?: string[];
+  notes?: string;
+}
+
+export interface CourtAvailabilityMatrixItem {
+  courtCode: string;
+  courtName: string;
+  jurisdiction: string;
+  jurisprudenceStatus: 'DISPONIVEL' | 'DISPONIVEL_PARCIAL' | 'EM_DESENVOLVIMENTO' | 'INDISPONIVEL';
+  processStatus: 'DISPONIVEL_PUBLICO' | 'EXIGE_CERTIFICADO' | 'EM_DESENVOLVIMENTO' | 'RESTRITO';
+  authenticationMethod: 'API_PUBLICA' | 'DADOS_ABERTOS' | 'CERTIFICADO_A1_A3' | 'PARCERIA_OFICIAL';
+  officialUrl: string;
+  latencyMs: number;
+  lastCheckedAt: string;
+  notes: string;
+}
+

@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   Scale,
+  Search,
   CalendarDays,
   FileText,
   DollarSign,
@@ -21,6 +22,7 @@ export type ActiveModule =
   | 'dashboard'
   | 'crm'
   | 'cases'
+  | 'legal-search'
   | 'calendar'
   | 'tasks'
   | 'documents'
@@ -69,6 +71,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Scale,
       badge: null,
       color: 'text-slate-600',
+    },
+    {
+      id: 'legal-search' as ActiveModule,
+      label: 'Pesquisa & Tribunais',
+      icon: Search,
+      badge: 'DataJud / STF',
+      badgeColor: 'bg-sky-100 text-sky-800 border-sky-200 font-semibold',
+      color: 'text-sky-600',
     },
     {
       id: 'calendar' as ActiveModule,

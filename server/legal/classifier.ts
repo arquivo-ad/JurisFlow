@@ -105,8 +105,8 @@ export class LegalCompetenceClassifier {
         branchLabel: 'Direito do Trabalho',
         subject: 'Empregado público celetista de fundação estadual - Cargo de confiança - Dispensa e verbas rescisórias',
         competentCourts: ['TST', 'TRT'],
-        prioritySources: ['tst-jurisprudencia'],
-        complementarySources: ['stf-jurisprudencia', 'cnj-bnp-pangea'],
+        prioritySources: ['tst-jurisprudencia', 'trt-jurisprudencia'],
+        complementarySources: isConstitutional ? ['stf-jurisprudencia'] : [],
         excludedSources: ['stj-dados-abertos'], // STJ é incompetente para relação celetista (CF/88, art. 114)
         entities: entities.length > 0 ? entities : ['empregado público', 'CLT', 'verbas rescisórias'],
         isLaborDispute: true,

@@ -9,6 +9,7 @@ import {
 import { DashboardView } from './components/dashboard/DashboardView';
 import { CrmView } from './components/crm/CrmView';
 import { CasesView } from './components/cases/CasesView';
+import { LegalSearchView } from './components/legal-search/LegalSearchView';
 import { CalendarView } from './components/calendar/CalendarView';
 import { DocumentsView } from './components/documents/DocumentsView';
 import { TasksView } from './components/tasks/TasksView';
@@ -542,6 +543,17 @@ export default function App() {
                   onSaveCase={handleSaveCase}
                   onAddMovement={handleAddMovement}
                   onOpenAiGateway={handleOpenAiGateway}
+                />
+              )}
+
+              {activeModule === 'legal-search' && (
+                <LegalSearchView
+                  cases={cases}
+                  currentUser={currentUser}
+                  currentRole={activeUserRole}
+                  onRefreshCases={loadBootstrapData}
+                  onOpenAiGateway={handleOpenAiGateway}
+                  onShowToast={showToast}
                 />
               )}
 

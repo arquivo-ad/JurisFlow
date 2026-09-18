@@ -322,7 +322,21 @@ export interface LegalSearchResponse {
   executionTimeMs: number;
   timestamp: string;
   diagnostic?: OfficialSourceDiagnostic;
+  routingReport?: SourceRoutingReport;
 }
+
+export type SourceLifecycleState =
+  | 'HTTP_SUCCESS'
+  | 'DOWNLOAD_COMPLETE'
+  | 'PARSE_SUCCESS'
+  | 'INDEX_SUCCESS'
+  | 'SEARCH_SUCCESS'
+  | 'EMPTY_VALID_DATASET'
+  | 'PARSER_EMPTY'
+  | 'PARSER_ERROR'
+  | 'SOURCE_UNAVAILABLE'
+  | 'EXCLUDED_BY_JURISDICTION'
+  | 'SOURCE_NOT_IMPLEMENTED';
 
 export type FailClosedReasonCode =
   | 'NO_RELEVANT_PRECEDENT'
@@ -332,19 +346,53 @@ export type FailClosedReasonCode =
   | 'DOCUMENT_FOUND_UNVERIFIED'
   | 'DOCUMENT_REJECTED'
   | 'MODEL_UNAVAILABLE'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'EXCLUDED_BY_JURISDICTION'
+  | 'SOURCE_NOT_IMPLEMENTED'
+  | 'PARSER_EMPTY'
+  | 'PARSER_ERROR';
+
+export interface SourceRoutingReport {
+  sourcesEligible: string[];
+  sourcesExcluded: {
+    sourceId: string;
+    courtCode: string;
+    reason: string;
+    lifecycleState: 'EXCLUDED_BY_JURISDICTION';
+  }[];
+  sourcesAttempted: string[];
+  sourcesSucceeded: string[];
+  sourcesFailed: string[];
+  sourcesNotImplemented: {
+    sourceId: string;
+    courtCode: string;
+    name: string;
+    lifecycleState: 'SOURCE_NOT_IMPLEMENTED';
+    message: string;
+  }[];
+}
 
 export interface OfficialSourceDiagnostic {
   adapter: string;
+  sourceName?: string;
+  courtCode?: string;
   officialUrl: string;
   timestamp: string;
   httpStatus: number;
   latencyMs: number;
+  lifecycleState?: SourceLifecycleState;
+  stateDescription?: string;
+  bytesTransferred?: number;
+  contentSha256?: string;
   documentsReceived: number;
   documentsNormalized: number;
   documentsRejected: number;
+  recordsRead?: number;
+  recordsAccepted?: number;
+  recordsRejected?: number;
+  parsingErrors?: string[];
   rejectionReasons: string[];
-  normalizedQueryNumber: string;
+  normalizedQueryNumber?: string;
   connectorStatus: string;
 }
 
@@ -360,6 +408,7 @@ export interface LegalResearchResult {
   failureCode?: FailClosedReasonCode;
   failureReason?: string;
   diagnostic?: OfficialSourceDiagnostic;
+  routingReport?: SourceRoutingReport;
   isModelAvailable?: boolean;
   modelStatus?: 'MODEL_READY' | 'MODEL_UNAVAILABLE';
   modelName?: string;

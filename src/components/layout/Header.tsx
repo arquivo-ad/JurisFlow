@@ -20,6 +20,8 @@ import {
   Camera,
   KeyRound,
   LifeBuoy,
+  Menu,
+  X,
 } from 'lucide-react';
 import { Tenant, Branch, User, Role, Notification } from '../../types';
 import { canAccessModule } from '../../utils/rbac';
@@ -47,6 +49,8 @@ interface HeaderProps {
   onQuickAction?: (action: 'NEW_CASE' | 'NEW_DEADLINE' | 'NEW_CLIENT' | 'AI_PROMPT') => void;
   onMarkNotificationRead?: (id: string) => void;
   onUpdateAvatar?: (newUrl: string) => Promise<void>;
+  onToggleMobileMenu?: () => void;
+  isMobileMenuOpen?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -70,6 +74,8 @@ export const Header: React.FC<HeaderProps> = ({
   onQuickAction = (_action: 'NEW_CASE' | 'NEW_DEADLINE' | 'NEW_CLIENT' | 'AI_PROMPT') => {},
   onMarkNotificationRead = (_id: string) => {},
   onUpdateAvatar,
+  onToggleMobileMenu,
+  isMobileMenuOpen = false,
 }) => {
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
@@ -106,7 +112,17 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-30 w-full bg-white border-b border-slate-200 px-4 lg:px-8 py-3 flex items-center justify-between">
       {/* Left: Branding & Tenant/Branch Selector */}
-      <div className="flex items-center gap-3 md:gap-6">
+      <div className="flex items-center gap-2 sm:gap-3 md:gap-6">
+        {/* Mobile Menu Toggle Button */}
+        <button
+          onClick={onToggleMobileMenu}
+          className="p-1.5 -ml-1 rounded-lg text-slate-600 hover:bg-slate-100 md:hidden focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          aria-label="Abrir Menu de Navegação"
+          title="Abrir Módulos"
+        >
+          {isMobileMenuOpen ? <X className="w-5 h-5 text-slate-900" /> : <Menu className="w-5 h-5 text-slate-700" />}
+        </button>
+
         {/* Brand */}
         <div 
           onClick={() => onNavigate('dashboard')}
@@ -280,6 +296,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
+        {/* Direct Pesquisa & Tribunais Header Button */}
+        {canAccessModule('legal-search', currentUser, currentRole) && (
+          <button
+            onClick={() => onNavigate?.('legal-search')}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-semibold transition-colors shadow-2xs"
+            title="Pesquisa Processual & Tribunais DataJud"
+          >
+            <Search className="w-3.5 h-3.5 text-sky-600 stroke-[2.2]" />
+            <span>Pesquisa & Tribunais</span>
+          </button>
+        )}
+
         {/* Search button mobile */}
         <button
           onClick={onOpenSearch}
@@ -326,6 +354,19 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Scale className="w-4 h-4 text-indigo-600" />
                   <span className="font-medium">Novo Processo / Caso</span>
+                </button>
+              )}
+
+              {canAccessModule('legal-search', currentUser, currentRole) && (
+                <button
+                  onClick={() => {
+                    onNavigate?.('legal-search');
+                    setShowQuickMenu(false);
+                  }}
+                  className="w-full text-left p-2 rounded-lg text-xs text-sky-700 hover:bg-sky-50 flex items-center gap-2 font-medium"
+                >
+                  <Search className="w-4 h-4 text-sky-600" />
+                  <span>Consultar Tribunal / DataJud</span>
                 </button>
               )}
 

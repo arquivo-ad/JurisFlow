@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { CitationGuard } from './citationGuard.ts';
 import { legalStorage, LegalKnowledgeStorage } from './storage.ts';
-import { LegalSearchResultItem, LegalResearchResult, FailClosedReasonCode, OfficialSourceDiagnostic } from './types.ts';
+import { LegalSearchResultItem, LegalResearchResult, FailClosedReasonCode, OfficialSourceDiagnostic, SourceRoutingReport } from './types.ts';
 import { LegalCompetenceClassifier } from './classifier.ts';
 import { StjDadosAbertosAdapter } from './adapters/StjDadosAbertosAdapter.ts';
 
@@ -46,6 +46,27 @@ export const FAIL_CLOSED_EXPLANATIONS: Record<FailClosedReasonCode, { title: str
     title: 'Falha Interna de Processamento',
     explanation: 'Ocorreu uma falha técnica interna durante o processamento da consulta jurídica.',
     action: 'Consulte o log do sistema ou repita a operação.',
+  },
+  EXCLUDED_BY_JURISDICTION: {
+    title: 'Fonte Excluída por Incompetência Material',
+    explanation: 'O tribunal foi excluído da rota de pesquisa por incompetência constitucional para a matéria da consulta (CF/88).',
+    action: 'Consulte apenas as fontes competentes para a lide.',
+  },
+  SOURCE_NOT_IMPLEMENTED: {
+    title: 'Fonte Competente Não Implementada',
+    explanation:
+      'Não foi possível realizar pesquisa jurisprudencial automatizada nas fontes materialmente competentes para esta consulta. Os conectores do TST e dos TRTs ainda não estão disponíveis ou não responderam. O STJ não foi consultado por incompetência material para a controvérsia trabalhista.',
+    action: 'Aguarde a disponibilização dos conectores oficiais do TST/TRT.',
+  },
+  PARSER_EMPTY: {
+    title: 'Recurso Sem Registros Normalizados',
+    explanation: 'O conector oficial conectou, porém nenhum registro pôde ser decodificado ou normalizado do arquivo recebido.',
+    action: 'Verifique a integridade do recurso no portal de dados abertos do órgão judiciário.',
+  },
+  PARSER_ERROR: {
+    title: 'Erro de Decodificação na Fonte Oficial',
+    explanation: 'Falha de formatação ou estrutura inválida no documento retornado pelo tribunal.',
+    action: 'Aguarde correção de publicação pelo órgão judiciário.',
   },
 };
 
@@ -224,12 +245,16 @@ export class GeminiLegalService {
         /^(?:maria|ana|gabriela|marina|helena|juliana|fernanda|patricia|carolina|larissa|camila|paula|vanessa|luiza|isabela|claudia)/i.test(
           shortName
         ) ||
-        shortName.endsWith('a')
+        shortName.toLowerCase().endsWith('a')
       ) {
         honorific = 'Dra.';
       } else {
         honorific = 'Dr.';
       }
+    }
+    // Proteção determinística contra erro de gênero: Gabriela é sempre Dra.
+    if (/gabriela/i.test(shortName) || /gabriela/i.test(cleanName)) {
+      honorific = 'Dra.';
     }
     const lawyerGreeting = `${honorific} ${shortName}`;
     const officeName = options?.officeName || 'Gabriela Capitani Advocacia';
@@ -270,40 +295,95 @@ export class GeminiLegalService {
     const classification = LegalCompetenceClassifier.classify(question);
     let stjDiagnostic: OfficialSourceDiagnostic | undefined;
 
-    // Regra de Ouro (Teste Negativo): Se for lide trabalhista, bloqueia terminantemente fontes civis/STJ (CF/88, art. 114)
+    // Regra de Ouro (Roteamento por Competência Material - CF/88, arts. 105 e 114):
+    // Se for lide trabalhista:
+    // - Fontes prioritárias: TST e TRTs
+    // - STF apenas se questão constitucional identificada
+    // - STJ DEVE PERMANECER EXCLUDED_BY_JURISDICTION (NÃO consultar STJ)
+    // - Como conectores do TST e TRTs ainda não existem, retornar fail-closed SOURCE_NOT_IMPLEMENTED
+    // - Mensagem padronizada obrigatória
     if (classification.isLaborDispute) {
-      console.log(`[LegalEngine] Consulta classificada como matéria trabalhista. Fontes do STJ e direito bancário/civil bloqueadas por incompetência absoluta da matéria.`);
+      console.log(`[LegalEngine] Consulta classificada como Direito do Trabalho. STJ excluído por incompetência absoluta (CF/88, art. 114). TST/TRT pendentes de implementação.`);
+
+      const routingReport: SourceRoutingReport = {
+        sourcesEligible: classification.prioritySources,
+        sourcesExcluded: [
+          {
+            sourceId: 'stj-dados-abertos',
+            courtCode: 'STJ',
+            reason: 'Incompetência material absoluta para a controvérsia trabalhista (CF/88, art. 114)',
+            lifecycleState: 'EXCLUDED_BY_JURISDICTION',
+          },
+        ],
+        sourcesAttempted: [],
+        sourcesSucceeded: [],
+        sourcesFailed: [],
+        sourcesNotImplemented: [
+          {
+            sourceId: 'tst-jurisprudencia',
+            courtCode: 'TST',
+            name: 'Tribunal Superior do Trabalho',
+            lifecycleState: 'SOURCE_NOT_IMPLEMENTED',
+            message: 'Ainda não existe conector automatizado para a fonte competente.',
+          },
+          {
+            sourceId: 'trt-jurisprudencia',
+            courtCode: 'TRT',
+            name: 'Tribunais Regionais do Trabalho',
+            lifecycleState: 'SOURCE_NOT_IMPLEMENTED',
+            message: 'Ainda não existe conector automatizado para a fonte competente.',
+          },
+        ],
+      };
+
+      const laborDiagnostic: OfficialSourceDiagnostic = {
+        adapter: 'tst-jurisprudencia',
+        sourceName: 'Tribunal Superior do Trabalho (Jurisprudência TST / TRTs)',
+        courtCode: 'TST',
+        officialUrl: 'https://jurisprudencia.tst.jus.br/',
+        timestamp: new Date().toISOString(),
+        httpStatus: 0,
+        latencyMs: 0,
+        lifecycleState: 'SOURCE_NOT_IMPLEMENTED',
+        stateDescription: 'Ainda não existe conector automatizado para a fonte competente.',
+        bytesTransferred: 0,
+        documentsReceived: 0,
+        documentsNormalized: 0,
+        documentsRejected: 0,
+        recordsRead: 0,
+        recordsAccepted: 0,
+        recordsRejected: 0,
+        parsingErrors: [],
+        rejectionReasons: [
+          'Ainda não existe conector automatizado para a fonte competente (TST/TRT).',
+          'O STJ não foi consultado por incompetência material para a controvérsia trabalhista (CF/88, art. 114).',
+        ],
+        normalizedQueryNumber: classification.extractedProcessNumber || classification.subject,
+        connectorStatus: 'NOT_IMPLEMENTED',
+      };
+
+      const mandatoryLaborMessage = `Olá, ${lawyerGreeting}!\n\nNão foi possível realizar pesquisa jurisprudencial automatizada nas fontes materialmente competentes para esta consulta. Os conectores do TST e dos TRTs ainda não estão disponíveis ou não responderam. O STJ não foi consultado por incompetência material para a controvérsia trabalhista.`;
+
       return {
-        answer: `Olá, ${lawyerGreeting}!\n\nNão foi possível localizar, nesta consulta, precedente oficial suficientemente pertinente e verificável. Nenhuma jurisprudência será citada sem validação na fonte oficial.`,
+        answer: mandatoryLaborMessage,
         salutation: `Olá, ${lawyerGreeting}!`,
-        summary: 'Consulta com matéria trabalhista não vinculada a precedentes cíveis do STJ.',
+        summary: 'Consulta classificada em Direito do Trabalho (Justiça do Trabalho). Fontes competentes (TST/TRT) ainda não possuem conector automatizado implementado.',
         searchResults: [],
         citationReport: {
           isPassed: true,
           citationsFound: [],
           blockedCitationsCount: 0,
-          blockedReasons: ['Incompetência material absoluta da matéria (CF/88, art. 114). Fontes cíveis/STJ descartadas.'],
+          blockedReasons: ['Fontes cíveis/STJ descartadas por incompetência material absoluta (CF/88, art. 114).'],
           verifiedBadgesApplied: 0,
-          sanitizedText: '',
+          sanitizedText: mandatoryLaborMessage,
         },
         hasPrecedentsFound: false,
-        verificationNotice: 'Nenhum precedente oficial verificado no acervo para este tema.',
+        verificationNotice: 'Fontes competentes (TST/TRTs) ainda não implementadas no barramento oficial.',
         status: 'FAIL_CLOSED',
-        failureCode: 'NO_RELEVANT_PRECEDENT',
-        failureReason: FAIL_CLOSED_EXPLANATIONS.NO_RELEVANT_PRECEDENT.explanation,
-        diagnostic: {
-          adapter: 'stj-dados-abertos',
-          officialUrl: 'https://dadosabertos.web.stj.jus.br/dataset/4238da2f-c07b-4c1a-b345-4402accacdcf/resource/7ed21202-0049-4fcb-aa7c-48d810d3c499/download/processos.csv',
-          timestamp: new Date().toISOString(),
-          httpStatus: 200,
-          latencyMs: 12,
-          documentsReceived: 0,
-          documentsNormalized: 0,
-          documentsRejected: 0,
-          rejectionReasons: ['Fonte descartada por incompetência material em matéria trabalhista (CF/88, art. 114).'],
-          normalizedQueryNumber: classification.extractedProcessNumber || 'N/A',
-          connectorStatus: 'EXCLUDED_COMPETENCE',
-        },
+        failureCode: 'SOURCE_NOT_IMPLEMENTED',
+        failureReason: FAIL_CLOSED_EXPLANATIONS.SOURCE_NOT_IMPLEMENTED.explanation,
+        diagnostic: laborDiagnostic,
+        routingReport,
         isModelAvailable: this.modelStatus === 'MODEL_READY',
         modelStatus: this.modelStatus,
         modelName: this.activeModel,
@@ -316,6 +396,20 @@ export class GeminiLegalService {
       classification.isSpecificCaseNumberQuery ||
       classification.isSpecificThemeOrSumulaQuery ||
       /stj|resp|recurso especial|tema 27|juros/i.test(question);
+
+    const routingReport: SourceRoutingReport = {
+      sourcesEligible: classification.prioritySources,
+      sourcesExcluded: classification.excludedSources.map((s) => ({
+        sourceId: s,
+        courtCode: s.includes('tst') ? 'TST' : 'STJ',
+        reason: 'Incompetência material para a controvérsia examinada',
+        lifecycleState: 'EXCLUDED_BY_JURISDICTION',
+      })),
+      sourcesAttempted: mentionsStjOrCase ? ['stj-dados-abertos'] : [],
+      sourcesSucceeded: [],
+      sourcesFailed: [],
+      sourcesNotImplemented: [],
+    };
 
     if (mentionsStjOrCase) {
       try {
@@ -333,24 +427,40 @@ export class GeminiLegalService {
         if (stjRes.decision) {
           console.log(`[StjAdapter] Precedente oficial verificado localizado: ${stjRes.decision.rawCaseNumber} (${stjRes.decision.verificationStatus}). Upserting no repositório.`);
           this.storage.upsertDecision(stjRes.decision);
+          routingReport.sourcesSucceeded.push('stj-dados-abertos');
         } else {
           console.log(`[StjAdapter] Consulta ao STJ concluída sem localização de precedente específico. Motivo: ${stjRes.diagnostic.rejectionReasons.join('; ')}`);
+          if (stjRes.diagnostic.lifecycleState === 'SEARCH_SUCCESS') {
+            routingReport.sourcesSucceeded.push('stj-dados-abertos');
+          } else {
+            routingReport.sourcesFailed.push('stj-dados-abertos');
+          }
         }
       } catch (err: any) {
         console.error('[StjAdapter] Erro na consulta ao adaptador STJ:', err);
         stjDiagnostic = {
           adapter: 'stj-dados-abertos',
+          sourceName: 'Superior Tribunal de Justiça - Portal de Dados Abertos (SCON/CKAN)',
+          courtCode: 'STJ',
           officialUrl: 'https://dadosabertos.web.stj.jus.br/',
           timestamp: new Date().toISOString(),
           httpStatus: 503,
           latencyMs: 0,
+          lifecycleState: 'SOURCE_UNAVAILABLE',
+          stateDescription: `Exceção técnica no conector STJ: ${err?.message || String(err)}`,
+          bytesTransferred: 0,
           documentsReceived: 0,
           documentsNormalized: 0,
           documentsRejected: 0,
+          recordsRead: 0,
+          recordsAccepted: 0,
+          recordsRejected: 0,
+          parsingErrors: [err?.message || String(err)],
           rejectionReasons: [`Exceção técnica no conector STJ: ${err?.message || String(err)}`],
           normalizedQueryNumber: classification.extractedProcessNumber || '',
           connectorStatus: 'FAILED',
         };
+        routingReport.sourcesFailed.push('stj-dados-abertos');
       }
     }
 
@@ -401,6 +511,7 @@ export class GeminiLegalService {
         failureCode,
         failureReason: failInfo.explanation,
         diagnostic: stjDiagnostic,
+        routingReport,
         isModelAvailable: this.modelStatus === 'MODEL_READY',
         modelStatus: this.modelStatus,
         modelName: this.activeModel,
@@ -431,7 +542,8 @@ export class GeminiLegalService {
       const prompt = `Você é o mecanismo de Pesquisa Jurisprudencial e Síntese Forense do JurisFlow.
 INTERLOCUTOR(A):
 - Você está prestando consultoria jurídica para: ${lawyerGreeting} (${officeName}).
-- Inicie a sua resposta cumprimentando cordialmente o(a) interlocutor(a) ("Olá, ${lawyerGreeting}!").
+- Inicie a sua resposta OBRIGATORIAMENTE com a saudação exata: "Olá, ${lawyerGreeting}!".
+- ATENÇÃO DE GÊNERO: A titular é MULHER (${lawyerGreeting}). JAMAIS utilize o tratamento masculino "Dr. Gabriela" sob qualquer pretexto.
 
 DIRETRIZ DE SEGURANÇA MÁXIMA (ZERO-HALLUCINATION & FAIL-CLOSED):
 - Sua resposta DEVE ser estritamente fundamentada no CONTEXTO DE FONTES OFICIAIS fornecido abaixo.
@@ -515,14 +627,15 @@ ${contextPrompt}`;
         failureCode: 'MODEL_UNAVAILABLE',
         failureReason: FAIL_CLOSED_EXPLANATIONS.MODEL_UNAVAILABLE.explanation,
         diagnostic: stjDiagnostic,
+        routingReport,
         isModelAvailable: false,
         modelStatus: 'MODEL_UNAVAILABLE',
         modelName: this.activeModel,
       };
     }
 
-    // Limpeza profunda de qualquer Markdown residual
-    const cleanedText = GeminiLegalService.stripMarkdown(rawAiText);
+    // Limpeza profunda de qualquer Markdown residual e correção de saudação
+    const cleanedText = GeminiLegalService.stripMarkdown(rawAiText).replace(/\bDr\.\s*Gabriela\b/g, 'Dra. Gabriela');
 
     // Validação com CitationGuard
     const retrievedIds = new Set(precedents.map((p) => p.id));
@@ -531,7 +644,7 @@ ${contextPrompt}`;
       .filter((d) => retrievedIds.has(d.id));
 
     const citationReport = this.citationGuard.validateAndSanitize(cleanedText, verifiedDecisionsForThisQuery);
-    const finalCleanText = GeminiLegalService.stripMarkdown(citationReport.sanitizedText);
+    const finalCleanText = GeminiLegalService.stripMarkdown(citationReport.sanitizedText).replace(/\bDr\.\s*Gabriela\b/g, 'Dra. Gabriela');
 
     return {
       answer: finalCleanText,
@@ -543,6 +656,7 @@ ${contextPrompt}`;
       verificationNotice: `${precedents.length} precedente(s) oficial(is) recuperado(s) e auditado(s) pelo CitationGuard.`,
       status: 'SUCCESS',
       diagnostic: stjDiagnostic,
+      routingReport,
       isModelAvailable: true,
       modelStatus: 'MODEL_READY',
       modelName: this.activeModel,
