@@ -26,8 +26,12 @@ export interface TenantVisualIdentity {
   showFooterPhone?: boolean;
   showFooterEmail?: boolean;
   showFooterText?: boolean;
+  showDigitalSignatureSeal?: boolean;
   // Visual layout & design customization
-  headerStyle?: 'MINIMALIST' | 'MODERN_BAR' | 'CLASSIC_CENTERED' | 'SIDE_BY_SIDE' | 'CUSTOM_DESIGN' | 'OFFICIAL_EMBLEM' | 'MODERN' | 'CLASSIC';
+  headerStyle?: 'FULL_BANNER' | 'MINIMALIST' | 'MODERN_BAR' | 'CLASSIC_CENTERED' | 'SIDE_BY_SIDE' | 'CUSTOM_DESIGN' | 'OFFICIAL_EMBLEM' | 'MODERN' | 'CLASSIC';
+  headerBannerUrl?: string; // High-resolution cropped official header banner
+  pageBackgroundUrl?: string; // Full official letterhead page background
+  bannerHeightRatio?: number;
   accentColor?: string;
   borderStyle?: 'SOLID' | 'DOUBLE' | 'DASHED' | 'NONE';
   borderWidth?: '1px' | '2px' | '3px' | '4px';
@@ -46,6 +50,8 @@ export interface TenantVisualIdentity {
     fileType: string;
     fileSize: number;
     dataUrl?: string;
+    headerBannerUrl?: string;
+    pageBackgroundUrl?: string;
     uploadedAt: string;
     detectedFonts?: string[];
     detectedColors?: string[];

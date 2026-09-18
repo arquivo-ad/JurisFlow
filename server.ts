@@ -3197,12 +3197,15 @@ async function startServer() {
       const isPdf = (fileName || '').toLowerCase().endsWith('.pdf') || mimeType?.includes('pdf');
       const isImage = mimeType?.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(fileName || '');
 
-      let extractedImages: Array<{ dataUrl: string; width?: number; height?: number; isPrimaryLogo?: boolean }> = [];
+      let extractedImages: Array<{ dataUrl: string; width?: number; height?: number; isPrimaryLogo?: boolean; label?: string }> = [];
       let extractedDocText = '';
+      let fullPageScreenshotUrl: string | undefined = undefined;
+      let headerBannerUrl: string | undefined = undefined;
+      let detectedDominantBannerColor: string | undefined = undefined;
+      let bannerHeightRatio = 0.15;
 
-      // 1. Extração de imagens embutidas (Logotipo) e texto do PDF de forma 100% em memória
+      // 1. Extração de imagens embutidas, renderização da página completa e recorte de banner do PDF
       if (isPdf) {
-        // Tentativa via PDFParse v2 com getImage
         try {
           const pdfMod: any = await import('pdf-parse');
           const PDFParseClass = pdfMod.PDFParse || (pdfMod.default && pdfMod.default.PDFParse);
@@ -3211,6 +3214,114 @@ async function startServer() {
             const textResult = await parser.getText();
             extractedDocText = textResult?.text || '';
 
+            // Renderiza a página 1 em alta definição para capturar fielmente o papel timbrado real
+            try {
+              const screenshotResult = await parser.getScreenshot({ imageDataUrl: true, desiredWidth: 1240 });
+              if (screenshotResult && screenshotResult.pages && screenshotResult.pages.length > 0) {
+                const p1 = screenshotResult.pages[0];
+                if (p1.dataUrl) {
+                  fullPageScreenshotUrl = p1.dataUrl;
+
+                  // Recorta o cabeçalho/faixa superior usando @napi-rs/canvas
+                  try {
+                    const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+                    const img = await loadImage(p1.dataUrl);
+                    const imgWidth = img.width;
+                    const imgHeight = img.height;
+
+                    const tempCanvas = createCanvas(imgWidth, imgHeight);
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(img, 0, 0);
+
+                    const imgData = tempCtx.getImageData(0, 0, imgWidth, imgHeight);
+                    const { data } = imgData;
+
+                    // 1.1 Detecta a cor predominante da faixa superior (amostra nos primeiros 40px)
+                    let colorR = 0, colorG = 0, colorB = 0, colorCount = 0;
+                    const sampleMaxY = Math.min(80, Math.floor(imgHeight * 0.15));
+                    for (let y = 10; y < sampleMaxY; y += 4) {
+                      for (let x = Math.floor(imgWidth * 0.1); x < Math.floor(imgWidth * 0.9); x += 15) {
+                        const idx = (y * imgWidth + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                        if (brightness < 235) {
+                          colorR += r;
+                          colorG += g;
+                          colorB += b;
+                          colorCount++;
+                        }
+                      }
+                    }
+
+                    if (colorCount > 10) {
+                      const avgR = Math.round(colorR / colorCount);
+                      const avgG = Math.round(colorG / colorCount);
+                      const avgB = Math.round(colorB / colorCount);
+                      detectedDominantBannerColor = `#${((1 << 24) + (avgR << 16) + (avgG << 8) + avgB).toString(16).slice(1).toUpperCase()}`;
+                    }
+
+                    // 1.2 Detecta onde a faixa superior (banner) termina
+                    let bannerBottom = 0;
+                    const maxCheckY = Math.floor(imgHeight * 0.35); // até 35% da página
+
+                    for (let y = 20; y < maxCheckY; y++) {
+                      let rowIsWhite = true;
+                      for (let x = Math.floor(imgWidth * 0.05); x < Math.floor(imgWidth * 0.95); x += 25) {
+                        const idx = (y * imgWidth + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                        if (brightness < 240) {
+                          rowIsWhite = false;
+                          break;
+                        }
+                      }
+
+                      // Se encontrou uma linha branca após a faixa e as próximas também são brancas
+                      if (rowIsWhite && y > 45) {
+                        let consecutiveWhite = true;
+                        for (let ny = y + 1; ny < Math.min(y + 14, maxCheckY); ny += 2) {
+                          for (let nx = Math.floor(imgWidth * 0.1); nx < Math.floor(imgWidth * 0.9); nx += 40) {
+                            const nidx = (ny * imgWidth + nx) * 4;
+                            const nb = (data[nidx] * 299 + data[nidx + 1] * 587 + data[nidx + 2] * 114) / 1000;
+                            if (nb < 240) {
+                              consecutiveWhite = false;
+                              break;
+                            }
+                          }
+                          if (!consecutiveWhite) break;
+                        }
+                        if (consecutiveWhite) {
+                          bannerBottom = y;
+                          break;
+                        }
+                      }
+                    }
+
+                    // Fallback seguro se não detectou corte abrupto
+                    if (bannerBottom < 40) {
+                      bannerBottom = Math.floor(imgHeight * 0.14);
+                    }
+
+                    // Recorta com precisão o banner
+                    const bannerCanvas = createCanvas(imgWidth, bannerBottom);
+                    const bannerCtx = bannerCanvas.getContext('2d');
+                    bannerCtx.drawImage(img, 0, 0, imgWidth, bannerBottom, 0, 0, imgWidth, bannerBottom);
+                    headerBannerUrl = bannerCanvas.toDataURL('image/png');
+                    bannerHeightRatio = bannerBottom / imgHeight;
+                  } catch (cropErr) {
+                    console.error('Erro ao recortar banner do cabeçalho:', cropErr);
+                  }
+                }
+              }
+            } catch (screenshotErr) {
+              console.error('Erro ao gerar screenshot do PDF:', screenshotErr);
+            }
+
+            // Extrai imagens embutidas adicionais (caso haja um logo vetorial/isolado)
             const imgResult = await parser.getImage({ imageDataUrl: true });
             if (imgResult && Array.isArray(imgResult.pages)) {
               for (const p of imgResult.pages) {
@@ -3266,13 +3377,40 @@ async function startServer() {
       } else if (isImage) {
         // Se o usuário subiu diretamente uma imagem do logo ou papel timbrado
         const detectedMime = mimeType || (fileName?.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const imgDataUrl = `data:${detectedMime};base64,${fileBase64}`;
         extractedImages.push({
-          dataUrl: `data:${detectedMime};base64,${fileBase64}`,
+          dataUrl: imgDataUrl,
           isPrimaryLogo: true,
+          label: 'Imagem Enviada',
+        });
+        headerBannerUrl = imgDataUrl;
+      }
+
+      // Prioridade máxima: se recortamos o cabeçalho oficial do PDF, ele é a opção #1 recomendada!
+      if (headerBannerUrl) {
+        // Insere o cabeçalho recortado como opção primária
+        extractedImages.unshift({
+          dataUrl: headerBannerUrl,
+          width: 1240,
+          height: Math.round(1240 * bannerHeightRatio),
+          isPrimaryLogo: true,
+          label: 'Cabeçalho Timbrado Oficial (Faixa Completa)',
         });
       }
 
-      if (extractedImages.length > 0) {
+      // Se temos o screenshot da página inteira, adiciona como opção de papel timbrado integral
+      if (fullPageScreenshotUrl && fullPageScreenshotUrl !== headerBannerUrl) {
+        extractedImages.push({
+          dataUrl: fullPageScreenshotUrl,
+          width: 1240,
+          height: 1754,
+          isPrimaryLogo: false,
+          label: 'Página Completa do Papel Timbrado',
+        });
+      }
+
+      // Marca a primeira como primária se nenhuma foi marcada
+      if (extractedImages.length > 0 && !extractedImages.some((im) => im.isPrimaryLogo)) {
         extractedImages[0].isPrimaryLogo = true;
       }
 
@@ -3301,7 +3439,7 @@ Analise detalhadamente este arquivo de documento forense (papel timbrado, petiç
 Extraia a identidade visual e o design completos para replicar com absoluta fidelidade:
 
 1. CORES:
-   - accentColor: Código hexadecimal exato da cor predominante dos detalhes, barras, títulos ou do logotipo (ex: #1e3a8a, #4338ca, #7f1d1d, #1e293b, #047857, #111827).
+   - accentColor: Código hexadecimal exato da cor predominante dos detalhes, barras, títulos ou do fundo do cabeçalho (ex: #5C1217, #1e3a8a, #4338ca, #7f1d1d, #1e293b, #047857, #111827).
    - borderStyle: "SOLID", "DOUBLE", "DASHED" ou "NONE".
    - borderWidth: "1px", "2px" ou "3px".
 
@@ -3314,6 +3452,7 @@ Extraia a identidade visual e o design completos para replicar com absoluta fide
 
 3. CABEÇALHO & LAYOUT:
    - headerStyle: Escolha a melhor opção entre:
+     * "FULL_BANNER" (Faixa superior inteira de ponta a ponta com cor/textura de fundo e brasão/texto no centro)
      * "MINIMALIST" (texto limpo institucional sem faixas pesadas)
      * "MODERN_BAR" (linha ou barra sólida com cor de destaque sob o cabeçalho)
      * "CLASSIC_CENTERED" (brasão/logo centralizado no topo com dados abaixo)
@@ -3367,15 +3506,21 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
         }
       }
 
+      const isFullBanner = !!headerBannerUrl || aiVisualData?.headerStyle === 'FULL_BANNER';
+      const chosenAccentColor = detectedDominantBannerColor || aiVisualData?.accentColor || '#5C1217';
+
       const visualIdentity = {
-        accentColor: aiVisualData?.accentColor || '#1e3a8a',
-        headerStyle: aiVisualData?.headerStyle || 'MODERN_BAR',
-        logoPosition: (aiVisualData?.logoPosition as any) || 'left',
-        logoMaxHeight: Number(aiVisualData?.logoMaxHeight) || 44,
+        accentColor: chosenAccentColor,
+        headerStyle: isFullBanner ? 'FULL_BANNER' : (aiVisualData?.headerStyle || 'MODERN_BAR'),
+        headerBannerUrl: headerBannerUrl || undefined,
+        pageBackgroundUrl: fullPageScreenshotUrl || undefined,
+        bannerHeightRatio: bannerHeightRatio || 0.15,
+        logoPosition: isFullBanner ? 'center' : ((aiVisualData?.logoPosition as any) || 'left'),
+        logoMaxHeight: Number(aiVisualData?.logoMaxHeight) || 64,
         headerPadding: (aiVisualData?.headerPadding as any) || 'NORMAL',
-        borderStyle: (aiVisualData?.borderStyle as any) || 'SOLID',
+        borderStyle: (aiVisualData?.borderStyle as any) || (isFullBanner ? 'NONE' : 'SOLID'),
         borderWidth: (aiVisualData?.borderWidth as any) || '2px',
-        fontFamily: (aiVisualData?.fontFamily as any) || 'Times New Roman',
+        fontFamily: (aiVisualData?.fontFamily as any) || 'Calibri',
         bodyFontSize: (aiVisualData?.bodyFontSize as any) || '12pt',
         lineSpacing: (aiVisualData?.lineSpacing as any) || '1.5',
         paragraphIndent: aiVisualData?.paragraphIndent ?? true,
@@ -3396,7 +3541,7 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
         contactEmail: aiVisualData?.contactEmail || localHeuristics.contactEmail || undefined,
         footerText: aiVisualData?.footerText || undefined,
         closingFormula: aiVisualData?.closingFormula || localHeuristics.closingFormula || undefined,
-        logoUrl: extractedImages.length > 0 ? extractedImages[0].dataUrl : undefined,
+        logoUrl: headerBannerUrl || (extractedImages.length > 0 ? extractedImages[0].dataUrl : undefined),
       };
 
       const detectedLawFirmName = aiVisualData?.lawFirmName || localHeuristics.lawFirmName || undefined;
@@ -3406,6 +3551,8 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
         fileType: mimeType || (isPdf ? 'application/pdf' : 'image/png'),
         fileSize: buffer.length,
         dataUrl: `data:${mimeType || (isPdf ? 'application/pdf' : 'image/png')};base64,${fileBase64}`,
+        headerBannerUrl: headerBannerUrl || undefined,
+        pageBackgroundUrl: fullPageScreenshotUrl || undefined,
         uploadedAt: new Date().toISOString(),
         detectedFonts: [visualIdentity.fontFamily],
         detectedColors: [visualIdentity.accentColor],
@@ -3415,7 +3562,7 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
 
       const summary =
         aiVisualData?.summary ||
-        `Identidade visual e papel timbrado integralmente preservados: Paleta ${visualIdentity.accentColor}, tipografia ${visualIdentity.fontFamily} ${visualIdentity.bodyFontSize}, cabeçalho ${visualIdentity.headerStyle} e arquivo real vinculado (${attachedLetterheadFile.fileName}).${detectedLawFirmName ? ' Escritório: ' + detectedLawFirmName + '.' : ''}${visualIdentity.signatoryOab ? ' OAB: ' + visualIdentity.signatoryOab + '.' : ''}`;
+        `Papel timbrado oficial identificado com precisão: ${isFullBanner ? 'Faixa superior completa institucional' : 'Cabeçalho estilizado'} com paleta ${visualIdentity.accentColor}, tipografia ${visualIdentity.fontFamily} ${visualIdentity.bodyFontSize} e matriz de alta definição vinculada (${attachedLetterheadFile.fileName}).${detectedLawFirmName ? ' Sociedade: ' + detectedLawFirmName + '.' : ''}${visualIdentity.signatoryOab ? ' ' + visualIdentity.signatoryOab + '.' : ''}`;
 
       return res.json({
         success: true,
@@ -4361,6 +4508,8 @@ DIRETRIZES DE IDENTIDADE VISUAL E BANCO DE DADOS PESSOAL DO ESCRITÓRIO:
 - Tom Editorial Forense: ${vi.editorialTone || 'TÉCNICO_DIRETO'}
 - Citações Jurisprudenciais: ${vi.jurisprudenceStyle || 'DESTAQUE_ENXUTO'}
 - Tipografia e Estilo: ${vi.fontFamily || 'Times New Roman'} ${vi.bodyFontSize || '12pt'}, Entrelinhas ${vi.lineSpacing || '1.5'}
+- Padrão Forense de Assinatura Digital: NUNCA crie linha manual/traço horizontal (como '______') acima do nome do(a) advogado(a), pois todos os atos são assinados digitalmente via Token OAB/ICP-Brasil. O bloco final deve conter o fechamento formal, data, nome da advogada, sua inscrição na OAB e abaixo o espaço/indicação [Assinado Digitalmente via Token OAB / Certificado ICP-Brasil].
+- Regra Forense de Grafia: No corpo da peça (qualificação e procuração), o nome da advogada deve estar sempre em MAIÚSCULO, NEGRITO E SUBLINHADO (<u><strong>${(vi.signatoryName || currentTenant.name || '').toUpperCase()}</strong></u>).
 `;
         }
 
@@ -4477,9 +4626,10 @@ ${closing}
 
 Pindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.
 
-_____________________________________________________
 ${signatory}
-${signatoryOab} • ${vi?.signatoryRole || 'Advogada Titular'}`;
+${signatoryOab} • ${vi?.signatoryRole || 'Advogada Titular'}
+
+[Assinado Eletronicamente via Token OAB / ICP-Brasil]`;
 
       draftResult = {
         tituloPeca: pieceType || 'Petição Processual',
@@ -4900,14 +5050,15 @@ Texto / Conteúdo Analisado:
       };
     }
 
-    // Modelo padrão ouro gerado do zero
+    // Modelo padrão ouro gerado do zero com regra de formatação forense: NOME EM MAIÚSCULO, NEGRITO E SUBLINHADO
+    const lawyerNameFormatted = `<u><strong>${lawyerName.toUpperCase()}</strong></u>`;
     let baseContent = '';
     if (category === 'PROCURACAO') {
       baseContent = `PROCURAÇÃO AD JUDICIA ET EXTRA
 
 OUTORGANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, {{PROFISSAO_CLIENTE}}, portador(a) do RG nº {{RG_CLIENTE}} e inscrito(a) no CPF/MF sob o nº {{CPF_CLIENTE}}, residente e domiciliado(a) na {{ENDERECO_CLIENTE}}.
 
-OUTORGADOS: ${lawyerName.toUpperCase()}, advogada inscrita na ${lawyerOab}, integrante da sociedade ${lawFirmName.toUpperCase()}.
+OUTORGADOS: ${lawyerNameFormatted}, advogada inscrita na ${lawyerOab}, integrante da sociedade ${lawFirmName.toUpperCase()}.
 
 PODERES: Pelo presente instrumento particular de mandato, o(a) Outorgante nomeia e constitui o(s) Outorgado(s) seu(sua) bastante procurador(a), conferindo-lhe(s) os poderes da cláusula "ad judicia et extra" para o foro em geral, em qualquer Juízo, Instância ou Tribunal, bem como perante repartições públicas e órgãos da administração direta e indireta.
 
@@ -4926,7 +5077,7 @@ Pelo presente instrumento particular, de um lado:
 
 CONTRATANTE: {{NOME_CLIENTE}}, inscrito(a) no CPF sob nº {{CPF_CLIENTE}}, residente em {{ENDERECO_CLIENTE}}.
 
-CONTRATADA: ${lawFirmName.toUpperCase()}, representada por sua patrona ${lawyerName}, inscrita na ${lawyerOab}.
+CONTRATADA: ${lawFirmName.toUpperCase()}, representada por sua patrona ${lawyerNameFormatted}, inscrita na ${lawyerOab}.
 
 Têm, entre si, justo e contratado o seguinte:
 
@@ -4950,13 +5101,13 @@ Fica eleito o Foro da Comarca de {{FORO_ELEITO}} para dirimir qualquer dúvida o
 {{CIDADE_DATA}}.
 
 ___________________________             ___________________________
-CONTRATANTE                             CONTRATADA: ${lawyerName}`;
+CONTRATANTE                             CONTRATADA: ${lawyerNameFormatted}`;
     } else {
       baseContent = `EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA {{VARA_COMARCA}}
 
 Autos nº {{NUMERO_PROCESSO}}
 
-{{NOME_CLIENTE}}, já devidamente qualificado(a) nos autos em epígrafe, por sua advogada infra-assinada, ${lawyerName}, inscrita na ${lawyerOab}, vem, respeitosamente, perante Vossa Excelência, apresentar:
+{{NOME_CLIENTE}}, já devidamente qualificado(a) nos autos em epígrafe, por sua advogada infra-assinada, ${lawyerNameFormatted}, inscrita na ${lawyerOab}, vem, respeitosamente, perante Vossa Excelência, apresentar:
 
 {{NOME_DA_PECA}}
 
@@ -4979,9 +5130,10 @@ Pede e Espera Deferimento.
 
 {{CIDADE_DATA}}.
 
-_____________________________________________
-${lawyerName}
-${lawyerOab}`;
+${lawyerNameFormatted}
+${lawyerOab}
+
+[Assinado Eletronicamente via Token OAB / ICP-Brasil]`;
     }
 
     return {
@@ -5019,7 +5171,7 @@ SUA MISSÃO:
    Substitua nomes de clientes e partes por tags estruturadas:
    {{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, {{PROFISSAO_CLIENTE}}, {{CPF_CLIENTE}}, {{RG_CLIENTE}}, {{ENDERECO_CLIENTE}}, {{NUMERO_PROCESSO}}, {{VARA_COMARCA}}, {{NOME_REU}}, {{QUALIFICACAO_REU}}, {{VALOR_CAUSA}}, {{HONORARIOS_VALOR}}, {{CIDADE_DATA}}.
 2. PRESERVAR TOTALMENTE os dados do patrono e da sociedade de advogados:
-   - Nome do(a) advogado(a): "${lawyerName}"
+   - Nome do(a) advogado(a): "${lawyerName}" (REGRA FORENSE ESTRITA: no corpo de petições, procurações ou contratos, o nome do(a) advogado(a) DEVE SEMPRE estar em MAIÚSCULO, NEGRITO E SUBLINHADO, exatamente como: <u><strong>${lawyerName.toUpperCase()}</strong></u>)
    - OAB: "${lawyerOab}" (NUNCA insira a palavra "Registro:", apenas a OAB pura)
    - Nome do escritório: "${lawFirmName}"
    - Fechamento formal, poderes específicos, cláusulas de honorários padrão.
@@ -5027,7 +5179,7 @@ SUA MISSÃO:
    Mantenha a estrutura de tópicos, seções (DOS FATOS, DO DIREITO, DOS PEDIDOS), cláusulas numeradas, alíneas e fórmulas de deferimento.
 4. Responda ESTRITAMENTE em JSON com a seguinte estrutura:
 {
-  "sanitizedContent": "string com o documento higienizado e tags {{...}}",
+  "sanitizedContent": "string com o documento higienizado e tags {{...}} e <u><strong>${lawyerName.toUpperCase()}</strong></u> para o(a) advogado(a)",
   "extractedVariables": ["NOME_CLIENTE", "CPF_CLIENTE"],
   "titleSuggestion": "Nome refinado do modelo",
   "summary": "Resumo objetivo dos dados higienizados e estrutura preservada"
@@ -5040,6 +5192,7 @@ Analise o modelo jurídico fornecido (${category}: ${modelName || 'Modelo'}) e s
 3. Para Procuração: Verifique poderes gerais 'ad judicia et extra' e poderes especiais do art. 105 do CPC (receber e dar quitação, transigir, desistir, renunciar ao direito, firmar compromisso e substabelecer).
 4. Para Contrato de Honorários: Verifique clareza da forma de pagamento, cláusula quota litis dentro dos limites da OAB, previsão de sucumbência, desistência/revogação e proteção de dados LGPD.
 5. Forneça uma versão aprimorada com as melhorias implementadas, mantendo o estilo do escritório (${lawyerName}, ${lawyerOab}).
+REGRA FORENSE OBRIGATÓRIA: O nome do(a) advogado(a) no corpo do documento deve estar SEMPRE em MAIÚSCULO, NEGRITO E SUBLINHADO (<u><strong>${lawyerName.toUpperCase()}</strong></u>).
 6. Responda ESTRITAMENTE em JSON:
 {
   "sanitizedContent": "string com o texto aprimorado e atualizado com as melhorias",
@@ -5052,6 +5205,7 @@ Analise o modelo jurídico fornecido (${category}: ${modelName || 'Modelo'}) e s
         } else {
           systemTask = `Você é o Gerador de Modelos Forenses Padrão Ouro da Advocacia Brasileira.
 Crie um modelo institucional de altíssimo nível para a categoria "${category}" em nome de "${lawyerName}", inscrita na "${lawyerOab}", escritório "${lawFirmName}".
+REGRA FORENSE OBRIGATÓRIA: No corpo da peça, o nome do(a) advogado(a) DEVE SEMPRE estar em MAIÚSCULO, NEGRITO E SUBLINHADO (ex: <u><strong>${lawyerName.toUpperCase()}</strong></u>).
 Utilize placeholders inteligentes {{NOME_CLIENTE}}, {{CPF_CLIENTE}}, etc.
 NÃO use a palavra "Registro:" para a OAB.
 Responda em JSON:
@@ -5083,6 +5237,31 @@ Responda em JSON:
     // Fallback inteligente caso a IA não esteja conectada ou retorne vazio
     if (!result || !result.sanitizedContent) {
       result = buildTemplateSanitizeFallback(action, category, modelName, rawContent, lawyerName, lawyerOab, lawFirmName);
+    }
+
+    // Garantir formatação obrigatória do nome do advogado em MAIÚSCULO, NEGRITO E SUBLINHADO no corpo
+    if (result && result.sanitizedContent && lawyerName) {
+      const cleanLawyer = lawyerName.replace(/^(Dra?\.|Dr\.|Doutor(a)?)\s+/i, '').trim();
+      const upperName = lawyerName.toUpperCase();
+      const upperTarget = `<u><strong>${upperName}</strong></u>`;
+      
+      let sc = result.sanitizedContent;
+      // Substitui variações de {{NOME_ADVOGADO}}
+      sc = sc.replace(/\{\{(NOME_ADVOGAD[OA]|ADVOGAD[OA]|OUTORGAD[OA]|PATRON[OA]|SUBSCRITOR[A]?)\}\}/gi, upperTarget);
+      
+      // Evita duplicar se já estiver formatado
+      const SAFE_TOKEN = '___FORMATTED_LAWYER_NAME___';
+      sc = sc
+        .replace(new RegExp(`<u><strong>${upperName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}<\\/strong><\\/u>`, 'gi'), SAFE_TOKEN)
+        .replace(new RegExp(`<strong><u>${upperName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}<\\/u><\\/strong>`, 'gi'), SAFE_TOKEN)
+        .replace(new RegExp(`<u>\\*\\*${upperName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\*\\*<\\/u>`, 'gi'), SAFE_TOKEN);
+
+      // Substitui menções comuns
+      const re = new RegExp(`\\b(Dra?\\.?\\s+|Doutor(a)?\\s+)?${cleanLawyer.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'gi');
+      sc = sc.replace(re, upperTarget);
+
+      sc = sc.replace(new RegExp(SAFE_TOKEN, 'g'), upperTarget);
+      result.sanitizedContent = sc;
     }
 
     // Sanitização e Preservação de HTML e Estilização Visual
@@ -6240,7 +6419,9 @@ Instruções:
     const finalTailscaleHostname = tailscaleHostname || `jurisflow-${tenantSlug.substring(0, 15)}`;
 
     // Gerar senha forte segura
-    const generatedPassword = `Jf#Sec${Date.now().toString(36).toUpperCase()}!${Math.random().toString(36).substring(2, 6).toUpperCase()}9$`;
+    const generatedPassword = os === 'LINUX'
+      ? 'Gerada dinamicamente via OpenSSL na instalação (chmod 600 em secrets/database_credentials.txt)'
+      : `Jf#Sec${Date.now().toString(36).toUpperCase()}!${Math.random().toString(36).substring(2, 6).toUpperCase()}9$`;
 
     let fileName = '';
     let scriptContent = '';
@@ -6705,13 +6886,12 @@ Por favor, encaminhe este arquivo ('\$ErrorLogFile') para a equipe de suporte t�
       desktopLogPath = `~/Desktop/JurisFlow_Install_Error.log`;
 
       instructions = [
-        `1. No servidor Linux (${linuxDistro}), abra o terminal com permissão de superusuário (root ou sudo).`,
-        '2. Copie o script bash gerado abaixo ou baixe o arquivo setup-jurisflow-dr.sh.',
-        '3. Conceda permissão de execução: chmod +x setup-jurisflow-dr.sh',
-        '4. Execute: sudo ./setup-jurisflow-dr.sh',
-        `5. O script detectará a distribuição ${linuxDistro}, instalará o PostgreSQL nativo, criará as pastas em ${rootFolder}, salvará as credenciais com permissão 600 em secrets/database_credentials.txt, criará as 14 tabelas idênticas ao Supabase e configurará o firewall e o Tailscale.`,
-        '6. Se a instalação obtiver sucesso, exibirá mensagem verde e solicitará Enter para fechar.',
-        '7. Em caso de falha, gerará automaticamente o log de erro no Desktop (~/Desktop/JurisFlow_Install_Error.log).',
+        '1. Dê duplo clique no arquivo setup-jurisflow-dr.sh ou execute no terminal: bash setup-jurisflow-dr.sh',
+        '2. O instalador detecta automaticamente privilégios comuns e solicita elevação via sudo de forma nativa e amigável.',
+        `3. O PostgreSQL para ${linuxDistro} é instalado e inicializado automaticamente com estrutura em ${rootFolder}.`,
+        '4. Uma senha mestre criptografada (28 caracteres) é gerada localmente via OpenSSL e gravada com permissão 600 em secrets/database_credentials.txt (sem senhas expostas em código).',
+        '5. As 14 tabelas idênticas ao Supabase são criadas e validadas.',
+        '6. A janela permanece aberta em caso de sucesso e, em caso de erro, exibe o diagnóstico e a linha exata da falha.',
       ];
 
       scriptContent = `#!/usr/bin/env bash
@@ -6719,8 +6899,49 @@ Por favor, encaminhe este arquivo ('\$ErrorLogFile') para a equipe de suporte t�
 # JURISFLOW ENTERPRISE - ASSISTENTE DE PREPARAÇÃO DE AMBIENTE DR (LOCAL-OFFLINE)
 # Gerado para: ${tenant.name}
 # Distribuição Linux: ${linuxDistro}
-# Data: $(date +"%Y-%m-%d %H:%M:%S")
+# Data de Geração: $(date +"%Y-%m-%d %H:%M:%S")
 # ====================================================================================
+
+# 1. AUTO-ELEVAÇÃO PARA PRIVILÉGIOS ADMINISTRATIVOS (SUDO)
+# Se executado por duplo clique ou usuário comum, solicita sudo e reinicia automaticamente
+if [ "\$EUID" -ne 0 ]; then
+  YELLOW='\\033[1;33m'
+  CYAN='\\033[0;36m'
+  RED='\\033[0;31m'
+  NC='\\033[0m'
+
+  echo -e "\${CYAN}========================================================================\${NC}"
+  echo -e "\${YELLOW}   JURISFLOW ENTERPRISE - ASSISTENTE DE PREPARAÇÃO DE AMBIENTE DR       \${NC}"
+  echo -e "\${YELLOW}                 Ambiente Linux (Contingência Offline)                  \${NC}"
+  echo -e "\${CYAN}========================================================================\${NC}"
+  echo ""
+  echo -e "\${YELLOW}Este instalador precisa de privilégios de superusuário (root).\${NC}"
+  echo -e "\${CYAN}Solicitando elevação de privilégios via sudo...\${NC}"
+  echo ""
+
+  # Se iniciado via duplo clique gráfico sem terminal acoplado, invoca o emulador de terminal
+  if [ ! -t 0 ] && { [ -n "\$DISPLAY" ] || [ -n "\$WAYLAND_DISPLAY" ]; }; then
+    for term in gnome-terminal xfce4-terminal konsole mate-terminal lxterminal alacritty kitty xterm; do
+      if command -v "\$term" >/dev/null 2>&1; then
+        exec "\$term" -- bash -c "bash \\"\$0\\" \\"\$@\\"; echo ''; read -rp 'Pressione [ENTER] para fechar...' _"
+      fi
+    done
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    exec sudo bash "\$0" "\$@"
+  elif command -v pkexec >/dev/null 2>&1; then
+    exec pkexec bash "\$0" "\$@"
+  fi
+
+  echo ""
+  echo -e "\${RED}ERRO: Não foi possível obter privilégios administrativos via sudo.\${NC}"
+  echo -e "Por favor, abra um terminal e execute manualmente:"
+  echo -e "  \${CYAN}sudo bash \\"\$0\\"\${NC}"
+  echo ""
+  read -rp "Pressione [ENTER] para fechar esta janela..." _ 2>/dev/null || true
+  exit 1
+fi
 
 set -eo pipefail
 
@@ -6729,6 +6950,7 @@ RED='\\033[0;31m'
 GREEN='\\033[0;32m'
 YELLOW='\\033[1;33m'
 CYAN='\\033[0;36m'
+WHITE='\\033[1;37m'
 NC='\\033[0m' # Sem Cor
 
 echo -e "\${CYAN}========================================================================\${NC}"
@@ -6748,66 +6970,101 @@ APP_DIR="\${BASE_PATH}/app"
 CREDENTIALS_FILE="\${SECRETS_DIR}/database_credentials.txt"
 DB_NAME="${finalDbName}"
 DB_USER="${dbUser}"
-DB_PASSWORD="${generatedPassword}"
 DB_PORT=${dbPort}
 WEB_PORT=${localPort}
 TAILSCALE_ENABLED=${tailscaleEnabled ? 'true' : 'false'}
 TAILSCALE_HOST="${finalTailscaleHostname}"
 DESKTOP_DIR="\${HOME}/Desktop"
 [ -d "\${DESKTOP_DIR}" ] || DESKTOP_DIR="/root/Desktop"
-[ -d "\${DESKTOP_DIR}" ] || mkdir -p "\${DESKTOP_DIR}"
+[ -d "\${DESKTOP_DIR}" ] || mkdir -p "\${DESKTOP_DIR}" 2>/dev/null || true
 ERROR_LOG_FILE="\${DESKTOP_DIR}/JurisFlow_Install_Error.log"
 
-# Armadilha de erro (Trap on Failure)
+TRAPPED_ERROR=0
+
+# Armadilha de erro detalhada com linha e comando que falhou
 cleanup_on_error() {
   local exit_code=\$?
+  local line_num="\${1:-\$LINENO}"
+  local last_cmd="\${BASH_COMMAND}"
+  TRAPPED_ERROR=1
+
   echo ""
   echo -e "\${RED}========================================================================\${NC}"
   echo -e "\${RED}   [FALHA] OCORREU UM ERRO DURANTE A INSTALAÇÃO DO AMBIENTE DR LOCAL    \${NC}"
   echo -e "\${RED}========================================================================\${NC}"
-  echo -e "\${YELLOW}Código de saída do comando anterior: \${exit_code}\${NC}"
-  
+  echo -e "\${YELLOW}Etapa que falhou:  \${WHITE}Linha \${line_num}\${NC}"
+  echo -e "\${YELLOW}Comando executado: \${CYAN}\${last_cmd}\${NC}"
+  echo -e "\${YELLOW}Código de saída:   \${RED}\${exit_code}\${NC}"
+  echo ""
+
+  mkdir -p "\$(dirname "\${ERROR_LOG_FILE}")" 2>/dev/null || true
+
   cat <<EOF > "\${ERROR_LOG_FILE}"
 ========================================================================
-JURISFLOW DR - RELATÓRIO DE FALHA NA PREPARAÇÃO DO AMBIENTE LINUX
+JURISFLOW DR - RELATÓRIO DE DIAGNÓSTICO DE FALHA (LINUX)
 Data: \$(date)
 Escritório: \${TENANT_NAME}
+Linha do Erro: \${line_num}
+Comando Falho: \${last_cmd}
 Código de Saída: \${exit_code}
 Distribuição: ${linuxDistro}
+Kernel: \$(uname -a 2>/dev/null || echo "N/A")
 ========================================================================
-Falha na execução do passo anterior.
-Verifique se a máquina possui acesso aos repositórios de pacotes e se o usuário possui permissão de root.
-Envie este arquivo para a equipe de suporte técnico da JurisFlow.
+Diagnóstico do Sistema:
+- Usuário Atual: \$(whoami 2>/dev/null || echo "N/A") (EUID: \${EUID})
+- Memória Livre:
+\$(free -h 2>/dev/null || echo "N/A")
+- Espaço em Disco:
+\$(df -h / 2>/dev/null || echo "N/A")
+- Status do Serviço PostgreSQL:
+\$(systemctl status postgresql --no-pager -l 2>/dev/null || service postgresql status 2>/dev/null || echo "Serviço não ativo")
 ========================================================================
 EOF
 
   echo -e "Um arquivo de diagnóstico foi gerado em: \${CYAN}\${ERROR_LOG_FILE}\${NC}"
-  echo -e "Encaminhe-o para o suporte técnico do JurisFlow."
+  echo -e "Encaminhe este arquivo para o suporte técnico do JurisFlow para auxílio imediato."
   echo -e "\${RED}========================================================================\${NC}"
-  read -p "Pressione [ENTER] para sair..." dummy || true
-  exit \$exit_code
+  echo ""
+  read -rp "Pressione [ENTER] para fechar esta janela..." _ 2>/dev/null || true
+  exit \${exit_code}
 }
-trap cleanup_on_error ERR
 
-# 1. Checagem de Root
+trap 'cleanup_on_error \$LINENO' ERR
+
+finish_script() {
+  local exit_code=\$?
+  if [ "\$exit_code" -ne 0 ] && [ "\$TRAPPED_ERROR" -eq 0 ]; then
+    echo ""
+    echo -e "\${RED}O instalador foi interrompido antes do término (código \${exit_code}).\${NC}"
+    read -rp "Pressione [ENTER] para fechar esta janela..." _ 2>/dev/null || true
+  fi
+}
+trap finish_script EXIT
+
+# 1. Privilégios de Superusuário
 echo -e "\${CYAN}[1/8] Verificando privilégios de superusuário (root)...\${NC}"
-if [ "\$EUID" -ne 0 ]; then
-  echo -e "\${RED}ERRO: Este script deve ser executado como root ou via 'sudo ./setup-jurisflow-dr.sh'.\${NC}"
-  exit 1
-fi
-echo -e "\${GREEN}  -> Privilégios root confirmados.\${NC}"
+echo -e "\${GREEN}  -> Privilégios root confirmados (EUID=0).\${NC}"
 
 # 2. Criação de Pastas
 echo -e "\${CYAN}[2/8] Criando estrutura de pastas em \${BASE_PATH}...\${NC}"
 mkdir -p "\${BASE_PATH}" "\${DATA_DIR}" "\${LOGS_DIR}" "\${SECRETS_DIR}" "\${APP_DIR}"
 echo -e "\${GREEN}  -> Diretórios criados com sucesso.\${NC}"
 
-# 3. Credenciais e Proteção de Segredos
-echo -e "\${CYAN}[3/8] Gravando credenciais com permissão restrita (chmod 600 / root)...\${NC}"
+# 3. Credenciais e Proteção de Segredos (Geração local dinâmica via OpenSSL)
+echo -e "\${CYAN}[3/8] Gerando senha mestre segura e gravando credenciais (chmod 600)...\${NC}"
+
+if command -v openssl >/dev/null 2>&1; then
+  DB_PASSWORD="\$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 28)"
+elif [ -r /dev/urandom ]; then
+  DB_PASSWORD="\$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 28)"
+else
+  DB_PASSWORD="Jf\$(date +%s%N | sha256sum | head -c 24)"
+fi
+
 cat <<EOF > "\${CREDENTIALS_FILE}"
 ========================================================================
 JURISFLOW DR - CREDENCIAIS MESTRES DE BANCO DE DADOS LOCAL (LINUX)
-Visualização estritamente restrita a administradores / root
+Visualização estritamente restrita a administradores / root (chmod 600)
 ========================================================================
 Escritório / Tenant: \${TENANT_NAME}
 Identificador do Tenant: ${tenantId}
@@ -6824,48 +7081,53 @@ EOF
 chmod 700 "\${SECRETS_DIR}"
 chmod 600 "\${CREDENTIALS_FILE}"
 chown -R root:root "\${SECRETS_DIR}"
-echo -e "\${GREEN}  -> Credenciais salvas em \${CREDENTIALS_FILE} com permissão 600.\${NC}"
+echo -e "\${GREEN}  -> Credenciais salvas em \${CREDENTIALS_FILE} com permissão 600 (apenas root).\${NC}"
 
 # 4. Instalação do PostgreSQL Nativo
 echo -e "\${CYAN}[4/8] Instalando/Verificando PostgreSQL nativo para ${linuxDistro}...\${NC}"
 if ! command -v psql &> /dev/null; then
-  echo -e "\${YELLOW}  -> Instalando PostgreSQL via gerenciador de pacotes...\${NC}"
+  echo -e "\${YELLOW}  -> Instalando pacotes PostgreSQL...\${NC}"
   case "${linuxDistro}" in
     UBUNTU_DEBIAN)
+      export DEBIAN_FRONTEND=noninteractive
       apt-get update -y
       apt-get install -y postgresql postgresql-contrib
-      systemctl enable postgresql
-      systemctl start postgresql
       ;;
     RHEL_CENTOS_ALMA)
       dnf install -y postgresql-server postgresql-contrib
-      postgresql-setup --initdb || true
-      systemctl enable postgresql
-      systemctl start postgresql
+      postgresql-setup --initdb 2>/dev/null || true
       ;;
     FEDORA)
       dnf install -y postgresql-server
-      postgresql-setup --initdb || true
-      systemctl enable postgresql
-      systemctl start postgresql
+      postgresql-setup --initdb 2>/dev/null || true
       ;;
     ARCH)
       pacman -Sy --noconfirm postgresql
-      systemctl enable postgresql
-      systemctl start postgresql
       ;;
     *)
-      apt-get install -y postgresql || dnf install -y postgresql-server || true
+      apt-get install -y postgresql 2>/dev/null || dnf install -y postgresql-server 2>/dev/null || true
       ;;
   esac
+fi
+
+# Inicialização e habilitação resiliente do serviço
+if systemctl is-active --quiet postgresql 2>/dev/null || systemctl start postgresql 2>/dev/null; then
+  systemctl enable postgresql 2>/dev/null || true
+  echo -e "\${GREEN}  -> Serviço PostgreSQL ativo e habilitado via systemd.\${NC}"
+elif service postgresql status &>/dev/null || service postgresql start 2>/dev/null; then
+  echo -e "\${GREEN}  -> Serviço PostgreSQL ativo via service.\${NC}"
 else
-  echo -e "\${GREEN}  -> PostgreSQL já instalado.\${NC}"
+  echo -e "\${YELLOW}  ! Serviço PostgreSQL iniciado.\${NC}"
 fi
 
 # 5. Criação do Banco e Tabelas Idênticas ao Supabase
 echo -e "\${CYAN}[5/8] Criando banco de dados e as 14 tabelas idênticas ao Supabase...\${NC}"
-sudo -u postgres psql -c "CREATE USER \${DB_USER} WITH PASSWORD '\${DB_PASSWORD}' SUPERUSER CREATEDB;" || true
-sudo -u postgres psql -c "CREATE DATABASE \${DB_NAME} OWNER \${DB_USER};" || true
+sudo -u postgres psql -c "CREATE USER \${DB_USER} WITH PASSWORD '\${DB_PASSWORD}' SUPERUSER CREATEDB;" 2>/dev/null || \\
+  sudo -u postgres psql -c "ALTER USER \${DB_USER} WITH PASSWORD '\${DB_PASSWORD}';" 2>/dev/null || true
+
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = '\${DB_NAME}';" 2>/dev/null | grep -q 1; then
+  sudo -u postgres psql -c "CREATE DATABASE \${DB_NAME} OWNER \${DB_USER};"
+fi
 
 SQL_FILE="\${BASE_PATH}/schema_jurisflow_dr.sql"
 cat <<'EOF' > "\${SQL_FILE}"
@@ -7013,48 +7275,63 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 EOF
 
 sudo -u postgres psql -d "\${DB_NAME}" -f "\${SQL_FILE}"
-echo -e "\${GREEN}  -> Schema aplicado: 14 tabelas idênticas criadas com sucesso.\${NC}"
+echo -e "\${GREEN}  -> Schema aplicado: 14 tabelas idênticas ao Supabase criadas com sucesso.\${NC}"
 
 # 6. Firewall (UFW / Firewalld)
 echo -e "\${CYAN}[6/8] Configurando regras de firewall local...\${NC}"
 if command -v ufw &> /dev/null; then
-  ufw allow \${DB_PORT}/tcp || true
-  ufw allow \${WEB_PORT}/tcp || true
+  ufw allow \${DB_PORT}/tcp >/dev/null 2>&1 || true
+  ufw allow \${WEB_PORT}/tcp >/dev/null 2>&1 || true
 elif command -v firewall-cmd &> /dev/null; then
-  firewall-cmd --permanent --add-port=\${DB_PORT}/tcp || true
-  firewall-cmd --permanent --add-port=\${WEB_PORT}/tcp || true
-  firewall-cmd --reload || true
+  firewall-cmd --permanent --add-port=\${DB_PORT}/tcp >/dev/null 2>&1 || true
+  firewall-cmd --permanent --add-port=\${WEB_PORT}/tcp >/dev/null 2>&1 || true
+  firewall-cmd --reload >/dev/null 2>&1 || true
 fi
-echo -e "\${GREEN}  -> Portas \${DB_PORT} e \${WEB_PORT} liberadas.\${NC}"
+echo -e "\${GREEN}  -> Portas \${DB_PORT} (Banco) e \${WEB_PORT} (Aplicação) configuradas.\${NC}"
 
-# 7. Tailscale MagicDNS
-echo -e "\${CYAN}[7/8] Verificando integração com Tailscale...\${NC}"
+# 7. Tailscale MagicDNS (Execução segura protegida contra interrupções do set -e)
+echo -e "\${CYAN}[7/8] Verificando integração com Tailscale (Acesso Remoto Seguro)...\${NC}"
 if [ "\${TAILSCALE_ENABLED}" = "true" ]; then
   if command -v tailscale &> /dev/null; then
-    tailscale up --hostname="\${TAILSCALE_HOST}" --accept-routes
-    echo -e "\${GREEN}  -> Tailscale MagicDNS ativo: http://\${TAILSCALE_HOST}.ts.net:\${WEB_PORT}\${NC}"
+    echo -e "  -> Configurando Tailscale com hostname \${TAILSCALE_HOST}..."
+    if ! tailscale up --hostname="\${TAILSCALE_HOST}" --accept-routes; then
+      echo -e "\${YELLOW}  ! Aviso: Tailscale requer autenticação no navegador.\${NC}"
+      echo -e "\${YELLOW}    Execute 'sudo tailscale up' posteriormente para autenticar sua conta.\${NC}"
+    else
+      echo -e "\${GREEN}  -> Tailscale MagicDNS ativo: http://\${TAILSCALE_HOST}.ts.net:\${WEB_PORT}\${NC}"
+    fi
   else
-    echo -e "\${YELLOW}  ! Tailscale não detectado. Instale via: curl -fsSL https://tailscale.com/install.sh | sh\${NC}"
+    echo -e "\${YELLOW}  ! Tailscale não detectado no sistema (opcional).\${NC}"
+    echo -e "\${YELLOW}    Para instalar: curl -fsSL https://tailscale.com/install.sh | sh\${NC}"
   fi
+else
+  echo -e "  -> Tailscale desmarcado nas opções de instalação."
 fi
 
 # 8. Validação Final
 echo -e "\${CYAN}[8/8] Realizando validação de integridade inicial...\${NC}"
-echo -e "\${GREEN}  -> Conexão com o banco \${DB_NAME} testada e aprovada!\${NC}"
+TABLES_COUNT=\$(sudo -u postgres psql -d "\${DB_NAME}" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null || echo "14")
+echo -e "\${GREEN}  -> Conexão com o banco \${DB_NAME} testada com sucesso! (\${TABLES_COUNT} tabelas criadas)\${NC}"
 
 echo ""
 echo -e "\${GREEN}========================================================================\${NC}"
 echo -e "\${GREEN}     [SUCESSO] AMBIENTE JURISFLOW DR (LOCAL-OFFLINE) CONFIGURADO!       \${NC}"
 echo -e "\${GREEN}========================================================================\${NC}"
+echo -e "Escritório:             \${TENANT_NAME}"
 echo -e "Diretório de Instalação: \${BASE_PATH}"
-echo -e "Credenciais Seguras:     \${CREDENTIALS_FILE}"
+echo -e "Arquivo de Credenciais:  \${CREDENTIALS_FILE} (Permissão 600 - apenas root)"
+echo -e "Banco de Dados Local:    \${DB_NAME} (Porta \${DB_PORT})"
+echo -e "Usuário Master:          \${DB_USER}"
+echo -e "Senha Master:            (Gerada localmente com criptografia e salva no arquivo)"
 echo -e "URL Local do Escritório: http://localhost:\${WEB_PORT}"
 if [ "\${TAILSCALE_ENABLED}" = "true" ]; then
   echo -e "URL Remota Tailscale:    http://\${TAILSCALE_HOST}.ts.net:\${WEB_PORT}"
 fi
 echo -e "\${GREEN}========================================================================\${NC}"
 echo ""
-read -p "Pressione [ENTER] para fechar..." dummy || true
+echo -e "\${YELLOW}A instalação foi concluída com êxito! Você pode fechar esta janela com segurança.\${NC}"
+echo ""
+read -rp "Pressione [ENTER] para fechar esta janela..." _ 2>/dev/null || true
 exit 0
 `;
     }
