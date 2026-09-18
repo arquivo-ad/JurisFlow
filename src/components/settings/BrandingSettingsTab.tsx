@@ -35,9 +35,12 @@ import {
   FileSignature,
   Loader2,
   X,
+  Download,
+  FileCode,
 } from 'lucide-react';
 import { Tenant, TenantVisualIdentity } from '../../types';
 import { api } from '../../services/api';
+import { formatLawyerNameInBody } from '../../utils/forensicFormatter';
 
 interface BrandingSettingsTabProps {
   currentTenant: Tenant | null;
@@ -45,6 +48,7 @@ interface BrandingSettingsTabProps {
 }
 
 const FORENSIC_ACCENT_COLORS = [
+  { name: 'Vinho Nobre / Bordô Oficial', hex: '#5C1217' },
   { name: 'Índigo Forense', hex: '#4338ca' },
   { name: 'Azul Marinho Nobre', hex: '#1e1b4b' },
   { name: 'Azul Real', hex: '#1e3a8a' },
@@ -77,6 +81,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     showFooterText: true,
     showFooterAddress: false,
     showFooterPhone: false,
+    showFooterEmail: false,
+    showDigitalSignatureSeal: true,
     headerStyle: 'MINIMALIST',
     accentColor: '#4338ca',
     borderStyle: 'SOLID',
@@ -97,7 +103,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         name: 'Petição Inicial Cível ABNT',
         category: 'PETICAO',
         content:
-          'EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA VARA CÍVEL DA COMARCA DE PINDAMONHANGABA/SP\n\n{{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, portador(a) do CPF sob nº {{CPF_CLIENTE}}, residente e domiciliado(a) em {{ENDERECO_CLIENTE}}, por sua advogada infra-assinada, Dra. Gabriela M. Manni Capitani, OAB/SP 478.370, vem respeitosamente perante Vossa Excelência propor a presente:\n\nAÇÃO INDENIZATÓRIA\n\nem face de {{NOME_REU}}, pelos fatos e fundamentos a seguir expostos:\n\nDOS FATOS...\nDO DIREITO...\nDOS PEDIDOS...',
+          'EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA VARA CÍVEL DA COMARCA DE PINDAMONHANGABA/SP\n\n{{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, portador(a) do CPF sob nº {{CPF_CLIENTE}}, residente e domiciliado(a) em {{ENDERECO_CLIENTE}}, por sua advogada infra-assinada, <u><strong>DRA. GABRIELA M. MANNI CAPITANI</strong></u>, OAB/SP 478.370, vem respeitosamente perante Vossa Excelência propor a presente:\n\nAÇÃO INDENIZATÓRIA\n\nem face de {{NOME_REU}}, pelos fatos e fundamentos a seguir expostos:\n\nDOS FATOS...\nDO DIREITO...\nDOS PEDIDOS...',
         isDefault: true,
         variables: ['NOME_CLIENTE', 'CPF_CLIENTE', 'ENDERECO_CLIENTE', 'NOME_REU'],
       },
@@ -106,7 +112,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         name: 'Procuração Ad Judicia et Extra (Poderes Art. 105 CPC)',
         category: 'PROCURACAO',
         content:
-          'PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, portador(a) do RG nº {{RG_CLIENTE}} e CPF nº {{CPF_CLIENTE}}, residente e domiciliado(a) na {{ENDERECO_CLIENTE}}.\n\nOUTORGADA: DRA. GABRIELA M. MANNI CAPITANI, advogada inscrita na OAB/SP sob o nº 478.370, com escritório profissional na R. Cap. Alfredo de Paula Salgado, 110, Pindamonhangaba/SP.\n\nPODERES: Pelo presente instrumento particular de mandato, o Outorgante nomeia e constitui a Outorgada sua bastante procuradora, conferindo-lhe os poderes da cláusula "ad judicia et extra" para o foro em geral, em qualquer Juízo, Instância ou Tribunal.\n\nPODERES ESPECIAIS: Confere ainda poderes especiais para confessar, reconhecer a procedência do pedido, transigir, desistir, renunciar ao direito, receber valores, dar quitação, firmar compromissos e substabelecer com ou sem reserva (Art. 105 do CPC/2015).\n\nTermos em que, Pede deferimento.\nPindamonhangaba/SP, data da assinatura digital.\n\n_____________________________________\n{{NOME_CLIENTE}}',
+          'PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE_CLIENTE}}, {{ESTADO_CIVIL_CLIENTE}}, portador(a) do RG nº {{RG_CLIENTE}} e CPF nº {{CPF_CLIENTE}}, residente e domiciliado(a) na {{ENDERECO_CLIENTE}}.\n\nOUTORGADA: <u><strong>DRA. GABRIELA M. MANNI CAPITANI</strong></u>, advogada inscrita na OAB/SP sob o nº 478.370, com escritório profissional na R. Cap. Alfredo de Paula Salgado, 110, Pindamonhangaba/SP.\n\nPODERES: Pelo presente instrumento particular de mandato, o Outorgante nomeia e constitui a Outorgada sua bastante procuradora, conferindo-lhe os poderes da cláusula "ad judicia et extra" para o foro em geral, em qualquer Juízo, Instância ou Tribunal.\n\nPODERES ESPECIAIS: Confere ainda poderes especiais para confessar, reconhecer a procedência do pedido, transigir, desistir, renunciar ao direito, receber valores, dar quitação, firmar compromissos e substabelecer com ou sem reserva (Art. 105 do CPC/2015).\n\nTermos em que, Pede deferimento.\nPindamonhangaba/SP, data da assinatura digital.\n\n_____________________________________\n{{NOME_CLIENTE}}',
         isDefault: true,
         variables: ['NOME_CLIENTE', 'CPF_CLIENTE', 'RG_CLIENTE', 'ENDERECO_CLIENTE'],
       },
@@ -115,7 +121,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         name: 'Contrato de Honorários Advocatícios & Quota Litis (LGPD)',
         category: 'CONTRATO',
         content:
-          'CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS E HONORÁRIOS\n\nCONTRATANTE: {{NOME_CLIENTE}}, inscrito(a) no CPF nº {{CPF_CLIENTE}}, residente em {{ENDERECO_CLIENTE}}.\n\nCONTRATADA: GABRIELA CAPITANI ADVOCACIA, representada por Dra. Gabriela M. Manni Capitani, OAB/SP 478.370.\n\nCLÁUSULA PRIMEIRA - DO OBJETO\nO presente contrato tem por objeto a prestação de serviços jurídicos forenses na defesa dos interesses do(a) CONTRATANTE perante o Poder Judiciário.\n\nCLÁUSULA SEGUNDA - DOS HONORÁRIOS\nPelos serviços ajustados, o CONTRATANTE pagará os honorários acordados de R$ {{VALOR_HONORARIOS}} e percentual de {{PERCENTUAL_EXITO}}% sobre o proveito econômico obtido.\n\nCLÁUSULA TERCEIRA - DA CONFORMIDADE COM A LGPD\nAs partes declaram ciência mútua quanto ao tratamento estritamente lícito dos dados pessoais para o fiel cumprimento do mandato judicial, nos termos da Lei nº 13.709/2018.\n\nPindamonhangaba/SP, data da assinatura.',
+          'CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS E HONORÁRIOS\n\nCONTRATANTE: {{NOME_CLIENTE}}, inscrito(a) no CPF nº {{CPF_CLIENTE}}, residente em {{ENDERECO_CLIENTE}}.\n\nCONTRATADA: GABRIELA CAPITANI ADVOCACIA, representada por <u><strong>DRA. GABRIELA M. MANNI CAPITANI</strong></u>, OAB/SP 478.370.\n\nCLÁUSULA PRIMEIRA - DO OBJETO\nO presente contrato tem por objeto a prestação de serviços jurídicos forenses na defesa dos interesses do(a) CONTRATANTE perante o Poder Judiciário.\n\nCLÁUSULA SEGUNDA - DOS HONORÁRIOS\nPelos serviços ajustados, o CONTRATANTE pagará os honorários acordados de R$ {{VALOR_HONORARIOS}} e percentual de {{PERCENTUAL_EXITO}}% sobre o proveito econômico obtido.\n\nCLÁUSULA TERCEIRA - DA CONFORMIDADE COM A LGPD\nAs partes declaram ciência mútua quanto ao tratamento estritamente lícito dos dados pessoais para o fiel cumprimento do mandato judicial, nos termos da Lei nº 13.709/2018.\n\nPindamonhangaba/SP, data da assinatura.',
         isDefault: true,
         variables: ['NOME_CLIENTE', 'CPF_CLIENTE', 'ENDERECO_CLIENTE', 'VALOR_HONORARIOS', 'PERCENTUAL_EXITO'],
       },
@@ -131,22 +137,70 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
   // Template Modal State
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  const [templateForm, setTemplateForm] = useState({
+  const [templateForm, setTemplateForm] = useState<{
+    name: string;
+    category: string;
+    content: string;
+    htmlContent?: string;
+    isDefault: boolean;
+    attachedFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    layoutStyle?: {
+      fontFamily?: string;
+      fontSize?: string;
+      lineSpacing?: string;
+      accentColor?: string;
+      headerIncluded?: boolean;
+      footerIncluded?: boolean;
+    };
+  }>({
     name: '',
     category: 'PETICAO',
     content: '',
+    htmlContent: '',
     isDefault: false,
   });
 
   // AI Import / Sanitize Modal State
+  const [templateModalViewMode, setTemplateModalViewMode] = useState<'TEXT' | 'HTML'>('TEXT');
+  const [aiResultViewMode, setAiResultViewMode] = useState<'TEXT' | 'HTML'>('TEXT');
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiMode, setAiMode] = useState<'SANITIZE' | 'SUGGEST' | 'GENERATE'>('SANITIZE');
   const [aiCategory, setAiCategory] = useState<'PETICAO' | 'PROCURACAO' | 'CONTRATO'>('PETICAO');
   const [aiModelName, setAiModelName] = useState('');
   const [aiRawInput, setAiRawInput] = useState('');
+  const [aiRawHtml, setAiRawHtml] = useState<string>('');
+  const [aiAttachedFile, setAiAttachedFile] = useState<{
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    dataUrl?: string;
+    uploadedAt: string;
+  } | null>(null);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [aiResult, setAiResult] = useState<{
     sanitizedContent: string;
+    sanitizedHtmlContent?: string;
+    attachedFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    layoutStyle?: {
+      fontFamily?: string;
+      fontSize?: string;
+      lineSpacing?: string;
+      accentColor?: string;
+      headerIncluded?: boolean;
+      footerIncluded?: boolean;
+    };
     extractedVariables: string[];
     titleSuggestion: string;
     summary: string;
@@ -158,10 +212,29 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
   const [isExtractingDoc, setIsExtractingDoc] = useState(false);
   const [extractSuccessMsg, setExtractSuccessMsg] = useState<string | null>(null);
 
+  // PDF / Image Visual Identity Clone States
+  const [isVisualIdentityImportModalOpen, setIsVisualIdentityImportModalOpen] = useState(false);
+  const [isAnalyzingVisualIdentity, setIsAnalyzingVisualIdentity] = useState(false);
+  const [visualIdentityAnalysisResult, setVisualIdentityAnalysisResult] = useState<{
+    visualIdentity: Partial<TenantVisualIdentity>;
+    attachedLetterheadFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
+    extractedImages: Array<{ dataUrl: string; width?: number; height?: number; isPrimaryLogo?: boolean }>;
+    summary: string;
+    detectedLawFirmName?: string;
+  } | null>(null);
+  const [selectedLogoFromPdf, setSelectedLogoFromPdf] = useState<string | null>(null);
+
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const sigFileInputRef = useRef<HTMLInputElement>(null);
   const docImportFileRef = useRef<HTMLInputElement>(null);
   const manualTmplFileRef = useRef<HTMLInputElement>(null);
+  const viImportFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (currentTenant?.visualIdentity) {
@@ -179,6 +252,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         showFooterText: currentTenant.visualIdentity.showFooterText !== false,
         showFooterAddress: !!currentTenant.visualIdentity.showFooterAddress,
         showFooterPhone: !!currentTenant.visualIdentity.showFooterPhone,
+        showFooterEmail: !!currentTenant.visualIdentity.showFooterEmail,
+        showDigitalSignatureSeal: currentTenant.visualIdentity.showDigitalSignatureSeal !== false,
+        footerText: currentTenant.visualIdentity.footerText ?? prev.footerText,
       }));
     } else if (currentTenant) {
       setVi((prev) => ({
@@ -260,6 +336,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
       name: '',
       category,
       content: '',
+      htmlContent: '',
+      attachedFile: undefined,
+      layoutStyle: undefined,
       isDefault: false,
     });
     setIsTemplateModalOpen(true);
@@ -270,7 +349,10 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setTemplateForm({
       name: tmpl.name || tmpl.title,
       category: tmpl.category,
-      content: tmpl.content,
+      content: tmpl.content || '',
+      htmlContent: tmpl.htmlContent || '',
+      attachedFile: tmpl.attachedFile,
+      layoutStyle: tmpl.layoutStyle,
       isDefault: !!tmpl.isDefault,
     });
     setIsTemplateModalOpen(true);
@@ -299,6 +381,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
           name: templateForm.name,
           category: templateForm.category,
           content: templateForm.content,
+          htmlContent: templateForm.htmlContent,
+          attachedFile: templateForm.attachedFile,
+          layoutStyle: templateForm.layoutStyle,
           isDefault: templateForm.isDefault,
           variables: extractedVars.length > 0 ? extractedVars : currentTemplates[idx].variables,
         };
@@ -309,6 +394,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         name: templateForm.name,
         category: templateForm.category,
         content: templateForm.content,
+        htmlContent: templateForm.htmlContent,
+        attachedFile: templateForm.attachedFile,
+        layoutStyle: templateForm.layoutStyle,
         isDefault: templateForm.isDefault,
         variables: extractedVars.length > 0 ? extractedVars : ['NOME_CLIENTE', 'CPF_CLIENTE'],
       });
@@ -332,6 +420,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         : 'Contrato de Honorários'
     );
     setAiRawInput('');
+    setAiRawHtml('');
+    setAiAttachedFile(null);
     setAiResult(null);
     setIsAiModalOpen(true);
   };
@@ -343,12 +433,21 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setExtractSuccessMsg(null);
     try {
       const res = await api.extractDocumentText(file);
-      if (res && res.text) {
-        setAiRawInput(res.text);
+      if (res && (res.text || res.htmlContent)) {
+        setAiRawInput(res.text || '');
+        setAiRawHtml(res.htmlContent || '');
+        const attached = res.attachedFile || (res.dataUrl ? {
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          dataUrl: res.dataUrl,
+          uploadedAt: new Date().toISOString(),
+        } : undefined);
+        setAiAttachedFile(attached || null);
         if (!aiModelName || aiModelName.includes('Petição') || aiModelName.includes('Procuração') || aiModelName.includes('Contrato') || aiModelName.trim() === '') {
           setAiModelName(res.suggestedTitle || file.name.replace(/\.[^/.]+$/, ''));
         }
-        setExtractSuccessMsg(`Arquivo "${file.name}" carregado com sucesso (${res.charCount.toLocaleString('pt-BR')} caracteres extraídos)`);
+        setExtractSuccessMsg(`Arquivo original "${file.name}" anexado com sucesso! Formatação, fontes, estilos e cabeçalhos preservados.`);
       } else {
         alert('Não foi possível extrair o texto deste documento.');
       }
@@ -368,13 +467,24 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
     setExtractSuccessMsg(null);
     try {
       const res = await api.extractDocumentText(file);
-      if (res && res.text) {
+      if (res && (res.text || res.htmlContent)) {
+        const attached = res.attachedFile || (res.dataUrl ? {
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          dataUrl: res.dataUrl,
+          uploadedAt: new Date().toISOString(),
+        } : undefined);
+
         setTemplateForm((prev) => ({
           ...prev,
-          content: res.text,
-          name: prev.name.trim() ? prev.name : res.suggestedTitle,
+          content: res.text || prev.content,
+          htmlContent: res.htmlContent || prev.htmlContent,
+          attachedFile: attached,
+          layoutStyle: res.layoutStyle || prev.layoutStyle,
+          name: prev.name.trim() ? prev.name : res.suggestedTitle || file.name.replace(/\.[^/.]+$/, ''),
         }));
-        setExtractSuccessMsg(`Arquivo "${file.name}" importado com sucesso (${res.charCount.toLocaleString('pt-BR')} caracteres).`);
+        setExtractSuccessMsg(`Arquivo original "${file.name}" anexado e formatado com sucesso! Estrutura visual, fontes e cabeçalhos preservados.`);
       } else {
         alert('Não foi possível extrair texto legível deste documento.');
       }
@@ -385,6 +495,60 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
       setIsExtractingDoc(false);
       e.target.value = '';
     }
+  };
+
+  const handleVisualIdentityFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setIsAnalyzingVisualIdentity(true);
+    setExtractSuccessMsg(null);
+
+    try {
+      const res = await api.analyzeVisualIdentityFromDoc(file);
+      if (res && res.visualIdentity) {
+        setVisualIdentityAnalysisResult(res);
+        if (res.visualIdentity.logoUrl) {
+          setSelectedLogoFromPdf(res.visualIdentity.logoUrl);
+        } else if (res.extractedImages && res.extractedImages.length > 0) {
+          setSelectedLogoFromPdf(res.extractedImages[0].dataUrl);
+        } else {
+          setSelectedLogoFromPdf(null);
+        }
+        setIsVisualIdentityImportModalOpen(true);
+      } else {
+        alert('Não foi possível obter a análise de identidade visual deste arquivo.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao analisar arquivo para identidade visual:', err);
+      alert('Não foi possível processar o arquivo: ' + (err.message || 'Verifique se o arquivo PDF ou Imagem é válido.'));
+    } finally {
+      setIsAnalyzingVisualIdentity(false);
+    }
+  };
+
+  const handleApplyAnalyzedVisualIdentity = () => {
+    if (!visualIdentityAnalysisResult?.visualIdentity) return;
+
+    const analyzed = visualIdentityAnalysisResult.visualIdentity;
+    const isFullBanner = analyzed.headerStyle === 'FULL_BANNER' || !!analyzed.headerBannerUrl;
+
+    const updatedVi: TenantVisualIdentity = {
+      ...vi,
+      ...analyzed,
+      headerStyle: isFullBanner ? 'FULL_BANNER' : (analyzed.headerStyle || vi.headerStyle || 'MODERN_BAR'),
+      headerBannerUrl: analyzed.headerBannerUrl || (isFullBanner ? (selectedLogoFromPdf || undefined) : undefined),
+      pageBackgroundUrl: analyzed.pageBackgroundUrl || vi.pageBackgroundUrl,
+      logoUrl: selectedLogoFromPdf !== null ? selectedLogoFromPdf : (analyzed.headerBannerUrl || vi.logoUrl),
+      attachedLetterheadFile: visualIdentityAnalysisResult.attachedLetterheadFile || vi.attachedLetterheadFile,
+    };
+
+    setVi(updatedVi);
+    setIsVisualIdentityImportModalOpen(false);
+    setExtractSuccessMsg('Papel timbrado oficial, faixa de cabeçalho, paleta e tipografia aplicados com 100% de fidelidade!');
+    setTimeout(() => setExtractSuccessMsg(null), 6000);
+    handleSave(updatedVi);
   };
 
   const handleRunAiAction = async () => {
@@ -407,6 +571,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
         category: aiCategory,
         modelName: aiModelName,
         rawContent: aiRawInput,
+        rawHtmlContent: aiRawHtml,
+        attachedFile: aiAttachedFile || undefined,
       });
 
       setAiResult(response);
@@ -425,9 +591,19 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
     currentTemplates.push({
       id: newTemplateId,
-      name: aiResult.titleSuggestion || aiModelName || 'Modelo Forense Otimizado',
+      name: aiResult.titleSuggestion || aiModelName || 'Modelo Forense Higienizado',
       category: aiCategory,
       content: aiResult.sanitizedContent,
+      htmlContent: aiResult.sanitizedHtmlContent || aiRawHtml || undefined,
+      attachedFile: aiResult.attachedFile || aiAttachedFile || undefined,
+      layoutStyle: aiResult.layoutStyle || {
+        fontFamily: vi.fontFamily || 'Times New Roman',
+        fontSize: vi.bodyFontSize || '12pt',
+        lineSpacing: vi.lineSpacing || '1.5',
+        accentColor: vi.accentColor || '#1e3a8a',
+        headerIncluded: true,
+        footerIncluded: true,
+      },
       variables: aiResult.extractedVariables || ['NOME_CLIENTE', 'CPF_CLIENTE'],
       isDefault: false,
     });
@@ -469,10 +645,19 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
     const sampleDocText =
       activePreviewDoc === 'PETICAO'
-        ? `EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA COMARCA DE PINDAMONHANGABA/SP\n\nAutos nº 1002341-89.2026.8.26.0445\n\nEMPRESA ALPHA LTDA, já qualificada nos autos, por sua advogada subscritora, vem perante Vossa Excelência apresentar RÉPLICA À CONTESTAÇÃO nos termos do Art. 350 do CPC...\n\nRequer o regular prosseguimento do feito com a procedência in totum dos pleitos formulados na exordial.\n\n${vi.closingFormula || 'Termos em que, Pede e Espera Deferimento.'}\nPindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.`
+        ? `EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA COMARCA DE PINDAMONHANGABA/SP\n\nAutos nº 1002341-89.2026.8.26.0445\n\nEMPRESA ALPHA LTDA, já qualificada nos autos, por sua advogada subscritora, <u><strong>${lawyerName.toUpperCase()}</strong></u>, inscrita na ${lawyerOab}, vem perante Vossa Excelência apresentar RÉPLICA À CONTESTAÇÃO nos termos do Art. 350 do CPC...\n\nRequer o regular prosseguimento do feito com a procedência in totum dos pleitos formulados na exordial.\n\n${vi.closingFormula || 'Termos em que, Pede e Espera Deferimento.'}\nPindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.`
         : activePreviewDoc === 'PROCURACAO'
-        ? `PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: JOÃO DA SILVA, brasileiro, inscrito no CPF nº 123.456.789-00.\n\nOUTORGADA: ${lawyerName.toUpperCase()}, ${lawyerOab}.\n\nPODERES: Cláusula ad judicia et extra para o foro em geral, em qualquer Juízo, Instância ou Tribunal...\n\nPODERES ESPECIAIS: Confere ainda poderes especiais para confessar, transigir, desistir, renunciar ao direito, receber valores e dar quitação (Art. 105 do CPC/2015).\n\nPindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.`
-        : `CONTRATO DE PRESTAÇÃO DE SERVIÇOS JURÍDICOS E HONORÁRIOS\n\nCONTRATANTE: JOÃO DA SILVA, CPF nº 123.456.789-00\nCONTRATADA: ${lawFirmName.toUpperCase()}, representada por ${lawyerName}, ${lawyerOab}.\n\nCLÁUSULA 1ª - DO OBJETO: Prestação de serviços jurídicos no patrocínio forense da causa.\nCLÁUSULA 2ª - DOS HONORÁRIOS: Valor ajustado com honorários de êxito e sucumbenciais.\nCLÁUSULA 3ª - DA LGPD: Conformidade com a Lei nº 13.709/2018.\n\nPindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.`;
+        ? `PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: JOÃO DA SILVA, brasileiro, inscrito no CPF nº 123.456.789-00.\n\nOUTORGADA: <u><strong>${lawyerName.toUpperCase()}</strong></u>, ${lawyerOab}.\n\nPODERES: Cláusula ad judicia et extra para o foro em geral, em qualquer Juízo, Instância ou Tribunal...\n\nPODERES ESPECIAIS: Confere ainda poderes especiais para confessar, transigir, desistir, renunciar ao direito, receber valores e dar quitação (Art. 105 do CPC/2015).\n\nPindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.`
+        : `CONTRATO DE PRESTAÇÃO DE SERVIÇOS JURÍDICOS E HONORÁRIOS\n\nCONTRATANTE: JOÃO DA SILVA, CPF nº 123.456.789-00\nCONTRATADA: ${lawFirmName.toUpperCase()}, representada por <u><strong>${lawyerName.toUpperCase()}</strong></u>, ${lawyerOab}.\n\nCLÁUSULA 1ª - DO OBJETO: Prestação de serviços jurídicos no patrocínio forense da causa.\nCLÁUSULA 2ª - DOS HONORÁRIOS: Valor ajustado com honorários de êxito e sucumbenciais.\nCLÁUSULA 3ª - DA LGPD: Conformidade com a Lei nº 13.709/2018.\n\nPindamonhangaba/SP, ${new Date().toLocaleDateString('pt-BR')}.`;
+
+    let footerMetaItems: string[] = [];
+    if (vi.showFooterAddress && vi.headerAddress) footerMetaItems.push(vi.headerAddress);
+    if (vi.showFooterPhone && (vi.contactPhone || currentTenant?.contactPhone)) {
+      footerMetaItems.push(`Tel: ${vi.contactPhone || currentTenant?.contactPhone}`);
+    }
+    if (vi.showFooterEmail && (vi.contactEmail || currentTenant?.contactEmail)) {
+      footerMetaItems.push(vi.contactEmail || currentTenant?.contactEmail);
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -500,15 +685,29 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
             </div>
           </div>
           <div class="content">${sampleDocText}</div>
-          <div style="margin-top: 40px; text-align: center;">
-            ${vi.signatureImageUrl ? `<img src="${vi.signatureImageUrl}" style="height: 44px; object-fit: contain; margin-bottom: 4px;" /><br/>` : `<div style="width: 200px; border-bottom: 1px solid #333; margin: 0 auto 6px auto;"></div>`}
-            <div style="font-weight: bold; font-size: 11pt;">${lawyerName}</div>
-            <div style="font-size: 10pt; color: ${accentColor}; font-family: monospace;">${lawyerOab}</div>
-            <div style="font-size: 9pt; color: #666;">${vi.signatoryRole || 'Advogada'}</div>
+          <div style="margin-top: 36px; text-align: center; font-family: ${fontFamily}, serif;">
+            ${vi.signatureImageUrl ? `<img src="${vi.signatureImageUrl}" style="height: 44px; object-fit: contain; margin-bottom: 6px;" /><br/>` : ''}
+            <div style="font-weight: bold; font-size: 11pt; color: #111;">${lawyerName}</div>
+            <div style="font-size: 10pt; color: ${accentColor}; font-family: monospace; font-weight: 600;">${lawyerOab}</div>
+            <div style="font-size: 9pt; color: #666; font-family: sans-serif;">${vi.signatoryRole || 'Advogada'}</div>
+            ${vi.showDigitalSignatureSeal !== false ? `
+              <div style="margin-top: 14px; display: inline-flex; flex-direction: column; align-items: center;">
+                <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1.5px solid #10b981; background-color: #ecfdf5; border-radius: 8px; color: #065f46; font-family: sans-serif; font-size: 8.5pt; font-weight: bold; letter-spacing: 0.5px;">
+                  <span>🔒 ASSINADO DIGITALMENTE</span>
+                  <span style="font-weight: normal; color: #047857; font-size: 8pt;">• Certificado ICP-Brasil / Token OAB</span>
+                </div>
+                <div style="margin-top: 4px; font-size: 7pt; color: #9ca3af; font-family: sans-serif;">
+                  (Documento assinado digitalmente nos termos da Lei nº 14.063/2020 e MP 2.200-2/2001)
+                </div>
+              </div>
+            ` : ''}
           </div>
-          <div class="footer">
-            ${vi.footerText || `${lawFirmName} • Documento emitido eletronicamente`}
-          </div>
+          ${vi.showFooterText !== false ? `
+            <div class="footer">
+              <div style="font-weight: 500;">${vi.footerText || `${lawFirmName} • Documento emitido eletronicamente`}</div>
+              ${footerMetaItems.length > 0 ? `<div style="margin-top: 4px; font-size: 7.5pt; color: #777;">${footerMetaItems.join(' • ')}</div>` : ''}
+            </div>
+          ` : ''}
           <script>window.onload = function() { window.print(); }</script>
         </body>
       </html>
@@ -604,60 +803,173 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
       {/* TAB 1: DESIGNER & LIVE A4 PREVIEW */}
       {activeMainTab === 'DESIGNER' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT: Controls (7 cols) */}
-          <div className="lg:col-span-7 space-y-5">
-            {/* SECTION 1: LOGO & CHANCELA */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Award className="w-4 h-4 text-indigo-600" />
-                  1. Logotipo Oficial & Chancela da Advogada
+        <div className="space-y-6">
+          {/* BANNER CLONAGEM VISUAL DE PDF PRONTO */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-indigo-500/30 relative overflow-hidden">
+            <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5 max-w-3xl">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-400/40 text-[10px] font-bold text-indigo-200 tracking-wide uppercase flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-300" />
+                    Importador Inteligente de Papel Timbrado
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                    PDF • PNG • JPG
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Importar e Copiar Papel Timbrado de Arquivo PDF Pronto
                 </h3>
-                <span className="text-[10px] text-slate-400 font-medium">Persistência em Disco e Banco</span>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Envie o arquivo original (PDF ou Imagem) da petição, procuração ou papel timbrado da sua banca: nossa inteligência artificial forense extrai automaticamente o <strong>logotipo</strong>, as <strong>cores (#hex)</strong>, a <strong>família de fontes</strong> (Times, Arial, Garamond), os <strong>tamanhos</strong>, o <strong>cabeçalho</strong> e o alinhamento completo.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {/* Logo Upload & Positioning */}
-                <div className="space-y-3 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800">Logotipo do Escritório</label>
-                    <input
-                      ref={logoFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleImageUpload(file, 'logo');
-                        e.target.value = '';
-                      }}
-                    />
-                    <div className="flex items-center gap-1.5">
-                      {vi.logoUrl && (
+              <div className="shrink-0 flex items-center gap-2">
+                <input
+                  ref={viImportFileRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  className="hidden"
+                  onChange={handleVisualIdentityFileUpload}
+                />
+                <button
+                  type="button"
+                  disabled={isAnalyzingVisualIdentity}
+                  onClick={() => viImportFileRef.current?.click()}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs transition-all flex items-center gap-2 shadow-lg disabled:opacity-50"
+                >
+                  {isAnalyzingVisualIdentity ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Analisando PDF & Extraindo Design...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 text-white" />
+                      <span>Importar PDF / Imagem Pronta</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ARQUIVO REAL ANEXADO DO PAPEL TIMBRADO */}
+          {vi.attachedLetterheadFile && (
+            <div className="p-4 rounded-2xl bg-white border border-indigo-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center text-indigo-600 shrink-0">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">
+                      Arquivo Matriz de Papel Timbrado Vinculado
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Formato Real Preservado
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    <strong>{vi.attachedLetterheadFile.fileName}</strong> • {(vi.attachedLetterheadFile.fileSize / 1024).toFixed(1)} KB • Carregado em {new Date(vi.attachedLetterheadFile.uploadedAt).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {vi.attachedLetterheadFile.dataUrl && (
+                  <a
+                    href={vi.attachedLetterheadFile.dataUrl}
+                    download={vi.attachedLetterheadFile.fileName}
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Baixar Arquivo Matriz</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Deseja desvincular este arquivo de papel timbrado?')) {
+                      const updatedVi = { ...vi, attachedLetterheadFile: undefined };
+                      setVi(updatedVi);
+                      handleSave(updatedVi);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-semibold"
+                >
+                  Desvincular
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* LEFT: Controls (7 cols) */}
+            <div className="lg:col-span-7 space-y-5">
+              {/* SECTION 1: LOGO & CHANCELA */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Award className="w-4 h-4 text-indigo-600" />
+                    1. Logotipo Oficial & Chancela da Advogada
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-medium">Persistência em Disco e Banco</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Logo Upload & Positioning */}
+                  <div className="space-y-3 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800">Logotipo do Escritório</label>
+                      <input
+                        ref={logoFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageUpload(file, 'logo');
+                          e.target.value = '';
+                        }}
+                      />
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleRemoveImage('logo')}
-                          title="Remover logotipo e manter apenas o nome do escritório"
-                          className="text-[11px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                          disabled={isAnalyzingVisualIdentity}
+                          onClick={() => viImportFileRef.current?.click()}
+                          title="Importar logotipo e design diretamente de um PDF pronto"
+                          className="text-[11px] px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold transition-all flex items-center gap-1 shadow-2xs disabled:opacity-50"
                         >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Remover</span>
+                          <Sparkles className="w-3 h-3 text-indigo-600" />
+                          <span>Do PDF</span>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => logoFileInputRef.current?.click()}
-                        className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
-                      >
-                        <Upload className="w-3 h-3" />
-                        <span>{vi.logoUrl ? 'Alterar' : 'Upload Imagem'}</span>
-                      </button>
+                        {vi.logoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage('logo')}
+                            title="Remover logotipo e manter apenas o nome do escritório"
+                            className="text-[11px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remover</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => logoFileInputRef.current?.click()}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all flex items-center gap-1 shadow-2xs"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>{vi.logoUrl ? 'Alterar' : 'Upload'}</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="relative h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden group">
-                    {vi.logoUrl ? (
+                    <div className="relative h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-2 overflow-hidden group">
+                      {vi.logoUrl ? (
                       <>
                         <img src={vi.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
                         <button
@@ -768,9 +1080,12 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                         </button>
                       </>
                     ) : (
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <FileSignature className="w-4 h-4 text-slate-300 shrink-0" />
-                        <span className="text-[11px] italic">Sem chancela (traço tradicional para caneta/física)</span>
+                      <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-emerald-800">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div className="text-left">
+                          <span className="text-[11px] font-bold block text-emerald-950">Assinatura Digital (Token OAB)</span>
+                          <span className="text-[10px] text-emerald-700 font-medium">Linha física dispensada • Espaço reservado para validação ICP-Brasil</span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -855,7 +1170,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                   Defina exatamente o que deve aparecer na Folha Timbrada:
                 </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {/* Elementos Exibidos no Cabeçalho e Rodapé */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   {/* Toggle OAB no cabeçalho */}
                   <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 cursor-pointer transition-all">
                     <input
@@ -866,7 +1182,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                     />
                     <div>
                       <span className="font-semibold text-slate-800 block">Exibir OAB no Cabeçalho</span>
-                      <span className="text-[10px] text-slate-500">Auto-dedutível, sem o prefixo &quot;Registro:&quot;</span>
+                      <span className="text-[10px] text-slate-500">Ex: OAB/SP 478.370</span>
                     </div>
                   </label>
 
@@ -893,8 +1209,8 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                       className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
                     />
                     <div>
-                      <span className="font-semibold text-slate-800 block">Exibir Telefone/Celular no Cabeçalho</span>
-                      <span className="text-[10px] text-slate-500">Opcional para quem não divulga número direto</span>
+                      <span className="font-semibold text-slate-800 block">Exibir Telefone no Cabeçalho</span>
+                      <span className="text-[10px] text-slate-500">Opcional no topo</span>
                     </div>
                   </label>
 
@@ -913,7 +1229,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                   </label>
 
                   {/* Toggle Rodapé com texto */}
-                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 cursor-pointer transition-all">
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition-all">
                     <input
                       type="checkbox"
                       checked={vi.showFooterText !== false}
@@ -922,7 +1238,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                     />
                     <div>
                       <span className="font-semibold text-slate-800 block">Exibir Rodapé Institucional</span>
-                      <span className="text-[10px] text-slate-500">Linha de encerramento no final da folha A4</span>
+                      <span className="text-[10px] text-slate-500">Linha de encerramento na base</span>
                     </div>
                   </label>
 
@@ -939,11 +1255,58 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                       <span className="text-[10px] text-slate-500">Posição alternativa e discreta</span>
                     </div>
                   </label>
+
+                  {/* Toggle Telefone no Rodapé */}
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition-all">
+                    <input
+                      type="checkbox"
+                      checked={!!vi.showFooterPhone}
+                      onChange={(e) => setVi({ ...vi, showFooterPhone: e.target.checked })}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <span className="font-semibold text-slate-800 block">Exibir Telefone no Rodapé</span>
+                      <span className="text-[10px] text-slate-500">Contato telefônico na base da folha</span>
+                    </div>
+                  </label>
+
+                  {/* Toggle E-mail no Rodapé */}
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition-all">
+                    <input
+                      type="checkbox"
+                      checked={!!vi.showFooterEmail}
+                      onChange={(e) => setVi({ ...vi, showFooterEmail: e.target.checked })}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <span className="font-semibold text-slate-800 block">Exibir E-mail no Rodapé</span>
+                      <span className="text-[10px] text-slate-500">E-mail oficial na base da folha</span>
+                    </div>
+                  </label>
+
+                  {/* Toggle Selo de Assinado Digitalmente (Token OAB) */}
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50 cursor-pointer transition-all sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={vi.showDigitalSignatureSeal !== false}
+                      onChange={(e) => setVi({ ...vi, showDigitalSignatureSeal: e.target.checked })}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <span className="font-semibold text-emerald-950 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        Selo & Espaço &quot;Assinado Digitalmente&quot; (Token OAB / ICP-Brasil)
+                      </span>
+                      <span className="text-[10px] text-emerald-800/80">
+                        Remove o traço obsoleto de caneta acima do nome e adiciona espaço com chancela digital oficial
+                      </span>
+                    </div>
+                  </label>
                 </div>
 
                 {/* Optional Field Inputs */}
-                {(vi.showHeaderAddress || vi.showFooterAddress || vi.showHeaderPhone) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
+                {(vi.showHeaderAddress || vi.showFooterAddress || vi.showHeaderPhone || vi.showFooterPhone || vi.showHeaderEmail || vi.showFooterEmail) && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
                     {(vi.showHeaderAddress || vi.showFooterAddress) && (
                       <div>
                         <label className="block text-slate-700 font-semibold mb-1">
@@ -958,7 +1321,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                         />
                       </div>
                     )}
-                    {vi.showHeaderPhone && (
+                    {(vi.showHeaderPhone || vi.showFooterPhone) && (
                       <div>
                         <label className="block text-slate-700 font-semibold mb-1">
                           Telefone / WhatsApp do Escritório
@@ -972,6 +1335,69 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                         />
                       </div>
                     )}
+                    {(vi.showHeaderEmail || vi.showFooterEmail) && (
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1">
+                          E-mail Institucional do Escritório
+                        </label>
+                        <input
+                          type="email"
+                          value={vi.contactEmail || ''}
+                          onChange={(e) => setVi({ ...vi, contactEmail: e.target.value })}
+                          placeholder="Ex: contato@gabrielacapitani.adv.br"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Edição do Texto Institucional do Rodapé */}
+                {vi.showFooterText !== false && (
+                  <div className="pt-3 border-t border-slate-100 text-xs space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <label className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Texto Institucional do Rodapé (Personalizado)</span>
+                      </label>
+                      <span className="text-[11px] text-slate-400">
+                        Aparecerá impresso na margem inferior de todas as páginas timbradas
+                      </span>
+                    </div>
+
+                    <textarea
+                      rows={2}
+                      value={vi.footerText || ''}
+                      onChange={(e) => setVi({ ...vi, footerText: e.target.value })}
+                      placeholder={`Ex: ${currentTenant?.name || 'GABRIELA CAPITANI ADVOCACIA'} • Sigilo, Excelência e Prática Forense`}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-900 text-xs focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed"
+                    />
+
+                    {/* Presets rápidos */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-500 font-medium mr-1">Sugestões de texto:</span>
+                      <button
+                        type="button"
+                        onClick={() => setVi({ ...vi, footerText: `${currentTenant?.name || 'GABRIELA CAPITANI ADVOCACIA'} • Sigilo, Excelência e Prática Forense Humanizada` })}
+                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-[10px] text-slate-600 border border-slate-200 transition-colors"
+                      >
+                        Padrão da Banca
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVi({ ...vi, footerText: 'Documento assinado eletronicamente com validade jurídica nos termos da Lei Federal nº 14.063/2020 e ICP-Brasil.' })}
+                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-[10px] text-slate-600 border border-slate-200 transition-colors"
+                      >
+                        Validade Eletrônica (Lei 14.063/20)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVi({ ...vi, footerText: 'DOCUMENTO PRIVILEGIADO E CONFIDENCIAL • Sigilo profissional resguardado pelo Art. 7º, II da Lei 8.906/94 (EAOAB).' })}
+                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-[10px] text-slate-600 border border-slate-200 transition-colors"
+                      >
+                        Sigilo & Confidencialidade
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -990,8 +1416,9 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
               {/* Layout Styles */}
               <div className="space-y-2 text-xs">
                 <label className="font-bold text-slate-800 block">Estilo de Formatação do Cabeçalho:</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                   {[
+                    { id: 'FULL_BANNER', label: 'Faixa Oficial (Banner)', desc: 'Faixa superior integral de borda a borda com cores e brasão' },
                     { id: 'MINIMALIST', label: 'Minimalista', desc: 'Sutil, foco no nome e OAB' },
                     { id: 'MODERN_BAR', label: 'Barra Executiva', desc: 'Faixa colorida moderna' },
                     { id: 'CLASSIC_CENTERED', label: 'Clássico Nobre', desc: 'Centralizado e solene' },
@@ -1003,7 +1430,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                       onClick={() => setVi({ ...vi, headerStyle: st.id as any })}
                       className={`p-3 rounded-xl border text-left transition-all ${
                         vi.headerStyle === st.id
-                          ? 'border-indigo-500 bg-indigo-50/70 shadow-xs'
+                          ? 'border-indigo-500 bg-indigo-50/70 shadow-xs ring-1 ring-indigo-500'
                           : 'border-slate-200 bg-white hover:bg-slate-50'
                       }`}
                     >
@@ -1159,67 +1586,88 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                 }}
               >
                 {/* Official Letterhead Header */}
-                <div
-                  style={{
-                    borderBottomWidth: vi.borderWidth || '2px',
-                    borderBottomStyle: vi.borderStyle === 'NONE' ? 'none' : vi.borderStyle === 'DOUBLE' ? 'double' : vi.borderStyle === 'DASHED' ? 'dashed' : 'solid',
-                    borderBottomColor: vi.accentColor || '#4338ca',
-                    paddingBottom: vi.headerPadding === 'COMPACT' ? '8px' : vi.headerPadding === 'SPACIOUS' ? '18px' : '12px',
-                  }}
-                  className={`flex flex-col ${
-                    vi.logoPosition === 'center'
-                      ? 'items-center text-center'
-                      : vi.logoPosition === 'right'
-                      ? 'items-end text-right'
-                      : 'items-start text-left'
-                  }`}
-                >
-                  {vi.logoUrl && (
+                {vi.headerStyle === 'FULL_BANNER' && (vi.headerBannerUrl || vi.logoUrl) ? (
+                  <div className="-mx-6 -mt-6 mb-4 overflow-hidden rounded-t-lg shadow-xs">
                     <img
-                      src={vi.logoUrl}
-                      alt="Logo Escritório"
-                      style={{ maxHeight: `${vi.logoMaxHeight || 44}px` }}
-                      className="object-contain mb-1.5"
+                      src={vi.headerBannerUrl || vi.logoUrl}
+                      alt="Cabeçalho Timbrado Oficial"
+                      className="w-full object-cover max-h-24 sm:max-h-28"
                     />
-                  )}
-
-                  <span
-                    style={{ color: vi.accentColor || '#1e1b4b' }}
-                    className="font-bold text-sm uppercase tracking-wider font-['Cinzel'] block"
-                  >
-                    {currentTenant?.name || 'GABRIELA CAPITANI ADVOCACIA'}
-                  </span>
-
-                  {/* Header Meta: Pure OAB without "Registro:", Optional Address, Phone */}
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-slate-600 font-sans mt-0.5">
-                    {vi.showHeaderOab !== false && (
-                      <span className="font-mono font-bold text-indigo-700">
-                        {vi.signatoryOab || 'OAB/SP 478.370'}
-                      </span>
-                    )}
-
-                    {vi.showHeaderAddress && vi.headerAddress && (
-                      <>
-                        {vi.showHeaderOab !== false && <span>•</span>}
-                        <span>{vi.headerAddress}</span>
-                      </>
-                    )}
-
-                    {vi.showHeaderPhone && (vi.contactPhone || currentTenant?.contactPhone) && (
-                      <>
-                        <span>•</span>
-                        <span>Tel: {vi.contactPhone || currentTenant?.contactPhone}</span>
-                      </>
-                    )}
-
-                    {vi.showHeaderEmail && (vi.contactEmail || currentTenant?.contactEmail) && (
-                      <>
-                        <span>•</span>
-                        <span>{vi.contactEmail || currentTenant?.contactEmail}</span>
-                      </>
+                    {(vi.showHeaderAddress || vi.showHeaderPhone || vi.showHeaderEmail) && (
+                      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[8.5px] text-slate-500 font-sans py-1 bg-slate-50/90 border-b border-slate-200">
+                        {vi.showHeaderAddress && vi.headerAddress && <span>{vi.headerAddress}</span>}
+                        {vi.showHeaderPhone && (vi.contactPhone || currentTenant?.contactPhone) && (
+                          <span>• Tel: {vi.contactPhone || currentTenant?.contactPhone}</span>
+                        )}
+                        {vi.showHeaderEmail && (vi.contactEmail || currentTenant?.contactEmail) && (
+                          <span>• {vi.contactEmail || currentTenant?.contactEmail}</span>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
+                ) : (
+                  <div
+                    style={{
+                      borderBottomWidth: vi.borderWidth || '2px',
+                      borderBottomStyle: vi.borderStyle === 'NONE' ? 'none' : vi.borderStyle === 'DOUBLE' ? 'double' : vi.borderStyle === 'DASHED' ? 'dashed' : 'solid',
+                      borderBottomColor: vi.accentColor || '#4338ca',
+                      paddingBottom: vi.headerPadding === 'COMPACT' ? '8px' : vi.headerPadding === 'SPACIOUS' ? '18px' : '12px',
+                    }}
+                    className={`flex flex-col ${
+                      vi.logoPosition === 'center'
+                        ? 'items-center text-center'
+                        : vi.logoPosition === 'right'
+                        ? 'items-end text-right'
+                        : 'items-start text-left'
+                    }`}
+                  >
+                    {vi.logoUrl && (
+                      <img
+                        src={vi.logoUrl}
+                        alt="Logo Escritório"
+                        style={{ maxHeight: `${vi.logoMaxHeight || 44}px` }}
+                        className="object-contain mb-1.5"
+                      />
+                    )}
+
+                    <span
+                      style={{ color: vi.accentColor || '#1e1b4b' }}
+                      className="font-bold text-sm uppercase tracking-wider font-['Cinzel'] block"
+                    >
+                      {currentTenant?.name || 'GABRIELA CAPITANI ADVOCACIA'}
+                    </span>
+
+                    {/* Header Meta: Pure OAB without "Registro:", Optional Address, Phone */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-slate-600 font-sans mt-0.5">
+                      {vi.showHeaderOab !== false && (
+                        <span className="font-mono font-bold text-indigo-700">
+                          {vi.signatoryOab || 'OAB/SP 478.370'}
+                        </span>
+                      )}
+
+                      {vi.showHeaderAddress && vi.headerAddress && (
+                        <>
+                          {vi.showHeaderOab !== false && <span>•</span>}
+                          <span>{vi.headerAddress}</span>
+                        </>
+                      )}
+
+                      {vi.showHeaderPhone && (vi.contactPhone || currentTenant?.contactPhone) && (
+                        <>
+                          <span>•</span>
+                          <span>Tel: {vi.contactPhone || currentTenant?.contactPhone}</span>
+                        </>
+                      )}
+
+                      {vi.showHeaderEmail && (vi.contactEmail || currentTenant?.contactEmail) && (
+                        <>
+                          <span>•</span>
+                          <span>{vi.contactEmail || currentTenant?.contactEmail}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Document Body Sample */}
                 <div className="py-4 space-y-3 flex-1 text-justify">
@@ -1232,7 +1680,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                         Autos nº 1002341-89.2026.8.26.0445
                       </p>
                       <p className={vi.paragraphIndent ? 'indent-6' : ''}>
-                        <strong>EMPRESA ALPHA LTDA</strong>, devidamente qualificada, por sua patrona constituída, vem perante Vossa Excelência apresentar <strong>RÉPLICA À CONTESTAÇÃO</strong> com esteio no art. 350 do CPC...
+                        <strong>EMPRESA ALPHA LTDA</strong>, devidamente qualificada, por sua patrona constituída, <u className="font-bold underline uppercase tracking-wide">{(vi.signatoryName || 'Dra. Gabriela M. Manni Capitani').toUpperCase()}</u>, inscrita na {vi.signatoryOab || 'OAB/SP 478.370'}, vem perante Vossa Excelência apresentar <strong>RÉPLICA À CONTESTAÇÃO</strong> com esteio no art. 350 do CPC...
                       </p>
                       {vi.jurisprudenceStyle === 'DESTAQUE_ENXUTO' ? (
                         <div className="pl-4 border-l-2 border-indigo-400 py-1 text-[10px] italic text-slate-700 bg-slate-50 rounded-r">
@@ -1258,7 +1706,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                         <strong>OUTORGANTE:</strong> JOÃO DA SILVA, brasileiro, empresário, CPF nº 123.456.789-00, residente em Pindamonhangaba/SP...
                       </p>
                       <p className="text-[10px]">
-                        <strong>OUTORGADA:</strong> {vi.signatoryName || 'DRA. GABRIELA M. MANNI CAPITANI'}, {vi.signatoryOab || 'OAB/SP 478.370'}, com escritório profissional...
+                        <strong>OUTORGADA:</strong> <u className="font-bold underline uppercase tracking-wide">{(vi.signatoryName || 'DRA. GABRIELA M. MANNI CAPITANI').toUpperCase()}</u>, inscrita na {vi.signatoryOab || 'OAB/SP 478.370'}, com escritório profissional...
                       </p>
                       <p className="text-[9px] text-slate-600">
                         PODERES: Cláusula ad judicia et extra para o foro em geral e poderes especiais do art. 105 do CPC/2015 (confessar, transigir, desistir, dar quitação e substabelecer).
@@ -1272,7 +1720,7 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                         CONTRATO DE HONORÁRIOS ADVOCATÍCIOS
                       </p>
                       <p className="text-[10px]">
-                        Pelo presente instrumento, de um lado o CONTRATANTE identificado e de outro a CONTRATADA {currentTenant?.name || 'Gabriela Capitani Advocacia'}, representada por {vi.signatoryName || 'Dra. Gabriela M. Manni Capitani'} ({vi.signatoryOab || 'OAB/SP 478.370'}).
+                        Pelo presente instrumento, de um lado o CONTRATANTE identificado e de outro a CONTRATADA {currentTenant?.name || 'Gabriela Capitani Advocacia'}, representada por sua patrona <u className="font-bold underline uppercase tracking-wide">{(vi.signatoryName || 'Dra. Gabriela M. Manni Capitani').toUpperCase()}</u> ({vi.signatoryOab || 'OAB/SP 478.370'}).
                       </p>
                       <p className="text-[10px]">
                         <strong>CLÁUSULA 1ª:</strong> O objeto consiste no patrocínio forense da causa com honorários pró-labore e cláusula quota litis conforme o Estatuto da OAB.
@@ -1296,14 +1744,12 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
 
                 {/* Signature Block */}
                 <div className="pt-3 flex flex-col items-center text-center">
-                  {vi.signatureImageUrl ? (
+                  {vi.signatureImageUrl && (
                     <img
                       src={vi.signatureImageUrl}
                       alt="Chancela"
-                      className="h-9 object-contain mb-1"
+                      className="h-9 object-contain mb-1.5"
                     />
-                  ) : (
-                    <div className="w-28 border-b border-slate-700 mb-1" />
                   )}
                   <p className="font-bold text-[10px] text-slate-900 leading-tight">
                     {vi.signatoryName || 'Dra. Gabriela M. Manni Capitani'}
@@ -1314,20 +1760,49 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                   <p className="text-[8px] text-slate-500 font-sans">
                     {vi.signatoryRole || 'Advogada Sócia e Titular'}
                   </p>
+
+                  {/* Espaço abaixo com Selo de "Assinado Digitalmente" com Token OAB */}
+                  {vi.showDigitalSignatureSeal !== false && (
+                    <div className="mt-2.5 flex flex-col items-center select-none">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-300 bg-emerald-50/90 text-emerald-800 shadow-2xs">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <div className="flex flex-col items-start leading-tight text-left">
+                          <span className="text-[7.5px] font-bold tracking-wider uppercase text-emerald-900">
+                            Assinado Digitalmente
+                          </span>
+                          <span className="text-[6.5px] text-emerald-700 font-mono">
+                            Certificado ICP-Brasil • Token OAB
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[6.5px] text-slate-400 font-sans mt-0.5">
+                        (Espaço reservado para validação eletrônica e protocolo)
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Official Footer */}
                 {vi.showFooterText !== false && (
-                  <div className="border-t border-slate-200 pt-2 text-center text-[8px] text-slate-500 font-sans">
-                    <p>{vi.footerText || `${currentTenant?.name || 'Gabriela Capitani Advocacia'} • ${vi.signatoryOab || 'OAB/SP 478.370'}`}</p>
-                    {vi.showFooterAddress && vi.headerAddress && (
-                      <p className="mt-0.5 text-[7px] text-slate-400">{vi.headerAddress}</p>
+                  <div className="border-t border-slate-200 pt-2 text-center text-[8px] text-slate-500 font-sans space-y-0.5">
+                    <p className="font-medium text-slate-700">
+                      {vi.footerText || `${currentTenant?.name || 'Gabriela Capitani Advocacia'} • ${vi.signatoryOab || 'OAB/SP 478.370'}`}
+                    </p>
+                    {(vi.showFooterAddress || vi.showFooterPhone || vi.showFooterEmail) && (
+                      <p className="text-[7.5px] text-slate-400">
+                        {[
+                          vi.showFooterAddress && vi.headerAddress ? vi.headerAddress : null,
+                          vi.showFooterPhone && (vi.contactPhone || currentTenant?.contactPhone) ? `Tel: ${vi.contactPhone || currentTenant?.contactPhone}` : null,
+                          vi.showFooterEmail && (vi.contactEmail || currentTenant?.contactEmail) ? (vi.contactEmail || currentTenant?.contactEmail) : null,
+                        ].filter(Boolean).join(' • ')}
+                      </p>
                     )}
                   </div>
                 )}
               </div>
             </div>
           </div>
+        </div>
         </div>
       )}
 
@@ -1462,6 +1937,49 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                                 </span>
                               )}
                             </div>
+
+                            {/* Attached File & Layout Style Badges */}
+                            {tmpl.attachedFile && (
+                              <div className="p-2 rounded-lg bg-indigo-50/80 border border-indigo-150 flex items-center justify-between gap-1 text-[10px]">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <FileCode className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  <span className="font-semibold text-indigo-950 truncate">
+                                    {tmpl.attachedFile.fileName}
+                                  </span>
+                                  <span className="text-[9px] text-indigo-600 font-mono">
+                                    ({(tmpl.attachedFile.fileSize / 1024).toFixed(0)}KB)
+                                  </span>
+                                </div>
+                                {tmpl.attachedFile.dataUrl && (
+                                  <a
+                                    href={tmpl.attachedFile.dataUrl}
+                                    download={tmpl.attachedFile.fileName}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-1 rounded hover:bg-indigo-100 text-indigo-700 transition-colors"
+                                    title="Baixar arquivo original formatado"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {tmpl.layoutStyle && (
+                              <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-mono">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                                  {tmpl.layoutStyle.fontFamily || 'Fonte Preservada'}
+                                </span>
+                                <span>•</span>
+                                <span>{tmpl.layoutStyle.fontSize || '12pt'}</span>
+                                {tmpl.layoutStyle.accentColor && (
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full inline-block border border-slate-300 ml-1"
+                                    style={{ backgroundColor: tmpl.layoutStyle.accentColor }}
+                                    title={`Cor de destaque: ${tmpl.layoutStyle.accentColor}`}
+                                  />
+                                )}
+                              </div>
+                            )}
 
                             <p className="text-[11px] text-slate-500 line-clamp-2 font-mono">
                               {tmpl.content.slice(0, 110)}...
@@ -1651,21 +2169,129 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                 </div>
               )}
 
+              {/* Attached File Display in Modal */}
+              {templateForm.attachedFile && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                      <FileCode className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-800 text-xs truncate max-w-[260px]">
+                          {templateForm.attachedFile.fileName}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                          Arquivo Matriz Anexado
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Tamanho: {(templateForm.attachedFile.fileSize / 1024).toFixed(1)} KB • Formato original e cabeçalhos preservados
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {templateForm.attachedFile.dataUrl && (
+                      <a
+                        href={templateForm.attachedFile.dataUrl}
+                        download={templateForm.attachedFile.fileName}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-[11px] flex items-center gap-1 transition-all shadow-2xs"
+                      >
+                        <Download className="w-3 h-3 text-indigo-600" />
+                        <span>Baixar Original</span>
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          attachedFile: undefined,
+                          htmlContent: undefined,
+                        }))
+                      }
+                      className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-[11px] font-semibold"
+                    >
+                      Remover Vínculo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Layout / Typography Info */}
+              {templateForm.layoutStyle && (
+                <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-indigo-50/50 border border-indigo-100 text-[10px] text-indigo-900 font-mono">
+                  <span>
+                    Tipografia Preservada: <strong>{templateForm.layoutStyle.fontFamily || 'Padrão'}</strong> ({templateForm.layoutStyle.fontSize || '12pt'}, entrelinhas {templateForm.layoutStyle.lineSpacing || '1.5'})
+                  </span>
+                  {templateForm.layoutStyle.accentColor && (
+                    <span className="flex items-center gap-1">
+                      Cor:{' '}
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block border border-slate-300"
+                        style={{ backgroundColor: templateForm.layoutStyle.accentColor }}
+                      />
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-700 font-semibold">Conteúdo da Minuta / Template</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <label className="text-slate-700 font-semibold">Conteúdo da Minuta / Template</label>
+                    {templateForm.htmlContent && (
+                      <div className="flex items-center rounded-lg bg-slate-100 p-0.5 text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setTemplateModalViewMode('TEXT')}
+                          className={`px-2 py-0.5 rounded-md transition-all ${
+                            templateModalViewMode === 'TEXT'
+                              ? 'bg-white text-indigo-700 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Texto & Variáveis
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTemplateModalViewMode('HTML')}
+                          className={`px-2 py-0.5 rounded-md transition-all ${
+                            templateModalViewMode === 'HTML'
+                              ? 'bg-white text-indigo-700 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Formatação Real (HTML)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-[10px] text-slate-500">
                     Use placeholders &#123;&#123;NOME_CLIENTE&#125;&#125;, &#123;&#123;CPF_CLIENTE&#125;&#125;, etc.
                   </span>
                 </div>
-                <textarea
-                  rows={10}
-                  required
-                  value={templateForm.content}
-                  onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
-                  placeholder="Insira o texto forense padronizado com as variáveis..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                />
+
+                {templateModalViewMode === 'HTML' && templateForm.htmlContent ? (
+                  <div
+                    className="w-full bg-white border border-slate-200 rounded-lg p-4 text-slate-900 max-h-[350px] overflow-y-auto shadow-inner text-xs leading-relaxed"
+                    style={{
+                      fontFamily: templateForm.layoutStyle?.fontFamily || vi.fontFamily || 'Times New Roman',
+                      lineHeight: templateForm.layoutStyle?.lineSpacing || vi.lineSpacing || '1.5',
+                    }}
+                    dangerouslySetInnerHTML={{ __html: templateForm.htmlContent }}
+                  />
+                ) : (
+                  <textarea
+                    rows={10}
+                    required
+                    value={templateForm.content}
+                    onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
+                    placeholder="Insira o texto forense padronizado com as variáveis..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                  />
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
@@ -1857,6 +2483,61 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                     </div>
                   )}
 
+                  {/* Attached File in AI Modal */}
+                  {aiAttachedFile && (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                          <FileCheck className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 truncate max-w-[280px]">
+                              {aiAttachedFile.fileName}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                              Matriz Original Vinculada
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500">
+                            {(aiAttachedFile.fileSize / 1024).toFixed(1)} KB • Formatação, fontes e cabeçalhos preservados
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {aiAttachedFile.dataUrl && (
+                          <a
+                            href={aiAttachedFile.dataUrl}
+                            download={aiAttachedFile.fileName}
+                            className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-[11px] flex items-center gap-1 shadow-2xs"
+                          >
+                            <Download className="w-3 h-3 text-indigo-600" />
+                            <span>Baixar</span>
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiAttachedFile(null);
+                            setAiRawHtml('');
+                          }}
+                          className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-[11px] font-semibold"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LGPD Preservation Note */}
+                  <div className="p-2.5 rounded-lg bg-indigo-50/50 border border-indigo-100 text-[11px] text-indigo-950 flex items-start gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Higienização Real de Dados Pessoais (LGPD):</strong> Os dados de clientes e partes (CPF, RG, endereços, etc.) serão substituídos por variáveis automáticas &#123;&#123;...&#125;&#125;. Os dados do escritório/advogada, logotipo, formatação, fontes, cores, cabeçalhos e rodapés serão 100% mantidos no arquivo final.
+                    </div>
+                  </div>
+
                   <textarea
                     rows={8}
                     value={aiRawInput}
@@ -1925,16 +2606,83 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                     </div>
                   )}
 
+                  {/* Attached File Confirmation */}
+                  {(aiResult.attachedFile || aiAttachedFile) && (
+                    <div className="p-2.5 rounded-lg bg-white border border-emerald-200 flex items-center justify-between gap-2 text-xs shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-slate-800 truncate">
+                          {(aiResult.attachedFile || aiAttachedFile)?.fileName}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                          Matriz Vinculada ao Modelo
+                        </span>
+                      </div>
+                      {(aiResult.attachedFile?.dataUrl || aiAttachedFile?.dataUrl) && (
+                        <a
+                          href={(aiResult.attachedFile || aiAttachedFile)?.dataUrl}
+                          download={(aiResult.attachedFile || aiAttachedFile)?.fileName}
+                          className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1"
+                        >
+                          <Download className="w-3 h-3 text-indigo-600" />
+                          <span>Baixar</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   <div>
-                    <label className="text-slate-800 font-bold block mb-1">
-                      Minuta Higienizada & Pronta para o Escritório:
-                    </label>
-                    <textarea
-                      rows={8}
-                      value={aiResult.sanitizedContent}
-                      onChange={(e) => setAiResult({ ...aiResult, sanitizedContent: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-slate-800 font-bold block">
+                        Minuta Higienizada & Pronta para o Escritório:
+                      </label>
+                      {(aiResult.sanitizedHtmlContent || aiRawHtml) && (
+                        <div className="flex items-center rounded-lg bg-slate-200/70 p-0.5 text-[10px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setAiResultViewMode('TEXT')}
+                            className={`px-2 py-0.5 rounded-md transition-all ${
+                              aiResultViewMode === 'TEXT'
+                                ? 'bg-white text-indigo-700 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Texto & Variáveis
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAiResultViewMode('HTML')}
+                            className={`px-2 py-0.5 rounded-md transition-all ${
+                              aiResultViewMode === 'HTML'
+                                ? 'bg-white text-indigo-700 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Formatação Real (HTML)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {aiResultViewMode === 'HTML' && (aiResult.sanitizedHtmlContent || aiRawHtml) ? (
+                      <div
+                        className="w-full bg-white border border-slate-300 rounded-lg p-4 text-slate-900 max-h-[300px] overflow-y-auto shadow-inner text-xs leading-relaxed"
+                        style={{
+                          fontFamily: aiResult.layoutStyle?.fontFamily || vi.fontFamily || 'Times New Roman',
+                          lineHeight: aiResult.layoutStyle?.lineSpacing || vi.lineSpacing || '1.5',
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: aiResult.sanitizedHtmlContent || aiRawHtml,
+                        }}
+                      />
+                    ) : (
+                      <textarea
+                        rows={8}
+                        value={aiResult.sanitizedContent}
+                        onChange={(e) => setAiResult({ ...aiResult, sanitizedContent: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 font-mono text-[11px] focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    )}
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2">
@@ -1956,6 +2704,304 @@ export const BrandingSettingsTab: React.FC<BrandingSettingsTabProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL: REVISÃO E APLICAÇÃO DE IDENTIDADE VISUAL EXTRAÍDA DE PDF / IMAGEM */}
+      {isVisualIdentityImportModalOpen && visualIdentityAnalysisResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                  <Sparkles className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Design e Identidade Visual Extraídos do Arquivo
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Revise o logotipo, fontes, cores e layout detectados antes de aplicar ao papel timbrado
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVisualIdentityImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 overflow-y-auto text-xs">
+              {/* Summary banner */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-100 flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-indigo-950">Resumo da Extração Forense:</span>
+                  <p className="text-[11px] text-indigo-900/80 leading-relaxed">
+                    {visualIdentityAnalysisResult.summary}
+                  </p>
+                </div>
+              </div>
+
+              {/* 1. Logotipo Extraído */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Award className="w-4 h-4 text-indigo-600" />
+                    1. Logotipo Detectado no Documento
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {visualIdentityAnalysisResult.extractedImages.length} imagem(ns) encontrada(s) no arquivo
+                  </span>
+                </div>
+
+                {visualIdentityAnalysisResult.extractedImages.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-stretch gap-3">
+                      {visualIdentityAnalysisResult.extractedImages.map((img: any, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedLogoFromPdf(img.dataUrl)}
+                          className={`relative p-2.5 rounded-xl border text-left transition-all bg-white flex flex-col items-center justify-between gap-1.5 ${
+                            selectedLogoFromPdf === img.dataUrl
+                              ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs bg-indigo-50/20'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center p-1 min-h-[60px]">
+                            <img
+                              src={img.dataUrl}
+                              alt={img.label || `Opção ${idx + 1}`}
+                              className="max-h-16 max-w-[240px] w-auto object-contain rounded"
+                            />
+                          </div>
+                          <span className="text-[10px] font-semibold text-slate-700 text-center max-w-[240px] truncate block">
+                            {img.label || (img.isPrimaryLogo ? 'Cabeçalho Principal' : `Opção ${idx + 1}`)}
+                          </span>
+                          {selectedLogoFromPdf === img.dataUrl && (
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLogoFromPdf(null)}
+                        className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-all self-center ${
+                          selectedLogoFromPdf === null
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                            : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        Deixar sem logotipo
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Selecione a faixa de cabeçalho timbrado ou o logotipo oficial extraído para aplicar automaticamente a todos os documentos gerados.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-center gap-2">
+                    <Info className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>Nenhuma imagem rasterizada de logotipo foi identificada no PDF. O papel timbrado utilizará o cabeçalho institucional tipográfico.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Cores & Tipografia */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Colors Card */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3 shadow-2xs">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Palette className="w-4 h-4 text-indigo-600" />
+                    2. Cores & Linhas Detectadas
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Cor de Destaque:</span>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-5 h-5 rounded-md border border-black/10 shadow-2xs"
+                          style={{ backgroundColor: visualIdentityAnalysisResult.visualIdentity.accentColor || '#1e3a8a' }}
+                        />
+                        <span className="font-mono font-bold text-slate-800 uppercase">
+                          {visualIdentityAnalysisResult.visualIdentity.accentColor || '#1e3a8a'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Estilo de Borda:</span>
+                      <span className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.borderStyle || 'SOLID'} ({visualIdentityAnalysisResult.visualIdentity.borderWidth || '2px'})
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Estilo do Cabeçalho:</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                        {visualIdentityAnalysisResult.visualIdentity.headerStyle}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Typography Card */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3 shadow-2xs">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Type className="w-4 h-4 text-indigo-600" />
+                    3. Tipografia & Dimensões Forenses
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Fonte Principal:</span>
+                      <span className="font-bold text-slate-900" style={{ fontFamily: visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman' }}>
+                        {visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Tamanho do Corpo:</span>
+                      <span className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.bodyFontSize || '12pt'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-600 font-medium">Espaçamento Entrelinhas:</span>
+                      <span className="font-bold text-slate-800">
+                        {visualIdentityAnalysisResult.visualIdentity.lineSpacing || '1.5'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Dados Oficiais Identificados */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 shadow-2xs">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  4. Dados Cadastrais Identificados no Documento
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  {visualIdentityAnalysisResult.detectedLawFirmName && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Escritório / Sociedade:</span>
+                      <span className="font-bold text-slate-800">{visualIdentityAnalysisResult.detectedLawFirmName}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.signatoryName && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Advogado(a) Titular:</span>
+                      <span className="font-bold text-slate-800">{visualIdentityAnalysisResult.visualIdentity.signatoryName}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.signatoryOab && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Inscrição OAB:</span>
+                      <span className="font-mono font-bold text-indigo-700">{visualIdentityAnalysisResult.visualIdentity.signatoryOab}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.contactPhone && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="text-slate-500 block">Telefone / WhatsApp:</span>
+                      <span className="font-bold text-slate-800">{visualIdentityAnalysisResult.visualIdentity.contactPhone}</span>
+                    </div>
+                  )}
+                  {visualIdentityAnalysisResult.visualIdentity.headerAddress && (
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 sm:col-span-2">
+                      <span className="text-slate-500 block">Endereço:</span>
+                      <span className="font-medium text-slate-800">{visualIdentityAnalysisResult.visualIdentity.headerAddress}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 4. Live Mini Preview */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                  <Eye className="w-4 h-4 text-indigo-600" />
+                  5. Prévia do Papel Timbrado com as Configurações Extraídas
+                </label>
+                <div
+                  className="p-5 rounded-lg border border-slate-300 bg-white shadow-xs space-y-4"
+                  style={{ fontFamily: visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman' }}
+                >
+                  {(visualIdentityAnalysisResult.visualIdentity.headerStyle === 'FULL_BANNER' || visualIdentityAnalysisResult.visualIdentity.headerBannerUrl) && selectedLogoFromPdf ? (
+                    <div className="-mx-5 -mt-5 mb-4 overflow-hidden rounded-t-lg shadow-2xs">
+                      <img
+                        src={selectedLogoFromPdf || visualIdentityAnalysisResult.visualIdentity.headerBannerUrl}
+                        alt="Faixa Superior do Papel Timbrado Oficial"
+                        className="w-full object-cover max-h-24 sm:max-h-28"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`flex items-center justify-between pb-3 ${
+                        visualIdentityAnalysisResult.visualIdentity.borderStyle !== 'NONE'
+                          ? 'border-b'
+                          : ''
+                      }`}
+                      style={{
+                        borderColor: visualIdentityAnalysisResult.visualIdentity.accentColor || '#5C1217',
+                        borderBottomWidth: visualIdentityAnalysisResult.visualIdentity.borderWidth || '2px',
+                      }}
+                    >
+                      {selectedLogoFromPdf ? (
+                        <img
+                          src={selectedLogoFromPdf}
+                          alt="Logo Preview"
+                          className="max-h-12 max-w-[180px] object-contain"
+                        />
+                      ) : (
+                        <div>
+                          <div className="font-bold text-sm text-slate-900 font-['Cinzel']">
+                            {visualIdentityAnalysisResult.detectedLawFirmName || currentTenant?.name || 'GABRIELA CAPITANI ADVOCACIA'}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-sans">
+                            {visualIdentityAnalysisResult.visualIdentity.signatoryOab || 'OAB/SP 478.370'}
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-right text-[10px] text-slate-600 font-sans">
+                        <div className="font-bold text-slate-800">
+                          {visualIdentityAnalysisResult.visualIdentity.signatoryName || 'Dra. Gabriela M. Manni Capitani'}
+                        </div>
+                        <div className="font-mono text-[9px]" style={{ color: visualIdentityAnalysisResult.visualIdentity.accentColor || '#5C1217' }}>
+                          {visualIdentityAnalysisResult.visualIdentity.signatoryOab || 'OAB/SP 478.370'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-[11px] text-slate-700 leading-relaxed text-justify">
+                    Excelentíssimo(a) Senhor(a) Doutor(a) Juiz(a) de Direito. Documento gerado com fidelidade à identidade visual forense da banca: tipografia {visualIdentityAnalysisResult.visualIdentity.fontFamily || 'Times New Roman'}, corpo {visualIdentityAnalysisResult.visualIdentity.bodyFontSize || '12pt'} e entrelinhas {visualIdentityAnalysisResult.visualIdentity.lineSpacing || '1.5'}.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsVisualIdentityImportModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-200 font-semibold text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApplyAnalyzedVisualIdentity}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all flex items-center gap-2 shadow-md"
+              >
+                <Check className="w-4 h-4 text-emerald-300" />
+                <span>Aplicar Design no Escritório & Salvar</span>
+              </button>
             </div>
           </div>
         </div>

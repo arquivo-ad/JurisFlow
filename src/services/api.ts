@@ -42,6 +42,14 @@ import {
   SystemUpdateManifest,
   SystemUpdateLog,
   SystemHealthReport,
+  SupportApiKey,
+  TenantSecurityConfig,
+  LocalDrConfig,
+  LocalDrTestResult,
+  EnvironmentSetupScriptRequest,
+  EnvironmentSetupScriptResponse,
+  PortCheckRequest,
+  PortCheckResponse,
 } from '../types';
 
 const DEFAULT_TENANT_ID = 't-1789481820042';
@@ -75,6 +83,7 @@ function getInitialStorage(key: string, fallback: string): string {
 let currentTenantId = getInitialStorage('jurisflow_tenant_id', DEFAULT_TENANT_ID);
 let currentBranchId = getInitialStorage('jurisflow_branch_id', DEFAULT_BRANCH_ID);
 let currentUserId = getInitialStorage('jurisflow_user_id', DEFAULT_USER_ID);
+let currentSupportApiKey = typeof window !== 'undefined' ? localStorage.getItem('jurisflow_support_apikey') || '' : '';
 
 export function setTenantContext(tenantId: string, branchId?: string, userId?: string) {
   currentTenantId = tenantId;
@@ -89,17 +98,33 @@ export function setTenantContext(tenantId: string, branchId?: string, userId?: s
   }
 }
 
+export function setSupportApiKey(key: string) {
+  currentSupportApiKey = key;
+  if (typeof window !== 'undefined') {
+    if (key) {
+      localStorage.setItem('jurisflow_support_apikey', key);
+    } else {
+      localStorage.removeItem('jurisflow_support_apikey');
+    }
+  }
+}
+
+export function getSupportApiKey() {
+  return currentSupportApiKey;
+}
+
 export function getTenantContext() {
-  return { tenantId: currentTenantId, branchId: currentBranchId, userId: currentUserId };
+  return { tenantId: currentTenantId, branchId: currentBranchId, userId: currentUserId, supportApiKey: currentSupportApiKey };
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-tenant-id': currentTenantId,
     'x-branch-id': currentBranchId,
     'x-user-id': currentUserId,
-    ...(options.headers || {}),
+    ...(currentSupportApiKey ? { 'x-support-apikey': currentSupportApiKey } : {}),
+    ...(options.headers as Record<string, string> || {}),
   };
 
   const response = await fetch(endpoint, {
@@ -386,14 +411,38 @@ export const api = {
     category: string;
     modelName?: string;
     rawContent?: string;
+    rawHtmlContent?: string;
+    attachedFile?: {
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      dataUrl?: string;
+      uploadedAt: string;
+    };
   }) =>
     request<{
       sanitizedContent: string;
+      sanitizedHtmlContent?: string;
       extractedVariables: string[];
       titleSuggestion: string;
       summary: string;
       suggestions?: string[];
       complianceNotes?: string;
+      attachedFile?: {
+        fileName: string;
+        fileType: string;
+        fileSize: number;
+        dataUrl?: string;
+        uploadedAt: string;
+      };
+      layoutStyle?: {
+        fontFamily?: string;
+        fontSize?: string;
+        lineSpacing?: string;
+        accentColor?: string;
+        headerIncluded?: boolean;
+        footerIncluded?: boolean;
+      };
     }>('/api/ai/template-sanitize-suggest', {
       method: 'POST',
       body: JSON.stringify(params),
@@ -410,17 +459,82 @@ export const api = {
       reader.readAsDataURL(file);
     });
 
+    const dataUrl = `data:${file.type || 'application/octet-stream'};base64,${base64}`;
+
     return request<{
       text: string;
+      htmlContent?: string;
       fileName: string;
+      fileSize?: number;
+      fileType?: string;
+      fileBase64?: string;
+      dataUrl?: string;
       charCount: number;
       detectedVariables: string[];
       suggestedTitle: string;
+      attachedFile?: {
+        fileName: string;
+        fileType: string;
+        fileSize: number;
+        dataUrl?: string;
+        uploadedAt: string;
+      };
+      layoutStyle?: {
+        fontFamily?: string;
+        fontSize?: string;
+        lineSpacing?: string;
+        accentColor?: string;
+        headerIncluded?: boolean;
+        footerIncluded?: boolean;
+      };
     }>('/api/documents/extract-file-content', {
       method: 'POST',
       body: JSON.stringify({
         fileName: file.name,
         mimeType: file.type,
+        fileSize: file.size,
+        fileBase64: base64,
+      }),
+    });
+  },
+  analyzeVisualIdentityFromDoc: async (file: File) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64Data = result.includes(',') ? result.split(',')[1] : result;
+        resolve(base64Data);
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+
+    const dataUrl = `data:${file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream')};base64,${base64}`;
+
+    return request<{
+      success: boolean;
+      visualIdentity: Partial<TenantVisualIdentity>;
+      extractedImages: Array<{
+        dataUrl: string;
+        width?: number;
+        height?: number;
+        isPrimaryLogo?: boolean;
+      }>;
+      summary: string;
+      detectedLawFirmName?: string;
+      attachedLetterheadFile?: {
+        fileName: string;
+        fileType: string;
+        fileSize: number;
+        dataUrl: string;
+        uploadedAt: string;
+      };
+    }>('/api/documents/analyze-visual-identity', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'),
+        fileSize: file.size,
         fileBase64: base64,
       }),
     });
@@ -496,6 +610,98 @@ export const api = {
   pingDatabase: (id: string) =>
     request<{ success: boolean; latencyMs: number; status: string; message: string }>(`/api/databases/${id}/ping`, {
       method: 'POST',
+    }),
+
+  // Disaster Recovery (DR) Local Offline & Automated Failover/Failback
+  getDrStatus: () =>
+    request<{
+      activeNode: DatabaseNode;
+      drNode: DatabaseNode;
+      cloudNode: DatabaseNode;
+      isDrActive: boolean;
+      cloudStatus: string;
+      lastCloudPingAt: string;
+      pendingSyncCount: number;
+      offlineStorageBytes: number;
+      totalLocalRecords: number;
+      mode: string;
+    }>('/api/databases/dr-status'),
+  failoverToDr: () =>
+    request<{ success: boolean; message: string; activeNode: DatabaseNode; nodes: DatabaseNode[] }>(
+      '/api/databases/failover-to-dr',
+      { method: 'POST' }
+    ),
+  syncDrToCloud: () =>
+    request<{
+      success: boolean;
+      cloudRestored: boolean;
+      recordsSynced: number;
+      message: string;
+      activeNode: DatabaseNode;
+      nodes: DatabaseNode[];
+    }>('/api/databases/sync-dr-to-cloud', { method: 'POST' }),
+  pingCloudDatabase: () =>
+    request<{ success: boolean; status: string; latencyMs: number; message: string }>('/api/databases/cloud-ping', {
+      method: 'POST',
+    }),
+  getLocalDrConfig: () => request<LocalDrConfig>('/api/databases/local-dr-config'),
+  updateLocalDrConfig: (data: Partial<LocalDrConfig>) =>
+    request<{ success: boolean; config: LocalDrConfig; message: string }>('/api/databases/local-dr-config', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  testLocalDrConnection: (config?: Partial<LocalDrConfig>) =>
+    request<LocalDrTestResult>('/api/databases/test-connection', {
+      method: 'POST',
+      body: JSON.stringify(config || {}),
+    }),
+  generateEnvironmentSetupScript: (req: EnvironmentSetupScriptRequest) =>
+    request<EnvironmentSetupScriptResponse>('/api/databases/generate-install-script', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  checkPortAvailability: (port: number, host?: string) =>
+    request<PortCheckResponse>('/api/databases/check-port', {
+      method: 'POST',
+      body: JSON.stringify({ port, host }),
+    }),
+
+  // Tenant Security, Strict Isolation & Support API Keys
+  getTenantSecurityConfig: () =>
+    request<
+      TenantSecurityConfig & {
+        tenantName: string;
+        tablesCount: number;
+        totalTenantRecords: number;
+        rlsEnforced: boolean;
+        superAdminAccessGranted: boolean;
+      }
+    >('/api/tenant/security-config'),
+  setProductionLock: (isProductionLocked: boolean) =>
+    request<{ success: boolean; isProductionLocked: boolean; message: string }>('/api/tenant/production-lock', {
+      method: 'POST',
+      body: JSON.stringify({ isProductionLocked }),
+    }),
+  generateSupportApiKey: (data: { durationHours: number; reason: string; scope: 'FULL_ADMIN_SUPPORT' | 'READ_ONLY_AUDIT' }) =>
+    request<{ success: boolean; supportKey: SupportApiKey; message: string }>('/api/tenant/support-keys', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeSupportApiKey: (keyId: string) =>
+    request<{ success: boolean; message: string; key: SupportApiKey }>(`/api/tenant/support-keys/${keyId}/revoke`, {
+      method: 'POST',
+    }),
+  validateSupportApiKey: (key: string, tenantId?: string) =>
+    request<{
+      valid: boolean;
+      tenantId: string;
+      scope: string;
+      expiresAt: string;
+      message: string;
+      supportKey: SupportApiKey;
+    }>('/api/tenant/support-keys/validate', {
+      method: 'POST',
+      body: JSON.stringify({ key, tenantId }),
     }),
 
   // Supabase PostgreSQL Persistence Status & Sync

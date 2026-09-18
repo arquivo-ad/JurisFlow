@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { DocumentItem, DocumentTemplate, Case, Person, DocumentCategory, DigitalSignatureInfo } from '../../types';
 import { api } from '../../services/api';
+import { formatLawyerNameInBody } from '../../utils/forensicFormatter';
 
 interface DocumentsViewProps {
   documents: DocumentItem[];
@@ -79,6 +80,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Selected Document Detail/Drawer State
+  const vi = currentTenant?.visualIdentity || {};
+  const currentLawyerName = vi.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
   const [isEditingDoc, setIsEditingDoc] = useState(false);
   const [editDocContent, setEditDocContent] = useState('');
@@ -87,9 +91,15 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   // Digital Signature Modal State
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
-  const [signerName, setSignerName] = useState('Dr. Carlos Silveira');
+  const [signerName, setSignerName] = useState(
+    currentTenant?.visualIdentity?.signatoryName || 'Dra. Gabriela M. Manni Capitani'
+  );
   const [signerCpf, setSignerCpf] = useState('123.456.789-00');
-  const [signerRole, setSignerRole] = useState('Advogado Titular - OAB/SP 412.890');
+  const [signerRole, setSignerRole] = useState(
+    currentTenant?.visualIdentity?.signatoryOab
+      ? `Advogada Titular - ${currentTenant.visualIdentity.signatoryOab}`
+      : 'Advogada Titular - OAB/SP 478.370'
+  );
   const [isSigning, setIsSigning] = useState(false);
 
   // New Document Modal State
@@ -204,6 +214,8 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     try {
       const relatedCase = cases.find((c) => c.id === templateCaseId);
       const relatedPerson = persons.find((p) => p.id === templatePersonId);
+      const lawyerToFormat = vi.signatoryName || 'Dra. Gabriela M. Manni Capitani';
+      const formattedToSave = formatLawyerNameInBody(renderedContent, lawyerToFormat);
 
       await onSaveDocument({
         title: `${selectedTemplate.title || selectedTemplate.name || 'Documento'} - ${relatedPerson?.name || 'Cliente'} (${new Date().toLocaleDateString('pt-BR')})`,
@@ -213,7 +225,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
         caseNumber: relatedCase?.cnjNumber,
         personId: relatedPerson?.id,
         personName: relatedPerson?.name,
-        content: renderedContent,
+        content: formattedToSave,
         status: 'DRAFT',
       });
       setIsRenderModalOpen(false);
@@ -378,9 +390,23 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
     if (showHeaderPhone) headerMetaItems.push(`Tel: ${vi.contactPhone || currentTenant?.contactPhone}`);
     if (showHeaderEmail) headerMetaItems.push(vi.contactEmail || currentTenant?.contactEmail);
 
+    // Footer items (Phone, Email, Address, Custom institutional text)
+    const showFooterText = vi.showFooterText !== false;
+    const showFooterAddress = !!vi.showFooterAddress && !!vi.headerAddress;
+    const showFooterPhone = !!vi.showFooterPhone && !!(vi.contactPhone || currentTenant?.contactPhone);
+    const showFooterEmail = !!vi.showFooterEmail && !!(vi.contactEmail || currentTenant?.contactEmail);
+
+    let footerMetaItems: string[] = [];
+    if (showFooterAddress) footerMetaItems.push(vi.headerAddress);
+    if (showFooterPhone) footerMetaItems.push(`Tel: ${vi.contactPhone || currentTenant?.contactPhone}`);
+    if (showFooterEmail) footerMetaItems.push(vi.contactEmail || currentTenant?.contactEmail);
+
     const borderStyle = vi.borderStyle === 'NONE' ? 'none' : vi.borderStyle === 'DOUBLE' ? 'double' : vi.borderStyle === 'DASHED' ? 'dashed' : 'solid';
     const borderWidth = vi.borderWidth || '2px';
     const logoHeight = vi.logoMaxHeight || 44;
+
+    // Regra forense estrita: o nome do(a) advogado(a) no corpo de petições, procurações e contratos deve SEMPRE estar em MAIÚSCULO, NEGRITO e SUBLINHADO
+    const formattedDocumentBody = formatLawyerNameInBody(doc.content || '', lawyerName);
 
     const signatureBlock = doc.digitalSignature
       ? `
@@ -393,11 +419,20 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
         <div><strong>Código de Verificação:</strong> ${doc.digitalSignature.verificationCode} (${doc.digitalSignature.certificateAuthority})</div>
       </div>`
       : `
-      <div style="margin-top: 50px; text-align: center; font-family: ${fontFamily}, serif;">
-        ${vi.signatureImageUrl ? `<img src="${vi.signatureImageUrl}" style="height: 48px; object-fit: contain; margin-bottom: 4px;" alt="Assinatura" /><br/>` : `<div style="width: 220px; border-bottom: 1px solid #333; margin: 0 auto 6px auto;"></div>`}
+      <div style="margin-top: 36px; text-align: center; font-family: ${fontFamily}, serif;">
+        ${vi.signatureImageUrl ? `<img src="${vi.signatureImageUrl}" style="height: 44px; object-fit: contain; margin-bottom: 6px;" alt="Assinatura" /><br/>` : ''}
         <div style="font-weight: bold; font-size: 11pt; color: #111;">${lawyerName}</div>
-        <div style="font-size: 10pt; color: #4338ca; font-family: monospace;">${lawyerOab}</div>
+        <div style="font-size: 10pt; color: #4338ca; font-family: monospace; font-weight: 600;">${lawyerOab}</div>
         <div style="font-size: 9pt; color: #666; font-family: sans-serif;">${vi.signatoryRole || 'Advogada'}</div>
+        <div style="margin-top: 14px; display: inline-flex; flex-direction: column; align-items: center;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1.5px solid #10b981; background-color: #ecfdf5; border-radius: 8px; color: #065f46; font-family: sans-serif; font-size: 8.5pt; font-weight: bold; letter-spacing: 0.5px;">
+            <span>🔒 ASSINADO DIGITALMENTE</span>
+            <span style="font-weight: normal; color: #047857; font-size: 8pt;">• Certificado ICP-Brasil / Token OAB</span>
+          </div>
+          <div style="margin-top: 4px; font-size: 7pt; color: #9ca3af; font-family: sans-serif;">
+            (Documento assinado digitalmente nos termos da Lei nº 14.063/2020 e MP 2.200-2/2001)
+          </div>
+        </div>
       </div>
       `;
 
@@ -407,8 +442,9 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
         <head>
           <title>${doc.title} - ${lawFirmName}</title>
           <style>
-            @page { margin: 20mm; size: A4; }
-            body { font-family: "${fontFamily}", Times, serif; font-size: 12pt; line-height: 1.6; color: #111; margin: 0; padding: 20px; }
+            @page { margin: 15mm 20mm; size: A4; }
+            body { font-family: "${fontFamily}", Times, serif; font-size: 12pt; line-height: 1.6; color: #111; margin: 0; padding: 15px; }
+            .header-banner { width: 100%; max-height: 170px; object-fit: contain; display: block; margin: 0 auto 12px auto; }
             .header-container { border-bottom: ${borderWidth} ${borderStyle} ${accentColor}; padding-bottom: 14px; margin-bottom: 25px; }
             .header-content { display: flex; flex-direction: column; align-items: ${vi.logoPosition === 'center' ? 'center' : vi.logoPosition === 'right' ? 'flex-end' : 'flex-start'}; text-align: ${vi.logoPosition === 'center' ? 'center' : vi.logoPosition === 'right' ? 'right' : 'left'}; }
             .header-logo { max-height: ${logoHeight}px; object-fit: contain; margin-bottom: 8px; }
@@ -419,18 +455,28 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
           </style>
         </head>
         <body>
-          <div class="header-container">
-            <div class="header-content">
-              ${logoUrl ? `<img src="${logoUrl}" class="header-logo" alt="Logo" />` : ''}
-              <h1 class="header-title">${lawFirmName}</h1>
-              ${headerMetaItems.length > 0 ? `<p class="header-meta">${headerMetaItems.join(' • ')}</p>` : ''}
+          ${vi.headerStyle === 'FULL_BANNER' && (vi.headerBannerUrl || logoUrl) ? `
+            <div style="margin-bottom: 24px;">
+              <img src="${vi.headerBannerUrl || logoUrl}" class="header-banner" alt="Cabeçalho Timbrado Oficial" />
+              ${headerMetaItems.length > 0 ? `<p class="header-meta" style="text-align: center; margin-top: -6px; margin-bottom: 20px; font-size: 8.5pt; color: #555;">${headerMetaItems.join(' • ')}</p>` : ''}
             </div>
-          </div>
-          <div class="content">${doc.content || ''}</div>
+          ` : `
+            <div class="header-container">
+              <div class="header-content">
+                ${logoUrl ? `<img src="${logoUrl}" class="header-logo" alt="Logo" />` : ''}
+                <h1 class="header-title">${lawFirmName}</h1>
+                ${headerMetaItems.length > 0 ? `<p class="header-meta">${headerMetaItems.join(' • ')}</p>` : ''}
+              </div>
+            </div>
+          `}
+          <div class="content">${formattedDocumentBody}</div>
           ${signatureBlock}
-          <div class="footer">
-            ${vi.footerText || `${lawFirmName} • Documento emitido eletronicamente`}
-          </div>
+          ${showFooterText ? `
+            <div class="footer">
+              <div style="font-weight: 500;">${vi.footerText || `${lawFirmName} • Documento emitido eletronicamente`}</div>
+              ${footerMetaItems.length > 0 ? `<div style="margin-top: 4px; font-size: 7.5pt; color: #777;">${footerMetaItems.join(' • ')}</div>` : ''}
+            </div>
+          ` : ''}
           <script>
             window.onload = function() { window.print(); }
           </script>
@@ -909,9 +955,12 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                   </button>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text shadow-2xs">
-                  {renderedContent}
-                </div>
+                <div
+                  className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text shadow-2xs"
+                  dangerouslySetInnerHTML={{
+                    __html: formatLawyerNameInBody(renderedContent, currentLawyerName)
+                  }}
+                />
               </div>
             </div>
 
@@ -1119,9 +1168,12 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                   />
                 </div>
               ) : (
-                <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed whitespace-pre-wrap max-h-[55vh] overflow-y-auto select-text shadow-2xs">
-                  {selectedDoc.content || 'Nenhum conteúdo salvo neste documento.'}
-                </div>
+                <div
+                  className="p-5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-serif leading-relaxed whitespace-pre-wrap max-h-[55vh] overflow-y-auto select-text shadow-2xs"
+                  dangerouslySetInnerHTML={{
+                    __html: formatLawyerNameInBody(selectedDoc.content || 'Nenhum conteúdo salvo neste documento.', currentLawyerName)
+                  }}
+                />
               )}
             </div>
 

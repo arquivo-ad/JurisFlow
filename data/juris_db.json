@@ -459,7 +459,15 @@
             "content": "CONTRATO DE PRESTAÇÃO DE SERVIÇOS JURÍDICOS E HONORÁRIOS ADVOCATÍCIOS\n\nCONTRATANTE: [NOME DO CLIENTE], [CPF/CNPJ]\nCONTRATADA: GABRIELA CAPITANI ADVOCACIA, representada por Dra. Gabriela M. Manni Capitani, OAB/SP 478.370...\n\nCLÁUSULA PRIMEIRA - DO OBJETO...",
             "isDefault": true
           }
-        ]
+        ],
+        "showHeaderOab": true,
+        "showHeaderAddress": false,
+        "showHeaderPhone": false,
+        "showHeaderEmail": false,
+        "showHeaderCnpj": false,
+        "showFooterText": true,
+        "showFooterAddress": false,
+        "showFooterPhone": false
       },
       "settings": {
         "pixKey": "gabriela.mannicapitani@gmail.com",
@@ -862,6 +870,72 @@
   "notifications": [],
   "templates": [
     {
+      "id": "tmpl-honorarios",
+      "name": "Contrato de Honorários e Prestação de Serviços Jurídicos",
+      "title": "Contrato de Honorários e Prestação de Serviços Jurídicos",
+      "category": "CONTRATO",
+      "description": "Modelo institucional padronizado (CONTRATO)",
+      "content": "CONTRATO DE PRESTAÇÃO DE SERVIÇOS JURÍDICOS E HONORÁRIOS ADVOCATÍCIOS\n\nCONTRATANTE: [NOME DO CLIENTE], [CPF/CNPJ]\nCONTRATADA: GABRIELA CAPITANI ADVOCACIA, representada por Dra. Gabriela M. Manni Capitani, OAB/SP 478.370...\n\nCLÁUSULA PRIMEIRA - DO OBJETO...",
+      "variables": [
+        "NOME_CLIENTE",
+        "CPF_CLIENTE",
+        "ENDERECO_CLIENTE"
+      ],
+      "placeholders": [
+        "NOME_CLIENTE",
+        "CPF_CLIENTE",
+        "ENDERECO_CLIENTE"
+      ],
+      "createdAt": "2026-09-16T02:46:43.143Z",
+      "updatedAt": "2026-09-16T02:46:43.143Z",
+      "tenantId": "t-1789481820042",
+      "isDefault": true
+    },
+    {
+      "id": "tmpl-procuracao",
+      "name": "Procuração Ad Judicia et Extra",
+      "title": "Procuração Ad Judicia et Extra",
+      "category": "PROCURACAO",
+      "description": "Modelo institucional padronizado (PROCURACAO)",
+      "content": "PROCURAÇÃO AD JUDICIA ET EXTRA\n\nOUTORGANTE: [NOME DO CLIENTE], [ESTADO CIVIL], [PROFISSÃO], inscrito no CPF sob nº [CPF], residente e domiciliado em [ENDEREÇO COMPLETO].\n\nOUTORGADA: DRA. GABRIELA M. MANNI CAPITANI, brasileira, advogada inscrita nos quadros da OAB/SP sob o nº 478.370...",
+      "variables": [
+        "NOME_CLIENTE",
+        "CPF_CLIENTE",
+        "ENDERECO_CLIENTE"
+      ],
+      "placeholders": [
+        "NOME_CLIENTE",
+        "CPF_CLIENTE",
+        "ENDERECO_CLIENTE"
+      ],
+      "createdAt": "2026-09-16T02:46:43.143Z",
+      "updatedAt": "2026-09-16T02:46:43.143Z",
+      "tenantId": "t-1789481820042",
+      "isDefault": true
+    },
+    {
+      "id": "tmpl-inicial",
+      "name": "Petição Inicial Cível ABNT",
+      "title": "Petição Inicial Cível ABNT",
+      "category": "PETICAO",
+      "description": "Modelo institucional padronizado (PETICAO)",
+      "content": "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA VARA CÍVEL DA COMARCA DE PINDAMONHANGABA/SP\n\n[QUALIFICAÇÃO COMPLETA DA PARTE AUTORA], por sua advogada infra-assinada, vem respeitosamente à presença de Vossa Excelência propor a presente...\n\nDOS FATOS...\nDO DIREITO...\nDOS PEDIDOS...",
+      "variables": [
+        "NOME_CLIENTE",
+        "CPF_CLIENTE",
+        "ENDERECO_CLIENTE"
+      ],
+      "placeholders": [
+        "NOME_CLIENTE",
+        "CPF_CLIENTE",
+        "ENDERECO_CLIENTE"
+      ],
+      "createdAt": "2026-09-16T02:46:43.143Z",
+      "updatedAt": "2026-09-16T02:46:43.143Z",
+      "tenantId": "t-1789481820042",
+      "isDefault": true
+    },
+    {
       "id": "tpl-peticao-inicial",
       "tenantId": "t-silveira",
       "name": "Petição Inicial Cível — Ação de Cobrança com Tutela de Urgência",
@@ -914,6 +988,62 @@
   "receivables": [],
   "payments": [],
   "auditLogs": [
+    {
+      "id": "aud-1789572951262-mms0",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela M. Manni Capitani",
+      "userEmail": "gabriela.mannicapitani@gmail.com",
+      "entityType": "SYSTEM",
+      "entityId": "dr-script-windows",
+      "action": "CREATE",
+      "details": "Gerou script de preparação de ambiente DR Local para WINDOWS (UBUNTU_DEBIAN) para o escritório Gabriela Capitani Advocacia",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "timestamp": "2026-09-16T15:35:51.262Z"
+    },
+    {
+      "id": "aud-1789572949031-soxl",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela M. Manni Capitani",
+      "userEmail": "gabriela.mannicapitani@gmail.com",
+      "entityType": "SYSTEM",
+      "entityId": "dr-script-windows",
+      "action": "CREATE",
+      "details": "Gerou script de preparação de ambiente DR Local para WINDOWS (UBUNTU_DEBIAN) para o escritório Gabriela Capitani Advocacia",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "timestamp": "2026-09-16T15:35:49.032Z"
+    },
+    {
+      "id": "aud-1789571469629-idgr",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela M. Manni Capitani",
+      "userEmail": "gabriela.mannicapitani@gmail.com",
+      "entityType": "SETTING",
+      "entityId": "t-1789481820042",
+      "action": "UPDATE",
+      "details": "Governança de Produção do Escritório: Ambiente alternado para Modo Setup / Implantação Inicial (Acesso de suporte direto permitido).",
+      "ip": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "timestamp": "2026-09-16T15:11:09.630Z"
+    },
+    {
+      "id": "aud-1789526803315-ymlw",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela M. Manni Capitani",
+      "userEmail": "gabriela.mannicapitani@gmail.com",
+      "entityType": "AUTH",
+      "entityId": "t-1789481820042",
+      "action": "UPDATE",
+      "details": "Atualizou identidade visual e templates do escritório: Gabriela Capitani Advocacia",
+      "ip": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "timestamp": "2026-09-16T02:46:43.315Z"
+    },
     {
       "id": "aud-1789504959817-qjz1",
       "tenantId": "t-1789481820042",
@@ -1094,10 +1224,57 @@
     }
   ],
   "processedWebhookIds": {},
+  "tenantSecurityConfigs": {
+    "t-1789481820042": {
+      "tenantId": "t-1789481820042",
+      "isProductionLocked": false,
+      "isolationMode": "STRICT_CONTAINER_RLS",
+      "activeSupportKey": null,
+      "supportKeysHistory": [],
+      "lastAuditVerification": "2026-09-16T15:11:09.629Z"
+    }
+  },
+  "localDrConfigs": {
+    "t-1789481820042": {
+      "id": "dr-cfg-t-1789481820042",
+      "tenantId": "t-1789481820042",
+      "locationType": "LOCAL_DIRECTORY",
+      "hostOrIp": "localhost",
+      "port": 5432,
+      "databaseName": "jurisflow_gabriela_capitani_advoca_dr",
+      "username": "jurisflow_master",
+      "password": "",
+      "directoryPath": "C:\\JurisFlow\\Gabriela Capitani Advocacia\\Data",
+      "networkSharePath": "",
+      "driveLetter": "C:",
+      "localServerUrl": "http://jurisflow.local:3000",
+      "tailscaleEnabled": true,
+      "tailscaleHostname": "jurisflow-gabriela_capitan",
+      "tailscaleMagicDnsUrl": "http://jurisflow-gabriela_capitan.ts.net:3000",
+      "tailscaleAuthKey": "",
+      "autoFailoverEnabled": true,
+      "syncIntervalMinutes": 5,
+      "lastTestStatus": "SUCCESS",
+      "updatedAt": "2026-09-16T15:35:43.764Z",
+      "lastTestedAt": "2026-09-16T15:35:54.380Z",
+      "lastTestLogs": [
+        "[3:35:54 PM] Iniciando diagnóstico de conectividade com a Réplica DR Local...",
+        "[Configuração] Modo: LOCAL_DIRECTORY | Host/IP: 127.0.0.1 | Porta: 5432 | Disco: C:",
+        "[Configuração] Caminho: C:\\JurisFlow\\Data | Servidor Web Local: http://jurisflow.local:3000",
+        "[Check 1] Caminho de armazenamento \"C:\\JurisFlow\\Data\" possui sintaxe válida e acessível pelo sistema operacional.",
+        "[Check 2] Socket TCP :5432 conectado com resposta SYN/ACK em 22ms. Firewall local permite tráfego.",
+        "[Check 3] Conexão autenticada como \"jurisflow_master\". Permissões de escrita e DDL verificadas com sucesso.",
+        "[Check 4] DDL Schema Audit: 14/14 tabelas encontradas no catálogo do DR com chaves primárias e tipos compatíveis.",
+        "[Check 5] Teste de contingência em modo offline: latência de escrita de 18ms em armazenamento seguro.",
+        "[Check 6] Tailscale MagicDNS ativo: http://jurisflow-gabriela_capitan.ts.net:3000. Usuários podem acessar o servidor de qualquer lugar sem abertura de portas no roteador.",
+        "[3:35:54 PM] Diagnóstico finalizado em 1ms. Status Geral: CONEXÃO BEM-SUCEDIDA."
+      ]
+    }
+  },
   "databaseNodes": [
     {
       "id": "db-node-primary",
-      "name": "Supabase Primário (PostgreSQL Cloud Ativo)",
+      "name": "Supabase Cloud (PostgreSQL Ativo Principal)",
       "provider": "SUPABASE",
       "url": "https://fqatbtzyedqwjxnqkvqd.supabase.co",
       "anonKey": "",
@@ -1105,30 +1282,33 @@
       "role": "ACTIVE",
       "status": "ONLINE",
       "region": "sa-east-1 (São Paulo - BR)",
-      "latencyMs": 28,
-      "lastSyncAt": "2026-09-15T20:22:37.237Z",
+      "latencyMs": 37,
+      "lastSyncAt": "2026-09-16T15:08:58.098Z",
       "tablesCount": 14,
-      "recordsCount": 184,
+      "recordsCount": 0,
       "isManagedDefault": true,
-      "notes": "Banco de dados ativo de produção principal conectado ao Supabase Cloud.",
+      "notes": "Banco de dados ativo de produção conectado ao cluster Supabase Cloud.",
       "createdAt": "2026-09-15T00:00:00.000Z"
     },
     {
-      "id": "db-node-dr-standby",
-      "name": "Supabase Réplica DR (Disaster Recovery / Standby)",
-      "provider": "SUPABASE",
-      "url": "https://dr-standby-jurisflow.supabase.co",
-      "anonKey": "[configured]",
-      "serviceRoleKey": "[configured]",
+      "id": "db-node-dr-local",
+      "name": "Réplica DR (LOCAL - OFFLINE Standby)",
+      "provider": "LOCAL_OFFLINE",
+      "url": "local://dr-offline-storage.db",
+      "anonKey": "",
+      "serviceRoleKey": "",
       "role": "PASSIVE",
       "status": "ONLINE",
-      "region": "us-east-1 (N. Virginia - USA)",
-      "latencyMs": 65,
-      "lastSyncAt": "2026-09-15T19:52:37.237Z",
+      "region": "Armazenamento Local / Cache Offline Seguro",
+      "latencyMs": 1,
+      "lastSyncAt": "2026-09-16T15:08:58.098Z",
       "tablesCount": 14,
-      "recordsCount": 184,
+      "recordsCount": 0,
       "isManagedDefault": false,
-      "notes": "Nó secundário de Disaster Recovery para failover imediato e cópia contínua de segurança.",
+      "isLocalDr": true,
+      "pendingOfflineSyncCount": 0,
+      "offlineStorageBytes": 524288,
+      "notes": "Réplica DR sempre LOCAL e OFFLINE. Opera em contingência contínua caso a Cloud ou rede sofram interrupção, sincronizando de volta automaticamente.",
       "createdAt": "2026-09-15T00:00:00.000Z"
     }
   ],
