@@ -3,7 +3,7 @@
 // RFC 5545 Standard for Legal Agendas, Deadlines & Hearings
 // ==========================================
 
-import { Deadline, Hearing, Diligence } from '../types';
+import { Deadline, Hearing, Diligence } from '../types/index.ts';
 
 function formatToICSDate(dateStr: string, isAllDay = false): string {
   // If dateStr is YYYY-MM-DD

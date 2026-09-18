@@ -33,11 +33,13 @@ import {
   Star,
   Camera,
   Palette,
+  ShieldAlert,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { AvatarPicker } from '../common/AvatarPicker';
 import { BrandingSettingsTab } from './BrandingSettingsTab';
 import { DatabaseDRTab } from './DatabaseDRTab';
+import { isSuperAdmin as rbacIsSuperAdmin, canAssignRole } from '../../utils/rbac';
 import {
   Tenant,
   Branch,
@@ -149,9 +151,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onOpenNewTenantModal,
 }) => {
   const isSuperAdmin =
+    rbacIsSuperAdmin(currentUser, currentRole) ||
     currentUser?.id === 'u-superadmin' ||
     currentUser?.email?.includes('superadmin') ||
-    currentRole?.code === 'SUPER_ADMIN';
+    currentRole?.code === 'SUPER_ADMIN' ||
+    currentRole?.id === 'role-super-admin';
 
   const [activeTab, setActiveTab] = useState<'GOVERNANCE' | 'BRANDING' | 'TENANTS' | 'USERS' | 'RBAC' | 'AUDIT' | 'LGPD' | 'DATABASE'>('GOVERNANCE');
 
@@ -426,7 +430,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleOpenNewUserModal = () => {
     setEditingUser(null);
     const initialBranchId = branches[0]?.id || '';
-    const initialRoleId = roles[0]?.id || '';
+    const initialRoleId = !isSuperAdmin
+      ? roles.find((r) => r.code !== 'SUPER_ADMIN' && r.id !== 'role-super-admin')?.id || roles[0]?.id || ''
+      : roles[0]?.id || '';
+
     setUserFormData({
       name: '',
       email: '',
@@ -450,6 +457,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleOpenEditUserModal = (u: any) => {
+    const isTargetSuperAdmin =
+      u.id === 'u-superadmin' ||
+      u.email?.includes('superadmin') ||
+      u.roleCode === 'SUPER_ADMIN' ||
+      u.roleId === 'role-super-admin' ||
+      (Array.isArray(u.branchAffiliations) && u.branchAffiliations.some((a: any) => a.roleId === 'role-super-admin' || roles.find(r => r.id === a.roleId)?.code === 'SUPER_ADMIN')) ||
+      (Array.isArray(u.memberships) && u.memberships.some((m: any) => m.roleId === 'role-super-admin' || roles.find(r => r.id === m.roleId)?.code === 'SUPER_ADMIN'));
+
+    if (isTargetSuperAdmin && !isSuperAdmin) {
+      alert('Acesso restrito: Somente o Super Admin da plataforma SaaS tem autorização para gerenciar ou editar o usuário Administrador da plataforma SaaS.');
+      return;
+    }
+
     setEditingUser(u);
     let affiliations: any[] = [];
     if (Array.isArray(u.branchAffiliations) && u.branchAffiliations.length > 0) {
@@ -507,13 +527,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const availableBranch = branches.find((b) => !usedBranchIds.has(b.id)) || branches[0];
     if (!availableBranch) return;
 
+    const defaultRoleId = !isSuperAdmin
+      ? roles.find((r) => r.code !== 'SUPER_ADMIN' && r.id !== 'role-super-admin')?.id || roles[0]?.id || ''
+      : roles[0]?.id || '';
+
     setUserFormData((prev) => ({
       ...prev,
       branchAffiliations: [
         ...prev.branchAffiliations,
         {
           branchId: availableBranch.id,
-          roleId: roles[0]?.id || '',
+          roleId: defaultRoleId,
           email: prev.email || '',
           phone: prev.phone || '',
           status: 'ACTIVE',
@@ -567,6 +591,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         affiliations[0].isPrimary = true;
       }
 
+      // Check if user is attempting to assign the SaaS Super Admin role without being a Super Admin
+      const attemptedSuperAdmin = affiliations.some((aff) => {
+        const selectedRole = roles.find((r) => r.id === aff.roleId);
+        return aff.roleId === 'role-super-admin' || selectedRole?.code === 'SUPER_ADMIN';
+      });
+
+      if (attemptedSuperAdmin && !isSuperAdmin) {
+        alert('Acesso negado: Somente o Super Admin da plataforma SaaS possui autorização para atribuir a função de Administrador da plataforma SaaS (Super Admin) para outro usuário.');
+        setSubmitting(false);
+        return;
+      }
+
       const primary = affiliations.find((a) => a.isPrimary) || affiliations[0];
 
       await onSaveUser({
@@ -584,14 +620,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         branchAffiliations: affiliations,
       });
       setIsUserModalOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(err.message || 'Erro ao salvar usuário.');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteUserClick = async (u: any) => {
+    const isTargetSuperAdmin =
+      u.id === 'u-superadmin' ||
+      u.email?.includes('superadmin') ||
+      u.roleCode === 'SUPER_ADMIN' ||
+      u.roleId === 'role-super-admin' ||
+      (Array.isArray(u.branchAffiliations) && u.branchAffiliations.some((a: any) => a.roleId === 'role-super-admin' || roles.find(r => r.id === a.roleId)?.code === 'SUPER_ADMIN')) ||
+      (Array.isArray(u.memberships) && u.memberships.some((m: any) => m.roleId === 'role-super-admin' || roles.find(r => r.id === m.roleId)?.code === 'SUPER_ADMIN'));
+
+    if (isTargetSuperAdmin && !isSuperAdmin) {
+      alert('Acesso negado: Somente o Super Admin da plataforma SaaS pode desvincular ou excluir o Administrador da plataforma SaaS.');
+      return;
+    }
+
     if (confirm(`Deseja desvincular o usuário "${u.name}" da equipe deste escritório?`)) {
       await onDeleteUser(u.id);
     }
@@ -610,6 +660,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleOpenEditRoleModal = (role: Role) => {
+    if ((role.code === 'SUPER_ADMIN' || role.id === 'role-super-admin') && !isSuperAdmin) {
+      alert('Acesso restrito: Somente o Super Admin da plataforma SaaS pode editar ou configurar a função de Administrador da plataforma SaaS.');
+      return;
+    }
     setEditingRole(role);
     const existingPermCodes = (role.permissions || []).map((p: any) =>
       typeof p === 'object' && p !== null ? p.code : String(p)
@@ -667,6 +721,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     e.preventDefault();
     setSubmitting(true);
     try {
+      if (editingRole && (editingRole.code === 'SUPER_ADMIN' || editingRole.id === 'role-super-admin') && !isSuperAdmin) {
+        alert('Acesso restrito: Somente o Super Admin da plataforma SaaS pode alterar a função de Administrador da plataforma SaaS.');
+        setSubmitting(false);
+        return;
+      }
+
       const fullPermissions: Permission[] = roleFormData.selectedPermissions.map((code) => {
         const found = AVAILABLE_PERMISSIONS.find((p) => p.code === code);
         return {
@@ -1281,6 +1341,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ];
 
               const primaryAff = affiliations.find((a: any) => a.isPrimary) || affiliations[0];
+              const isUserSuperAdmin =
+                u.id === 'u-superadmin' ||
+                u.email?.includes('superadmin') ||
+                u.roleCode === 'SUPER_ADMIN' ||
+                u.roleId === 'role-super-admin' ||
+                (Array.isArray(u.branchAffiliations) && u.branchAffiliations.some((a: any) => a.roleId === 'role-super-admin' || roles.find(r => r.id === a.roleId)?.code === 'SUPER_ADMIN')) ||
+                (Array.isArray(u.memberships) && u.memberships.some((m: any) => m.roleId === 'role-super-admin' || roles.find(r => r.id === m.roleId)?.code === 'SUPER_ADMIN'));
 
               return (
                 <div
@@ -1319,6 +1386,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 truncate mt-0.5">{u.email}</p>
+                        {isUserSuperAdmin && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                              <Crown className="w-3 h-3 text-purple-600" />
+                              Admin da Plataforma SaaS
+                            </span>
+                          </div>
+                        )}
                         {u.oabNumber && (
                           <p className="text-[11px] text-indigo-600 font-mono font-semibold mt-0.5">
                             OAB/{u.oabUf || 'SP'} {u.oabNumber}
@@ -1408,20 +1483,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-100">
-                    <button
-                      onClick={() => handleOpenEditUserModal(u)}
-                      className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center gap-1.5"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Editar e Vincular</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUserClick(u)}
-                      className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-rose-50 text-rose-600 font-semibold text-xs border border-slate-200 hover:border-rose-200 transition-colors flex items-center gap-1.5"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Desvincular</span>
-                    </button>
+                    {isUserSuperAdmin && !isSuperAdmin ? (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 italic px-2.5 py-1.5 bg-slate-50 rounded-lg border border-slate-200 w-full justify-between">
+                        <span className="flex items-center gap-1.5 not-italic font-medium text-slate-700">
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Admin SaaS</span>
+                        </span>
+                        <span className="text-[11px] text-amber-700 font-semibold not-italic bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                          Gerenciamento restrito ao Super Admin
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleOpenEditUserModal(u)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center gap-1.5"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Editar e Vincular</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUserClick(u)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-rose-50 text-rose-600 font-semibold text-xs border border-slate-200 hover:border-rose-200 transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Desvincular</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -2216,8 +2305,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             </div>
 
                             <div>
-                              <label className="block text-slate-700 mb-1 font-semibold">
-                                Função / Perfil RBAC nesta Filial *
+                              <label className="block text-slate-700 mb-1 font-semibold flex items-center justify-between">
+                                <span>Função / Perfil RBAC nesta Filial *</span>
+                                {!isSuperAdmin && (
+                                  <span className="text-[10px] text-amber-700 font-normal flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                    <Lock className="w-2.5 h-2.5 text-amber-600" /> Somente Super Admin atribui Admin SaaS
+                                  </span>
+                                )}
                               </label>
                               <select
                                 required
@@ -2225,12 +2319,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 onChange={(e) => handleUpdateAffiliation(index, 'roleId', e.target.value)}
                                 className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                               >
-                                {roles.map((r) => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.name}
-                                  </option>
-                                ))}
+                                {roles.map((r) => {
+                                  const isSaaSAdminRole = r.code === 'SUPER_ADMIN' || r.id === 'role-super-admin';
+                                  const isRestricted = isSaaSAdminRole && !isSuperAdmin;
+                                  return (
+                                    <option
+                                      key={r.id}
+                                      value={r.id}
+                                      disabled={isRestricted}
+                                      className={isRestricted ? 'text-slate-400 bg-slate-100 italic' : 'text-slate-900'}
+                                    >
+                                      {r.name} {isRestricted ? '🔒 (Exclusivo Super Admin SaaS)' : ''}
+                                    </option>
+                                  );
+                                })}
                               </select>
+                              {!isSuperAdmin && (
+                                <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-indigo-500 shrink-0" />
+                                  <span>Perfis de escritório disponíveis. O perfil <strong>Admin da Plataforma SaaS</strong> é restrito ao Super Admin.</span>
+                                </p>
+                              )}
                             </div>
                           </div>
 

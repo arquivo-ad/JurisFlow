@@ -24,7 +24,7 @@ import {
   Payment,
   AuditLog,
   LGPDConsent
-} from '../types';
+} from '../types/index.ts';
 
 // ==========================================
 // TENANTS & STRUCTURE

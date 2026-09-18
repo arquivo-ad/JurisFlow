@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import { getSupabase, syncTenantToSupabase, syncBranchToSupabase, syncUserToSupabase, syncMembershipToSupabase } from './supabase.ts';
-import { Tenant, Branch, User, Membership } from '../src/types';
+import { Tenant, Branch, User, Membership } from '../src/types/index.ts';
 
 export const PROD_TENANT: Tenant = {
   id: 't-1789481820042',

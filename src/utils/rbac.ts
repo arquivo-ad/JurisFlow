@@ -1,4 +1,4 @@
-import { Role, User, Membership } from '../types';
+import { Role, User, Membership } from '../types/index.ts';
 
 export type AppModule =
   | 'dashboard'
