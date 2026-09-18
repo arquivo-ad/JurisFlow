@@ -554,8 +554,47 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(item),
     }),
-  aiChat: (message: string, caseContext?: string, fileAttachment?: AIFileAttachment) =>
-    request<{ reply: string }>('/api/ai/chat', { method: 'POST', body: JSON.stringify({ message, caseContext, fileAttachment }) }),
+  aiChat: (
+    message: string,
+    optionsOrContext?:
+      | {
+          caseContext?: string;
+          fileAttachment?: AIFileAttachment;
+          userName?: string;
+          honorific?: string;
+        }
+      | string,
+    fileAttachment?: AIFileAttachment
+  ) => {
+    const payload =
+      typeof optionsOrContext === 'string'
+        ? { message, caseContext: optionsOrContext, fileAttachment }
+        : {
+            message,
+            caseContext: optionsOrContext?.caseContext,
+            fileAttachment: optionsOrContext?.fileAttachment || fileAttachment,
+            userName: optionsOrContext?.userName,
+            honorific: optionsOrContext?.honorific,
+          };
+    return request<{
+      reply: string;
+      salutation?: string;
+      summary?: string;
+      searchResults?: any[];
+      citationReport?: any;
+      verificationNotice?: string;
+      status?: 'SUCCESS' | 'FAIL_CLOSED';
+      failureCode?: string;
+      failureReason?: string;
+      diagnostic?: any;
+      isModelAvailable?: boolean;
+      modelStatus?: string;
+      modelName?: string;
+    }>('/api/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
   getAiStats: () =>
     request<{
       totalRequests: number;

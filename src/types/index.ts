@@ -194,6 +194,7 @@ export interface UserBranchAffiliation {
 
 export interface User {
   id: UUID;
+  tenantId?: UUID;
   name: string;
   email: string;
   avatarUrl?: string;

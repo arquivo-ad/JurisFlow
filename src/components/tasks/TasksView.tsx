@@ -1051,7 +1051,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 text-xs text-slate-800 font-medium">
                             <User className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{task.assignedUserName || 'Dr. Carlos Silveira'}</span>
+                            <span>{task.assignedUserName || 'Dra. Gabriela M. Manni Capitani'}</span>
                           </div>
                         </td>
 
@@ -1527,7 +1527,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     <span className="text-slate-500">Responsável</span>
                     <div className="font-bold text-slate-800 mt-1 flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-indigo-600" />
-                      {selectedTaskDetail.assignedUserName || 'Dr. Carlos Silveira'}
+                      {selectedTaskDetail.assignedUserName || 'Dra. Gabriela M. Manni Capitani'}
                     </div>
                   </div>
 

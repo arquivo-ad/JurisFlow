@@ -460,7 +460,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="hidden xl:block text-left">
               <p className="text-xs font-semibold text-slate-900 leading-tight">
-                {currentUser?.name || 'Dr. Carlos Silveira'}
+                {currentUser?.name || currentTenant?.visualIdentity?.signatoryName || 'Dra. Gabriela M. Manni Capitani'}
               </p>
               <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium">
                 <ShieldCheck className="w-3 h-3" />
