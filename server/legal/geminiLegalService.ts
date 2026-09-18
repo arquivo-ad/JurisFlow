@@ -82,7 +82,7 @@ export class GeminiLegalService {
   public modelErrorDetail: string | null = null;
 
   public static normalizeModelName(raw?: string): string {
-    if (!raw) return 'gemini-3.8-flash';
+    if (!raw) return '';
     let s = raw.trim().replace(/^["'`]|["'`]$/g, '');
     s = s.replace(/^models\//i, '');
 
@@ -95,7 +95,7 @@ export class GeminiLegalService {
 
     // Conversão de formato livre: minúsculas e substituição de caracteres não alfanuméricos por hífen
     const formatted = s.toLowerCase().replace(/[^a-z0-9.-]/g, '-').replace(/-+/g, '-');
-    return formatted || 'gemini-3.8-flash';
+    return formatted;
   }
 
   constructor() {
@@ -104,7 +104,7 @@ export class GeminiLegalService {
     this.citationGuard = new CitationGuard();
     this.stjAdapter = new StjDadosAbertosAdapter();
 
-    this.configuredModel = GeminiLegalService.normalizeModelName(process.env.GEMINI_MODEL || 'gemini-3.8-flash');
+    this.configuredModel = GeminiLegalService.normalizeModelName(process.env.GEMINI_MODEL);
     this.activeModel = this.configuredModel;
   }
 
@@ -143,11 +143,8 @@ export class GeminiLegalService {
   }
 
   private getModelCascade(): string[] {
-    const defaultCascade = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
     const normalizedConfigured = GeminiLegalService.normalizeModelName(this.configuredModel);
-    const list = [normalizedConfigured, ...defaultCascade];
-    // Remove duplicatas preservando ordem
-    return Array.from(new Set(list));
+    return normalizedConfigured ? [normalizedConfigured] : [];
   }
 
   /**
@@ -267,7 +264,7 @@ export class GeminiLegalService {
       /^(?:quem [eé] voc[eê]|o que voc[eê] faz|como voc[eê] funciona|como pode me ajudar)$/i.test(cleanQuestion);
 
     if (isGreeting) {
-      const greetingText = `Olá, ${lawyerGreeting}! É uma satisfação atendê-la(o) no âmbito de ${officeName}.\n\nSou seu Copiloto Forense com Grounding Oficial, conectado aos acervos oficiais do STF, TST, STJ, DataJud/CNJ e Legislação Federal do Planalto.\n\nComo posso auxiliá-la(o) hoje?\n- Pesquisa Jurisprudencial: Localizar precedentes qualificados, acórdãos e súmulas vinculantes com links oficiais verificados.\n- Auditoria Processual: Conferir vigência de normas do CPC, CC e CLT com identificação de preliminares e competência material.\n- Fundamentação de Peças: Subsidiar minutas e teses com citações canônicas estritamente auditadas.\n- Prazos Forenses: Esclarecer contagens em dias úteis pelo CPC/2015 e marcos recursais.\n\nEnvie o tema, número de processo ou questionamento forense!`;
+      const greetingText = `Olá, ${lawyerGreeting}! É uma satisfação atendê-la(o) no âmbito de ${officeName}.\n\nSou seu Copiloto Forense. Consulto apenas as fontes oficiais que estiverem configuradas e informo o estado real de cada evidência. Conectores indisponíveis ou ainda não implementados não serão simulados.\n\nEnvie o tema, número de processo ou questionamento forense.`;
 
       return {
         answer: greetingText,

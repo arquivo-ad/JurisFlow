@@ -1336,6 +1336,8 @@ export interface JudicialProcessSearchResult {
   retrievedAt: string;
   sourceProvider: string;
   sourceUrl: string;
+  evidenceState: 'VERIFIED_OFFICIAL' | 'FOUND_PENDING_REVIEW' | 'NOT_VERIFIED_PROHIBITED';
+  evidenceId: string;
   isAlreadyImported: boolean;
   existingCaseId?: string;
   existingCaseTitle?: string;
@@ -1415,7 +1417,7 @@ export interface CourtAvailabilityMatrixItem {
   authenticationMethod: 'API_PUBLICA' | 'DADOS_ABERTOS' | 'CERTIFICADO_A1_A3' | 'PARCERIA_OFICIAL';
   officialUrl: string;
   latencyMs: number;
+  status: 'READY' | 'NOT_CONFIGURED' | 'PARTIAL' | 'NOT_IMPLEMENTED' | 'FAILED';
   lastCheckedAt: string;
   notes: string;
 }
-

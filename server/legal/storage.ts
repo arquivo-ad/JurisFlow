@@ -46,6 +46,12 @@ export class LegalKnowledgeStorage {
         const parsed = JSON.parse(raw);
         const rawDecisions = parsed.decisions || [];
         const decisions: CanonicalLegalDecision[] = rawDecisions.map((d: any) => {
+          // O BNP/Pangea ainda não possui conector oficial implementado. Registros
+          // estáticos legados jamais podem conservar selo oficial em produção.
+          if (d.sourceId === 'cnj-bnp-pangea') {
+            d.verificationStatus = 'DEMO_UNVERIFIED';
+            d.environment = 'development';
+          }
           // Bloqueio de sementes de desenvolvimento não auditadas por HTTP real.
           // Precedentes com VERIFIED_OFFICIAL devidamente auditados são preservados.
           if (d.sourceId === 'stj-dados-abertos' && d.verificationStatus !== 'VERIFIED_OFFICIAL') {
@@ -55,8 +61,23 @@ export class LegalKnowledgeStorage {
           return d;
         });
 
+        const persistedSources: LegalSourceRegistryItem[] = parsed.sources || INITIAL_LEGAL_SOURCE_REGISTRY;
+        const sources = persistedSources.map((source) => {
+          if (source.sourceId === 'cnj-datajud') {
+            const configured = Boolean(process.env.DATAJUD_API_KEY?.trim());
+            return { ...source, connectorStatus: configured ? 'READY' as const : 'NOT_CONFIGURED' as const, credentialConfigured: configured, reviewedBy: undefined, reviewedAt: undefined };
+          }
+          if (source.sourceId === 'stj-dados-abertos') {
+            return { ...source, connectorStatus: 'PARTIAL' as const, credentialConfigured: false, reviewedBy: undefined, reviewedAt: undefined };
+          }
+          if (['cnj-bnp-pangea', 'stf-jurisprudencia', 'tst-jurisprudencia'].includes(source.sourceId)) {
+            return { ...source, connectorStatus: 'NOT_IMPLEMENTED' as const, credentialConfigured: false, reviewedBy: undefined, reviewedAt: undefined };
+          }
+          return source;
+        });
+
         return {
-          sources: parsed.sources || INITIAL_LEGAL_SOURCE_REGISTRY,
+          sources,
           decisions,
           qualifiedPrecedents: parsed.qualifiedPrecedents || [],
           caseMetadata: parsed.caseMetadata || [],
@@ -150,9 +171,7 @@ export class LegalKnowledgeStorage {
         if (!options?.includeDemo) return false;
       }
       // Isolamento multi-tenant: decisões com tenantId nulo são públicas; decisões com tenantId pertencem ao escritório
-      if (d.tenantId && options?.tenantId && d.tenantId !== options.tenantId) {
-        return false;
-      }
+      if (d.tenantId && d.tenantId !== options?.tenantId) return false;
       if (options?.courtCodes && options.courtCodes.length > 0) {
         if (!options.courtCodes.includes(d.courtCode)) return false;
       }
@@ -168,7 +187,7 @@ export class LegalKnowledgeStorage {
 
   public getDecisionById(id: string, tenantId?: string): CanonicalLegalDecision | undefined {
     return this.state.decisions.find(
-      (d) => d.id === id && (!d.tenantId || !tenantId || d.tenantId === tenantId)
+      (d) => d.id === id && (!d.tenantId || d.tenantId === tenantId)
     );
   }
 

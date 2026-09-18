@@ -38,7 +38,7 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
   onOpenAiGateway,
   onShowToast,
 }) => {
-  const [query, setQuery] = useState('dano moral extravio de bagagem cdc');
+  const [query, setQuery] = useState('');
   const [court, setCourt] = useState('ALL');
   const [legalArea, setLegalArea] = useState('ALL');
   const [onlyBinding, setOnlyBinding] = useState(false);
@@ -92,6 +92,10 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
   };
 
   const handleCopyCitation = (item: any) => {
+    if (item.evidenceState !== 'VERIFIED_OFFICIAL') {
+      onShowToast('Uso bloqueado: somente precedentes verificados em fonte oficial podem ser copiados para peças.');
+      return;
+    }
     const citation = `${item.courtCode}. ${item.rapporteur || 'Relator'}. Acórdão ${item.caseNumber || item.id}. Julgado em ${item.judgmentDate || 'data não informada'}.\n\nEMENTA:\n${item.headnote}`;
     navigator.clipboard.writeText(citation);
     setCopiedId(item.id);
@@ -101,6 +105,10 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
 
   const handleAssociatePrecedent = async () => {
     if (!targetCaseId || !selectedPrecedentForCase) return;
+    if (selectedPrecedentForCase.evidenceState !== 'VERIFIED_OFFICIAL') {
+      onShowToast('Vinculação bloqueada: o precedente ainda não foi verificado na fonte oficial.');
+      return;
+    }
     setAssociating(true);
 
     try {
@@ -139,7 +147,7 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
               Pesquisa Jurisprudencial & Precedentes Vinculantes
             </h3>
             <p className="text-xs text-slate-500">
-              Busca semântica e por termos nos repositórios oficiais do STF, STJ, TST e Cortes Estaduais
+              Pesquisa no acervo realmente sincronizado; cada resultado informa seu estado de evidência
             </p>
           </div>
 
@@ -281,6 +289,19 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
                         {item.legalArea}
                       </span>
                     )}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      item.evidenceState === 'VERIFIED_OFFICIAL'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : item.evidenceState === 'FOUND_PENDING_REVIEW'
+                          ? 'bg-amber-100 text-amber-900 border-amber-200'
+                          : 'bg-rose-100 text-rose-800 border-rose-200'
+                    }`}>
+                      {item.evidenceState === 'VERIFIED_OFFICIAL'
+                        ? 'Verificado em fonte oficial'
+                        : item.evidenceState === 'FOUND_PENDING_REVIEW'
+                          ? 'Encontrado, pendente de conferência'
+                          : 'Não verificado — proibido usar em peça'}
+                    </span>
                   </div>
                   <p className="text-xs text-slate-500">
                     {item.organ || 'Órgão Julgador'} • Relator: <strong className="text-slate-700">{item.rapporteur || 'Des. Relator'}</strong> • Julgado em {item.judgmentDate}
@@ -292,8 +313,9 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
                   <button
                     type="button"
                     onClick={() => handleCopyCitation(item)}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-slate-50 transition-colors"
-                    title="Copiar Citação Formatada"
+                    disabled={item.evidenceState !== 'VERIFIED_OFFICIAL'}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title={item.evidenceState === 'VERIFIED_OFFICIAL' ? 'Copiar citação verificada' : 'Bloqueado até conferência oficial'}
                   >
                     {copiedId === item.id ? (
                       <Check className="w-4 h-4 text-emerald-600" />
@@ -318,8 +340,9 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPrecedentForCase(item)}
-                    className="px-2.5 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-xs font-semibold flex items-center gap-1 hover:bg-sky-100 transition-colors"
-                    title="Vincular este precedente a um processo do JurisFlow"
+                    disabled={item.evidenceState !== 'VERIFIED_OFFICIAL'}
+                    className="px-2.5 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-xs font-semibold flex items-center gap-1 hover:bg-sky-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title={item.evidenceState === 'VERIFIED_OFFICIAL' ? 'Vincular a processo' : 'Bloqueado até conferência oficial'}
                   >
                     <Link2 className="w-3.5 h-3.5" />
                     <span>Vincular a Processo</span>
@@ -386,7 +409,7 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
             <BookOpen className="w-8 h-8 text-slate-300 mx-auto" />
             <h4 className="text-sm font-semibold text-slate-700">Nenhum precedente localizado</h4>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Tente utilizar outros sinônimos jurídicos ou selecione a opção "Todos os Tribunais" para expandir a varredura nos repositórios.
+              Nenhum registro do acervo sincronizado passou pelo controle de competência, pertinência e evidência. Nenhuma jurisprudência será inventada.
             </p>
           </div>
         )}

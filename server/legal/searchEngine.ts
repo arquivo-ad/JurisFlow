@@ -69,8 +69,6 @@ export class LegalSearchEngine {
     const sourcesActuallyConsulted: Set<string> = new Set();
 
     for (const d of candidates) {
-      sourcesActuallyConsulted.add(d.sourceId);
-
       // Bloqueio rigoroso de sementes não verificadas / demo
       if (d.verificationStatus === 'DEMO_UNVERIFIED' || (d as any).environment === 'development') {
         continue;
@@ -122,8 +120,8 @@ export class LegalSearchEngine {
         const queryDigits = classification.extractedProcessNumber.replace(/[^0-9]/g, '');
         const docDigits = d.rawCaseNumber.replace(/[^0-9]/g, '');
         if (
-          (queryProcClean.length >= 6 && (rawCaseClean.includes(queryProcClean) || (cnjClean && cnjClean.includes(queryProcClean)))) ||
-          (queryDigits.length >= 5 && docDigits.includes(queryDigits))
+          (queryProcClean.length >= 6 && (rawCaseClean === queryProcClean || cnjClean === queryDigits)) ||
+          (queryDigits.length >= 5 && docDigits === queryDigits)
         ) {
           condition1 = true;
         }
@@ -194,6 +192,18 @@ export class LegalSearchEngine {
         continue;
       }
 
+      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
+        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
+      const hasAuditableEvidence =
+        d.verificationStatus === 'VERIFIED_OFFICIAL'
+        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
+        && Boolean(d.lastVerifiedAt)
+        && Boolean(d.rawPayloadPreserved)
+        && officialUrlIsDirect;
+
+      if (queryInput.onlyVerified && !hasAuditableEvidence) continue;
+      sourcesActuallyConsulted.add(d.sourceId);
+
       // -------------------------------------------------------------
       // 3. PONTUAÇÃO (APENAS PARA OS QUE PASSARAM NO FILTRO DE PERTINÊNCIA)
       // -------------------------------------------------------------
@@ -246,12 +256,23 @@ export class LegalSearchEngine {
 
     const results: LegalSearchResultItem[] = paginated.map((item) => {
       const d = item.decision;
-      const citationBadge =
-        d.verificationStatus === 'VERIFIED_OFFICIAL'
-          ? `[OFICIAL ${d.courtCode} - VERIFICADO]`
-          : d.verificationStatus === 'CANCELLED'
-          ? `[${d.courtCode} - CANCELADO]`
-          : `[${d.courtCode} - NÃO VERIFICADO]`;
+      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
+        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
+      const hasAuditableEvidence = d.verificationStatus === 'VERIFIED_OFFICIAL'
+        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
+        && Boolean(d.lastVerifiedAt)
+        && Boolean(d.rawPayloadPreserved)
+        && officialUrlIsDirect;
+      const evidenceState = hasAuditableEvidence
+        ? 'VERIFIED_OFFICIAL'
+        : d.officialUrl
+          ? 'FOUND_PENDING_REVIEW'
+          : 'NOT_VERIFIED_PROHIBITED';
+      const citationBadge = evidenceState === 'VERIFIED_OFFICIAL'
+        ? `[OFICIAL ${d.courtCode} - VERIFICADO]`
+        : evidenceState === 'FOUND_PENDING_REVIEW'
+          ? `[${d.courtCode} - ENCONTRADO, PENDENTE DE CONFERÊNCIA]`
+          : `[${d.courtCode} - NÃO VERIFICADO — PROIBIDO USAR EM PEÇA]`;
 
       const officialCitation = `${d.courtCode}, ${d.rawCaseNumber}, Rel. ${d.rapporteur}, ${d.courtOrgan || ''}, julgado em ${d.judgmentDate || 'N/D'}, DJe ${d.publicationDate || 'N/D'}`;
 
@@ -284,20 +305,11 @@ export class LegalSearchEngine {
         scoreFinal: item.score,
         relevanceReason: item.pertinenceReason,
         verifiedAt: d.lastVerifiedAt,
+        evidenceState,
+        evidenceId: hasAuditableEvidence ? `${d.sourceId}:${d.contentSha256}` : undefined,
+        contentSha256: d.contentSha256,
       };
     });
-
-    // Fontes consultadas dinâmicas
-    const dynamicSources: string[] = [];
-    if (classification.prioritySources) {
-      dynamicSources.push(...classification.prioritySources.map((s) => `${s} (prioritária)`));
-    }
-    if (classification.complementarySources) {
-      dynamicSources.push(...classification.complementarySources.map((s) => `${s} (complementar)`));
-    }
-    if (classification.excludedSources && classification.excludedSources.length > 0) {
-      dynamicSources.push(...classification.excludedSources.map((s) => `${s} (descartada por incompetência material)`));
-    }
 
     return {
       query,
@@ -305,7 +317,7 @@ export class LegalSearchEngine {
       page,
       pageSize,
       results,
-      sourcesConsulted: dynamicSources.length > 0 ? dynamicSources : Array.from(sourcesActuallyConsulted),
+      sourcesConsulted: Array.from(sourcesActuallyConsulted),
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
     };

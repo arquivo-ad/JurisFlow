@@ -289,6 +289,9 @@ export interface LegalSearchResultItem {
   scoreFinal: number;
   relevanceReason: string;
   verifiedAt: string;
+  evidenceState: 'VERIFIED_OFFICIAL' | 'FOUND_PENDING_REVIEW' | 'NOT_VERIFIED_PROHIBITED';
+  evidenceId?: string;
+  contentSha256: string;
 }
 
 export interface LegalQueryClassification {

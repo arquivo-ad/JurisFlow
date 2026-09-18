@@ -114,7 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'ai-gateway' as ActiveModule,
       label: 'AI Gateway Jurídico',
       icon: Sparkles,
-      badge: 'Gemini 3.7',
+      badge: 'Modelo configurável',
       badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200 font-bold',
       color: 'text-indigo-600',
     },

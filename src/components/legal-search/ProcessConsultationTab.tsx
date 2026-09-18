@@ -42,7 +42,7 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
   onShowToast,
 }) => {
   const [searchType, setSearchType] = useState<'CNJ' | 'LAWYER_OAB' | 'PARTY_NAME'>('CNJ');
-  const [cnjNumber, setCnjNumber] = useState('1002458-12.2024.8.26.0100');
+  const [cnjNumber, setCnjNumber] = useState('');
   const [courtCode, setCourtCode] = useState('TJSP');
   const [lawyerOab, setLawyerOab] = useState('');
   const [partyName, setPartyName] = useState('');
@@ -147,7 +147,7 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
               Consulta Processual Unificada
             </h3>
             <p className="text-xs text-slate-500">
-              Interligação com DataJud (CNJ) e instâncias estaduais, federais e trabalhistas
+              Consulta pública por número CNJ via DataJud; sem completar dados ausentes por suposição
             </p>
           </div>
 
@@ -169,7 +169,7 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
                 className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium text-slate-600 flex items-center gap-1.5 hover:bg-slate-100 transition-colors"
               >
                 <Lock className="w-3.5 h-3.5 text-slate-400" />
-                <span>Autenticar Certificado A1/A3</span>
+                <span>Certificado: indisponível</span>
               </button>
             )}
           </div>
@@ -190,25 +190,27 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setSearchType('LAWYER_OAB')}
+            disabled
+            title="Conector oficial ainda não implementado"
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               searchType === 'LAWYER_OAB'
                 ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-400 cursor-not-allowed'
             }`}
           >
-            Por Advogado (OAB)
+            Por Advogado (em desenvolvimento)
           </button>
           <button
             type="button"
-            onClick={() => setSearchType('PARTY_NAME')}
+            disabled
+            title="Conector oficial ainda não implementado"
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               searchType === 'PARTY_NAME'
                 ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-400 cursor-not-allowed'
             }`}
           >
-            Por Nome da Parte
+            Por Nome (em desenvolvimento)
           </button>
         </div>
 
@@ -337,6 +339,9 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
                     <CheckCircle2 className="w-3 h-3 text-indigo-600" /> Cadastrado no JurisFlow
                   </span>
                 )}
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Verificado em fonte oficial
+                </span>
               </div>
               <p className="text-xs text-slate-600">
                 {searchResult.courtOrgan} • Distribuído em {searchResult.distributionDate} • Fonte: {searchResult.sourceProvider}
@@ -358,9 +363,9 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
               ) : (
                 <button
                   type="button"
-                  onClick={handleImportToJurisFlow}
-                  disabled={importing}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
+                  disabled
+                  title="Bloqueado até existir importação sem dados presumidos"
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-200 text-slate-500 text-xs font-semibold flex items-center gap-1.5 cursor-not-allowed"
                 >
                   {importing ? (
                     <>
@@ -370,7 +375,7 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
                   ) : (
                     <>
                       <Plus className="w-3.5 h-3.5" />
-                      Importar para o JurisFlow
+                      Importação segura em desenvolvimento
                     </>
                   )}
                 </button>

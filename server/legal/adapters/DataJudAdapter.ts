@@ -11,8 +11,9 @@ import { CaseMetadata, CourtMovement } from '../types.ts';
  * tribunal, grau, classe, assuntos TPU, órgão julgador e movimentações.
  */
 
-// Chave pública de homologação/consulta pública documentada pelo CNJ
-const DEFAULT_DATAJUD_API_KEY = process.env.DATAJUD_API_KEY || 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENxbUpraFl0akZadw==';
+// A chave pública do CNJ pode mudar. Ela deve ser configurada no ambiente e
+// nunca ficar embutida no código-fonte.
+const DEFAULT_DATAJUD_API_KEY = process.env.DATAJUD_API_KEY?.trim() || '';
 const DATAJUD_BASE_URL = 'https://api-publica.datajud.cnj.jus.br';
 
 export class DataJudAdapter {
@@ -24,13 +25,31 @@ export class DataJudAdapter {
     this.baseUrl = baseUrl || DATAJUD_BASE_URL;
   }
 
+  public isConfigured(): boolean {
+    return this.apiKey.length > 0;
+  }
+
+  /** Validação oficial do dígito verificador CNJ (ISO 7064 / módulo 97). */
+  public static isValidCnjNumber(input: string): boolean {
+    const digits = (input || '').replace(/\D/g, '');
+    if (digits.length !== 20 || /^0{20}$/.test(digits)) return false;
+
+    // NNNNNNN-DD.AAAA.J.TR.OOOO -> NNNNNNNAAAAJTROOOODD
+    const reordered = `${digits.slice(0, 7)}${digits.slice(9)}${digits.slice(7, 9)}`;
+    try {
+      return BigInt(reordered) % 97n === 1n;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Normaliza número CNJ para padrão NNNNNNN-DD.AAAA.J.TR.OOOO (20 dígitos + pontuação)
    */
   public static normalizeCnjNumber(input: string): string | null {
     if (!input) return null;
     const digitsOnly = input.replace(/\D/g, '');
-    if (digitsOnly.length !== 20) {
+    if (digitsOnly.length !== 20 || !DataJudAdapter.isValidCnjNumber(digitsOnly)) {
       return null;
     }
     // Formato: NNNNNNN-DD.AAAA.J.TR.OOOO
@@ -97,7 +116,16 @@ export class DataJudAdapter {
     if (!normalized) {
       return {
         success: false,
-        error: `Número CNJ inválido: "${cnjNumber}". O padrão oficial exige 20 dígitos (NNNNNNN-DD.AAAA.J.TR.OOOO).`,
+        error: `Número CNJ inválido: "${cnjNumber}". Verifique o formato e os dígitos verificadores.`,
+        statusCode: 400,
+      };
+    }
+
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        error: 'Conector DataJud não configurado: defina DATAJUD_API_KEY no ambiente.',
+        statusCode: 503,
       };
     }
 
@@ -162,13 +190,13 @@ export class DataJudAdapter {
         judicialDegree: sourceData.grau || 'G1',
         processClass: {
           code: sourceData.classe?.codigo || 0,
-          name: sourceData.classe?.nome || 'Procedimento Comum',
+          name: sourceData.classe?.nome || 'Não informado pelo DataJud',
         },
         subjects: (sourceData.assuntos || []).map((a: any) => ({
           code: a.codigo,
           name: a.nome,
         })),
-        courtOrgan: sourceData.orgaoJulgador?.nome || 'Juízo Cível',
+        courtOrgan: sourceData.orgaoJulgador?.nome || 'Não informado pelo DataJud',
         distributionDate: sourceData.dataAjuizamento,
         value: sourceData.valorCausa,
         isConfidential,

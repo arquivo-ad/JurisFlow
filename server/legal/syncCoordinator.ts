@@ -229,10 +229,13 @@ export class LegalSyncCoordinator {
     const job2 = await this.syncBnpSources();
     const totalNew = job1.documentsNew + job2.documentsNew;
     const totalUnchanged = job1.documentsUnchanged + job2.documentsUnchanged;
+    const allSucceeded = [job1, job2].every((job) => job.status === 'SUCCESS' && job.failures === 0);
 
     return {
       jobs: [job1, job2],
-      summary: `Sincronização concluída: ${totalNew} novos documentos persistidos, ${totalUnchanged} inalterados (idempotência confirmada via SHA-256).`,
+      summary: allSucceeded
+        ? `Sincronização concluída: ${totalNew} novos documentos persistidos, ${totalUnchanged} inalterados (idempotência confirmada via SHA-256).`
+        : `Sincronização não concluída: ${[job1, job2].filter((job) => job.status !== 'SUCCESS').map((job) => job.sourceId).join(', ')} falhou ou não possui conector implementado.`,
     };
   }
 
