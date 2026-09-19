@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { CanonicalLegalDecision, PrecedentSituation, PrecedentStrength, OfficialSourceDiagnostic } from '../types.ts';
+import { CanonicalLegalDecision, LegalDocumentType, PrecedentSituation, PrecedentStrength, OfficialSourceDiagnostic } from '../types.ts';
 import { PrecedentVerifier } from '../verifier.ts';
 
 /**
@@ -44,16 +44,17 @@ export class StjDadosAbertosAdapter {
     themeNumber?: number;
     precedentStrength?: PrecedentStrength;
     precedentSituation?: PrecedentSituation;
+    documentType?: LegalDocumentType;
     officialUrl?: string;
     fullTextUrl?: string;
     originCourt?: string;
   }): CanonicalLegalDecision {
     const headnote = (raw.officialHeadnote || '').trim();
     const caseNum = (raw.rawCaseNumber || '').trim();
-    const rapporteur = raw.rapporteur || 'Ministro do STJ';
-    const courtOrgan = raw.courtOrgan || 'STJ';
-    const judgmentDate = raw.judgmentDate || new Date().toISOString().split('T')[0];
-    const publicationDate = raw.publicationDate || new Date().toISOString().split('T')[0];
+    const rapporteur = (raw.rapporteur || '').trim();
+    const courtOrgan = (raw.courtOrgan || '').trim();
+    const judgmentDate = raw.judgmentDate || '';
+    const publicationDate = raw.publicationDate || '';
     const hashPayload = `${caseNum}|${rapporteur}|${judgmentDate}|${headnote}`;
     const contentSha256 = StjDadosAbertosAdapter.computeSha256(hashPayload);
 
@@ -82,8 +83,8 @@ export class StjDadosAbertosAdapter {
       rulingThesis: raw.rulingThesis,
       citedLegislation: raw.citedLegislation || [],
       citedPrecedents: raw.citedPrecedents || [],
-      documentType: 'ACORDAO',
-      result: 'Julgado pelo Colegiado',
+      documentType: raw.documentType || 'ACORDAO',
+      result: undefined,
       precedentSituation: raw.precedentSituation || 'VIGENTE',
       precedentStrength: raw.precedentStrength || 'PERSUASIVO_SUPERIOR',
       themeNumber: raw.themeNumber,
@@ -697,11 +698,11 @@ export class StjDadosAbertosAdapter {
     }
 
     const themeNum = parseInt(matchedRow[2] || '0', 10);
-    const procNameRaw = matchedRow[3] || 'REsp 1061530';
-    const origemUf = matchedRow[20] || 'RS';
-    const relator = matchedRow[5] || 'Min. Ari Pargendler';
-    const dataJulg = matchedRow[12] || '2008-10-22';
-    const dataPub = matchedRow[13] || '2009-03-10';
+    const procNameRaw = matchedRow[3]?.trim() || '';
+    const origemUf = matchedRow[20]?.trim() || '';
+    const relator = matchedRow[5]?.trim() || '';
+    const dataJulg = matchedRow[12]?.trim() || '';
+    const dataPub = matchedRow[13]?.trim() || '';
 
     // Recupera dados do Tema correspondente
     const temasContent = fs.readFileSync(temas, 'utf8');
@@ -710,12 +711,14 @@ export class StjDadosAbertosAdapter {
 
     let teseFirmada = '';
     let questaoSubmetida = '';
-    let situacao = 'Trânsito em Julgado';
+    let situacao = '';
+    let matchedThemeRow: string[] | null = null;
 
     for (let i = 1; i < temasRecords.length; i++) {
       const row = temasRecords[i];
       if (row[0] === matchedThemeSeq || (row[1] === 'Tema' && parseInt(row[2] || '0', 10) === themeNum)) {
-        situacao = row[6] || 'Trânsito em Julgado';
+        matchedThemeRow = row;
+        situacao = row[6]?.trim() || '';
         questaoSubmetida = row[8] || '';
         teseFirmada = row[9] || '';
         break;
@@ -723,35 +726,89 @@ export class StjDadosAbertosAdapter {
     }
 
     const rawCaseNumber = procNameRaw.includes('/') ? procNameRaw : `${procNameRaw}/${origemUf}`;
-    const headnote = `DIREITO PROCESSUAL CIVIL E CONSUMIDOR. RECURSO ESPECIAL REPETITIVO. TEMA ${themeNum}/STJ. CONTRATOS BANCÁRIOS. TAXA DE JUROS REMUNERATÓRIOS. LIMITAÇÃO E REVISÃO JUDICIAL. 1. ${questaoSubmetida || 'Discussão acerca dos juros remuneratórios em ações que digam respeito a contratos bancários.'} 2. ${teseFirmada || 'É admitida a revisão das taxas de juros remuneratórios em situações excepcionais, desde que caracterizada a relação de consumo e que a abusividade fique cabalmente demonstrada, ante às peculiaridades do julgamento em concreto.'}`;
+    const headnote = [questaoSubmetida, teseFirmada].filter(Boolean).join(' ');
+    const referenciaLegislativa = matchedThemeRow?.[13]?.trim();
+    const referenciaSumular = matchedThemeRow?.[14]?.trim();
+    const orgaoJulgador = matchedThemeRow?.[18]?.trim() || '';
+    const missingOfficialFields = [
+      ['processo', procNameRaw],
+      ['UF de origem', origemUf],
+      ['relator', relator],
+      ['data de julgamento/publicação', dataJulg || dataPub],
+      ['linha oficial do tema', matchedThemeRow],
+      ['questão submetida/tese', headnote],
+      ['situação do tema', situacao],
+      ['órgão julgador', orgaoJulgador],
+    ].filter(([, value]) => !value).map(([label]) => label as string);
+
+    if (missingOfficialFields.length > 0) {
+      return {
+        diagnostic: {
+          adapter: 'stj-dados-abertos',
+          sourceName: 'Superior Tribunal de Justiça - Portal de Dados Abertos (SCON/CKAN)',
+          courtCode: 'STJ',
+          officialUrl: syncStatus.officialUrl,
+          timestamp,
+          httpStatus: 200,
+          latencyMs: syncStatus.latencyMs + (Date.now() - startParse),
+          lifecycleState: 'PARSER_ERROR',
+          stateDescription: 'Registro oficial localizado, mas sem os campos mínimos necessários para validação forense.',
+          bytesTransferred: syncStatus.bytesTransferred,
+          contentSha256: syncStatus.processosSha256,
+          documentsReceived: procRecords.length - 1,
+          documentsNormalized: 0,
+          documentsRejected: 1,
+          recordsRead: syncStatus.recordsRead,
+          recordsAccepted: syncStatus.recordsAccepted,
+          recordsRejected: syncStatus.recordsRejected + 1,
+          parsingErrors: [`Campos oficiais ausentes: ${missingOfficialFields.join(', ')}.`],
+          rejectionReasons: ['Documento rejeitado sem preenchimento artificial de metadados.'],
+          normalizedQueryNumber: queryNum,
+          connectorStatus: 'DEGRADED',
+        },
+      };
+    }
+
+    const normalizedSituation = situacao.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const precedentSituation: PrecedentSituation = normalizedSituation.includes('cancelad')
+      ? 'CANCELADO'
+      : normalizedSituation.includes('superad')
+        ? 'SUPERADO'
+        : normalizedSituation.includes('transit')
+          ? 'TRANSITADO'
+          : normalizedSituation.includes('afetad')
+            ? 'AFETADO'
+            : normalizedSituation.includes('julgad')
+              ? 'JULGADO'
+              : 'EM_REVISAO';
 
     const decision: CanonicalLegalDecision = this.normalizeStjDecision({
       rawCaseNumber,
-      normalizedCnjNumber: '0024851-12.2008.8.21.7000',
       processClass: 'RECURSO ESPECIAL (REsp)',
-      rapporteur:
-        relator === 'ARI PARGENDLER'
-          ? 'Min. Nancy Andrighi (Relatora p/ Acórdão; Rel. Orig. Min. Ari Pargendler)'
-          : relator,
-      courtOrgan: 'Segunda Seção',
+      rapporteur: relator,
+      courtOrgan: orgaoJulgador,
       judgmentDate: dataJulg,
       publicationDate: dataPub,
       officialHeadnote: headnote,
-      rulingThesis: `Tema ${themeNum}/STJ: ${teseFirmada || 'É admitida a revisão das taxas de juros remuneratórios em situações excepcionais, desde que caracterizada a relação de consumo e que a abusividade fique cabalmente demonstrada em concreto.'}`,
-      citedLegislation: [
-        'Código de Processo Civil, art. 543-C',
-        'Código de Defesa do Consumidor, art. 51, § 1º',
-        'Lei de Usura (Decreto 22.626/1933)',
-        'Súmula 596/STF',
-      ],
-      citedPrecedents: [`Tema ${themeNum}/STJ`],
+      rulingThesis: teseFirmada ? `Tema ${themeNum}/STJ: ${teseFirmada}` : undefined,
+      citedLegislation: referenciaLegislativa ? [referenciaLegislativa] : [],
+      citedPrecedents: referenciaSumular ? [referenciaSumular] : [],
+      documentType: 'TEMA_REPETITIVO',
       themeNumber: themeNum,
       precedentStrength: 'VINCULANTE',
-      precedentSituation: 'VIGENTE',
+      precedentSituation,
       officialUrl: `https://processo.stj.jus.br/processo/pesquisa/?termo=${encodeURIComponent(procNameRaw)}&aplicacao=processos.ea`,
-      fullTextUrl: `https://dadosabertos.web.stj.jus.br/dataset/precedentes-qualificados`,
-      originCourt: 'Tribunal de Justiça do Estado do Rio Grande do Sul (TJRS)',
+      fullTextUrl: 'https://dadosabertos.web.stj.jus.br/dataset/precedentes-qualificados',
+      originCourt: matchedRow[17]?.trim() || undefined,
     });
+
+    decision.rawPayloadPreserved = {
+      processosRow: matchedRow,
+      temasRow: matchedThemeRow,
+      processosSha256: syncStatus.processosSha256,
+      temasSha256: syncStatus.temasSha256,
+      sourceDataset: syncStatus.officialUrl,
+    };
 
     const verification = PrecedentVerifier.verifyDecision(decision);
     decision.verificationStatus = verification.isPassed ? 'VERIFIED_OFFICIAL' : 'REJECTED';

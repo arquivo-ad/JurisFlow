@@ -147,7 +147,7 @@ export class DataJudAdapter {
     try {
       const controller = new AbortController();
       // A API pública do CNJ frequentemente responde entre 6 e 10 segundos.
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch(url, {
         method: 'POST',

@@ -196,12 +196,18 @@ export class LegalSearchEngine {
 
       const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
         && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
+      const payload = d.rawPayloadPreserved as any;
+      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
+        && Array.isArray(payload?.processosRow)
+        && Array.isArray(payload?.temasRow)
+        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
       const hasAuditableEvidence =
         d.verificationStatus === 'VERIFIED_OFFICIAL'
         && /^[a-f0-9]{64}$/i.test(d.contentSha256)
         && Boolean(d.lastVerifiedAt)
         && Boolean(d.rawPayloadPreserved)
-        && officialUrlIsDirect
+        && (officialUrlIsDirect || hasOfficialDatasetEvidence)
         && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
         && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
 
@@ -262,11 +268,17 @@ export class LegalSearchEngine {
       const d = item.decision;
       const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
         && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
+      const payload = d.rawPayloadPreserved as any;
+      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
+        && Array.isArray(payload?.processosRow)
+        && Array.isArray(payload?.temasRow)
+        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
       const hasAuditableEvidence = d.verificationStatus === 'VERIFIED_OFFICIAL'
         && /^[a-f0-9]{64}$/i.test(d.contentSha256)
         && Boolean(d.lastVerifiedAt)
         && Boolean(d.rawPayloadPreserved)
-        && officialUrlIsDirect
+        && (officialUrlIsDirect || hasOfficialDatasetEvidence)
         && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
         && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
       const evidenceState = hasAuditableEvidence

@@ -6,6 +6,8 @@ import { PrecedentVerifier } from '../verifier.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalSearchEngine } from '../searchEngine.ts';
 import { LegalKnowledgeStorage } from '../storage.ts';
+import { CitationGuard } from '../citationGuard.ts';
+import type { CanonicalLegalDecision } from '../types.ts';
 
 test('valida formato e dígitos verificadores do número CNJ', () => {
   assert.equal(DataJudAdapter.normalizeCnjNumber('0000832-35.2018.4.01.3202'), '0000832-35.2018.4.01.3202');
@@ -80,4 +82,44 @@ test('consulta exata a tema não aceita coincidência textual genérica de catá
   const result = engine.search({ query: 'Qual é a tese do Tema 27 do STJ?', onlyVerified: true });
   assert.equal(result.total, 0);
   assert.deepEqual(result.results, []);
+});
+
+test('CitationGuard reconhece Tema 27 do STJ somente no conjunto verificado da consulta', () => {
+  const decision = {
+    id: 'stj-tema-27',
+    sourceId: 'stj-dados-abertos',
+    officialUrl: 'https://processo.stj.jus.br/processo/pesquisa/?termo=REsp%201061530%2FRS&aplicacao=processos.ea',
+    court: 'Superior Tribunal de Justiça',
+    courtCode: 'STJ',
+    judicialBranch: 'SUPERIOR',
+    jurisdiction: 'BRASIL',
+    processClass: 'REsp',
+    rawCaseNumber: 'REsp 1061530/RS',
+    rapporteur: 'ARI PARGENDLER',
+    judgmentDate: '2008-10-22',
+    publicationDate: '2009-03-10',
+    officialHeadnote: 'Questão submetida e tese firmada preservadas da linha oficial do tema.',
+    rulingThesis: 'Tese oficial preservada da fonte.',
+    documentType: 'TEMA_REPETITIVO',
+    precedentSituation: 'TRANSITADO',
+    precedentStrength: 'VINCULANTE',
+    themeNumber: 27,
+    language: 'pt-BR',
+    contentSha256: 'a'.repeat(64),
+    collectedAt: '2026-09-19T00:00:00.000Z',
+    lastVerifiedAt: '2026-09-19T00:00:00.000Z',
+    verificationStatus: 'VERIFIED_OFFICIAL',
+    parserVersion: 'test',
+    documentVersion: 1,
+  } satisfies CanonicalLegalDecision;
+
+  const report = new CitationGuard().validateAndSanitize(
+    'O Tema 27 do STJ foi recuperado nesta consulta.',
+    [decision]
+  );
+
+  assert.equal(report.isPassed, true);
+  assert.equal(report.blockedCitationsCount, 0);
+  assert.equal(report.verifiedBadgesApplied, 1);
+  assert.equal(report.citationsFound[0]?.isVerified, true);
 });

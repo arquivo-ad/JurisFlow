@@ -97,16 +97,27 @@ export class CitationGuard {
         }
         trackedMatches.add(normKey);
 
-        // Correspondência estrita e unívoca
+        // Correspondência estrita e unívoca. Temas e súmulas são reconstruídos
+        // a partir dos grupos capturados para que grafias equivalentes como
+        // "Tema 27/STJ" e "Tema 27 do STJ" usem a mesma chave canônica.
         let matchedDecision = verifiedMap.get(normKey);
+        const citationType = normalizeCitationKey(match[1] || '');
+        const citationNumber = String(match[2] || '').replace(/[^0-9]/g, '');
 
-        // Se a busca for "Tema 27" e a chave estiver mapeada como "tema27"
-        if (!matchedDecision) {
-          if (normKey.startsWith('tema')) {
-            matchedDecision = verifiedMap.get(normKey);
-          } else if (normKey.startsWith('sv')) {
-            matchedDecision = verifiedMap.get(normKey.replace('sv', 'sumulavinculante')) || verifiedMap.get(normKey);
-          }
+        if (!matchedDecision && citationType === 'tema' && citationNumber) {
+          const citedCourt = normalizeCitationKey(match[3] || '');
+          matchedDecision =
+            (citedCourt ? verifiedMap.get(`tema${citationNumber}${citedCourt}`) : undefined) ||
+            verifiedMap.get(`tema${citationNumber}`);
+        } else if (!matchedDecision && (citationType === 'sv' || citationType === 'sumulavinculante') && citationNumber) {
+          matchedDecision =
+            verifiedMap.get(`sumulavinculante${citationNumber}`) ||
+            verifiedMap.get(`sv${citationNumber}`);
+        } else if (!matchedDecision && citationType === 'sumula' && citationNumber) {
+          const citedCourt = normalizeCitationKey(match[3] || '');
+          matchedDecision =
+            (citedCourt ? verifiedMap.get(`sumula${citationNumber}${citedCourt}`) : undefined) ||
+            verifiedMap.get(`sumula${citationNumber}`);
         }
 
         if (matchedDecision) {
