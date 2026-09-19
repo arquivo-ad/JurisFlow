@@ -7,6 +7,8 @@ import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchP
 import { LegalSearchEngine } from '../searchEngine.ts';
 import { LegalKnowledgeStorage } from '../storage.ts';
 import { CitationGuard } from '../citationGuard.ts';
+import { TstJurisprudenciaAdapter } from '../adapters/TstJurisprudenciaAdapter.ts';
+import { GeminiLegalService } from '../geminiLegalService.ts';
 import type { CanonicalLegalDecision } from '../types.ts';
 
 test('valida formato e dígitos verificadores do número CNJ', () => {
@@ -122,4 +124,123 @@ test('CitationGuard reconhece Tema 27 do STJ somente no conjunto verificado da c
   assert.equal(report.blockedCitationsCount, 0);
   assert.equal(report.verifiedBadgesApplied, 1);
   assert.equal(report.citationsFound[0]?.isVerified, true);
+});
+
+const tstOfficialRecord = {
+  id: 'acordao-11281',
+  tipo: 'ACORDAO',
+  numFormatado: 'AIRR-AIRR - 112-81.2021.5.08.0002',
+  anoProcInt: 2021,
+  numProcInt: 11281,
+  numInterno: 11281,
+  numProcDocumento: 987654,
+  orgao: 'TST',
+  orgaoJudicante: { descricao: '8ª Turma' },
+  nomRelator: 'Sergio Pinto Martins',
+  dtaJulgamento: '2026-09-02T00:00:00-03:00',
+  dtaPublicacao: '2026-09-09T07:00:00-03:00',
+  ementa: 'COMPETÊNCIA MATERIAL DA JUSTIÇA DO TRABALHO. FUNDAÇÃO PÚBLICA DE DIREITO PRIVADO. CARGO EM COMISSÃO. REGIME CELETISTA. VERBAS RESCISÓRIAS.',
+  dispositivo: 'Recurso examinado pela Oitava Turma.',
+  numeracaoUnica: { numero: 112, digito: 81, ano: 2021, orgao: 5, tribunal: 8, vara: 2 },
+};
+
+test('conector TST normaliza e verifica acórdão somente com evidência oficial completa', async () => {
+  const fetchMock = async () => new Response(JSON.stringify({
+    totalRegistros: 1,
+    registros: [{ registro: tstOfficialRecord }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const adapter = new TstJurisprudenciaAdapter(fetchMock as typeof fetch);
+
+  const result = await adapter.searchOfficialJurisprudence('verbas rescisórias fundação pública cargo de confiança');
+
+  assert.equal(result.diagnostic.httpStatus, 200);
+  assert.equal(result.diagnostic.lifecycleState, 'SEARCH_SUCCESS');
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decisions[0]?.normalizedCnjNumber, '0000112-81.2021.5.08.0002');
+  assert.match(result.decisions[0]?.officialUrl || '', /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/documentos\//);
+  assert.match((result.decisions[0]?.rawPayloadPreserved as any)?.officialResponseSha256 || '', /^[a-f0-9]{64}$/);
+});
+
+test('conector TST rejeita registro sem relator em vez de completar metadado', async () => {
+  const fetchMock = async () => new Response(JSON.stringify({
+    totalRegistros: 1,
+    registros: [{ registro: { ...tstOfficialRecord, nomRelator: '' } }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const adapter = new TstJurisprudenciaAdapter(fetchMock as typeof fetch);
+
+  const result = await adapter.searchOfficialJurisprudence('fundação pública regime celetista');
+
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.diagnostic.documentsRejected, 1);
+  assert.equal(result.diagnostic.lifecycleState, 'EMPTY_VALID_DATASET');
+});
+
+test('motor admite evidência auditável da API oficial do TST e exibe o estado verificado', async () => {
+  const fetchMock = async () => new Response(JSON.stringify({
+    totalRegistros: 1,
+    registros: [{ registro: tstOfficialRecord }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const adapter = new TstJurisprudenciaAdapter(fetchMock as typeof fetch);
+  const official = await adapter.searchOfficialJurisprudence('verbas rescisórias fundação pública cargo de confiança');
+  const storage = {
+    getDecisions: () => official.decisions,
+  } as unknown as LegalKnowledgeStorage;
+
+  const result = new LegalSearchEngine(storage).search({
+    query: 'verbas rescisórias fundação pública cargo de confiança',
+    courtCodes: ['TST'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results[0]?.evidenceState, 'VERIFIED_OFFICIAL');
+  assert.equal(result.results[0]?.sourceId, 'tst-jurisprudencia');
+  assert.equal(result.results[0]?.verificationBadge, '[OFICIAL TST - VERIFICADO]');
+});
+
+test('CitationGuard reconhece a classe composta AIRR-AIRR apenas no conjunto da consulta', async () => {
+  const fetchMock = async () => new Response(JSON.stringify({
+    totalRegistros: 1,
+    registros: [{ registro: tstOfficialRecord }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const decision = (await new TstJurisprudenciaAdapter(fetchMock as typeof fetch)
+    .searchOfficialJurisprudence('cargo em comissão fundação pública')).decisions[0];
+
+  const report = new CitationGuard().validateAndSanitize(
+    'Aplica-se o AIRR-AIRR - 112-81.2021.5.08.0002, conforme a fonte oficial.',
+    [decision]
+  );
+
+  assert.equal(report.isPassed, true);
+  assert.equal(report.blockedCitationsCount, 0);
+  assert.equal(report.verifiedBadgesApplied, 1);
+});
+
+test('Chat Forense não reutiliza precedente TST antigo quando a consulta oficial atual falha', async () => {
+  const service = new GeminiLegalService();
+  (service as any).tstAdapter = {
+    searchOfficialJurisprudence: async () => ({
+      decisions: [],
+      totalRecords: 0,
+      diagnostic: {
+        adapter: 'tst-jurisprudencia',
+        officialUrl: 'https://jurisprudencia-backend.tst.jus.br/rest/pesquisa-textual/1/12',
+        timestamp: new Date().toISOString(),
+        httpStatus: 503,
+        latencyMs: 1,
+        lifecycleState: 'SOURCE_UNAVAILABLE',
+        documentsReceived: 0,
+        documentsNormalized: 0,
+        documentsRejected: 0,
+        rejectionReasons: ['fonte indisponível'],
+        connectorStatus: 'FAILED',
+      },
+    }),
+  };
+
+  const result = await service.researchAndSynthesize('CLT fundação pública cargo de confiança verbas rescisórias');
+
+  assert.equal(result.status, 'FAIL_CLOSED');
+  assert.equal(result.failureCode, 'SOURCE_UNAVAILABLE');
+  assert.deepEqual(result.searchResults, []);
 });

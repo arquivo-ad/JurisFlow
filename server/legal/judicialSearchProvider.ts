@@ -6,9 +6,11 @@ import {
   CourtAvailabilityMatrixItem,
 } from '../../src/types/index.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
+import { TstJurisprudenciaAdapter } from './adapters/TstJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { LegalSearchQuery, LegalSearchResultItem } from './types.ts';
+import { LegalCompetenceClassifier } from './classifier.ts';
 
 /**
  * INTERFACE CANÔNICA DE PROVEDORES DE BUSCA PROCESSUAL E JURISPRUDENCIAL
@@ -164,11 +166,13 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
  */
 export class JudicialSearchService {
   private datajudProvider: DataJudSearchProvider;
+  private tstAdapter: TstJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
   constructor() {
     this.datajudProvider = new DataJudSearchProvider();
+    this.tstAdapter = new TstJurisprudenciaAdapter();
   }
 
   /**
@@ -180,7 +184,20 @@ export class JudicialSearchService {
     if (cached) return cached;
 
     const start = Date.now();
-    const searchEngine = new LegalSearchEngine(legalStorage);
+    const classification = LegalCompetenceClassifier.classify(params.query || '');
+    const requestsTst = classification.isLaborDispute || params.courtCodes?.includes('TST');
+    let activeTstDecisions = undefined as Awaited<ReturnType<TstJurisprudenciaAdapter['searchOfficialJurisprudence']>>['decisions'] | undefined;
+
+    if (requestsTst) {
+      const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
+      activeTstDecisions = officialResult.decisions.filter((decision) => decision.verificationStatus === 'VERIFIED_OFFICIAL');
+      for (const decision of activeTstDecisions) {
+        legalStorage.upsertDecision(decision);
+      }
+    }
+    const searchEngine = activeTstDecisions
+      ? new LegalSearchEngine({ getDecisions: () => activeTstDecisions } as unknown as typeof legalStorage)
+      : new LegalSearchEngine(legalStorage);
 
     // Ajusta o LegalSearchQuery canônico
     const query: LegalSearchQuery = {
@@ -334,7 +351,14 @@ export class JudicialSearchService {
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Há dataset oficial local; cada precedente ainda exige evidência suficiente para receber selo verificado.',
       },
-      ...['STF', 'TST', 'TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
+      {
+        courtCode: 'TST', courtName: 'TST - Pesquisa Oficial de Jurisprudência', jurisdiction: 'Nacional',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'RESTRITO',
+        authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisprudencia.tst.jus.br/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Consulta pública em tempo real de acórdãos; cada resultado passa por verificação determinística.',
+      },
+      ...['STF', 'TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
         courtCode, courtName: `${courtCode} - conector oficial`, jurisdiction: 'Brasil',
         jurisprudenceStatus: 'EM_DESENVOLVIMENTO', processStatus: 'EM_DESENVOLVIMENTO',
         authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: '', latencyMs: 0,

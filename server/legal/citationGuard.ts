@@ -72,9 +72,10 @@ export class CitationGuard {
 
     // Padrões Regex com captura de identificadores forenses integrais (incluindo classe e UF)
     const citationPatterns: RegExp[] = [
+      /\b((?:Ag-)?(?:AIRR|RR|RRAg|Ag-RR)(?:-(?:AIRR|RR|RRAg))?)\s*[-:]?\s*([0-9]{1,7}-[0-9]{2}\.\d{4}\.5\.\d{2}\.\d{4})\b/gi,
       /\b(REsp|Recurso Especial)\s+([0-9\.\-]+(?:\/[A-Z]{2})?)\b/gi,
       /\b(RE|Recurso Extraordinário)\s+([0-9\.\-]+(?:\/[A-Z]{2})?)\b/gi,
-      /\b(RR|AIRR|Ag-RR|RO)\s*[-:]?\s*([0-9\.\-]+(?:\/[A-Z]{2})?)\b/gi,
+      /(?<!-)\b(RR|AIRR|Ag-RR|RO)\s*[-:]?\s*([0-9][0-9\.\-]*(?:\/[A-Z]{2})?)\b/gi,
       /\b(Súmula Vinculante|SV)\s+([0-9]+)\b/gi,
       /\b(Súmula)\s+([0-9]+)\s*(?:\/|\s+do\s+)?(STJ|STF|TST)?\b/gi,
       /\b(Tema)\s+([0-9]+)\s*(?:\/|\s+do\s+)?(STJ|STF|TST)?\b/gi,

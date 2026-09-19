@@ -78,7 +78,11 @@ export class LegalKnowledgeStorage {
           if (source.sourceId === 'stj-dados-abertos') {
             return { ...source, connectorStatus: 'PARTIAL' as const, credentialConfigured: false, reviewedBy: undefined, reviewedAt: undefined };
           }
-          if (['cnj-bnp-pangea', 'stf-jurisprudencia', 'tst-jurisprudencia'].includes(source.sourceId)) {
+          if (source.sourceId === 'tst-jurisprudencia') {
+            const current = INITIAL_LEGAL_SOURCE_REGISTRY.find((item) => item.sourceId === source.sourceId);
+            return { ...source, ...current, connectorStatus: 'PARTIAL' as const, credentialConfigured: false, reviewedBy: undefined, reviewedAt: undefined };
+          }
+          if (['cnj-bnp-pangea', 'stf-jurisprudencia'].includes(source.sourceId)) {
             return { ...source, connectorStatus: 'NOT_IMPLEMENTED' as const, credentialConfigured: false, reviewedBy: undefined, reviewedAt: undefined };
           }
           return source;

@@ -165,6 +165,22 @@ export class LegalSearchEngine {
         }
       }
 
+      let leadingLaborConceptCount = 0;
+      if (classification.isLaborDispute) {
+        const leadingHeadnote = `${d.rulingThesis || ''} ${d.officialHeadnote.slice(0, 1200)}`
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+        const leadingConcepts = [
+          /\b(?:clt|celetist\w*)\b/,
+          /\bfundacao\s+publica\b/,
+          /\bcargo\s+(?:em\s+comissao|de\s+confianca)\b|\bfuncao\s+de\s+confianca\b/,
+          /\b(?:dispensa|demissao|rescisao)\b/,
+          /\bverbas?\s+rescisorias\b/,
+        ];
+        leadingLaborConceptCount = leadingConcepts.filter((pattern) => pattern.test(leadingHeadnote)).length;
+      }
+
       // Regra de Admissibilidade Material:
       // Exige ao menos 2 termos substantivos coincidentes OU 1 instituto jurídico completo
       // E proíbe falso match genérico
@@ -202,12 +218,17 @@ export class LegalSearchEngine {
         && Array.isArray(payload?.temasRow)
         && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
         && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
+      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
+        && Boolean(payload?.officialApiRecordId)
+        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
       const hasAuditableEvidence =
         d.verificationStatus === 'VERIFIED_OFFICIAL'
         && /^[a-f0-9]{64}$/i.test(d.contentSha256)
         && Boolean(d.lastVerifiedAt)
         && Boolean(d.rawPayloadPreserved)
-        && (officialUrlIsDirect || hasOfficialDatasetEvidence)
+        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
         && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
         && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
 
@@ -229,9 +250,16 @@ export class LegalSearchEngine {
         reasons.push(`Correspondência direta de Tema/Súmula pesquisada (${d.themeNumber})`);
       }
       if (condition3) {
-        const basePertinenceScore = Math.min(50, matchedSubstantive.length * 12 + matchedEntitiesCount * 20);
+        const uniqueMaterialMatches = Array.from(new Set(matchedSubstantive));
+        const basePertinenceScore = Math.min(
+          90,
+          uniqueMaterialMatches.length * 4 + matchedEntitiesCount * 12 + leadingLaborConceptCount * 15
+        );
         score += basePertinenceScore;
-        reasons.push(`Correspondência temática material confirmada: ${matchedSubstantive.slice(0, 4).join(', ')}`);
+        reasons.push(
+          `Correspondência temática material confirmada: ${uniqueMaterialMatches.slice(0, 6).join(', ')}`
+          + (leadingLaborConceptCount > 0 ? ` • ${leadingLaborConceptCount} conceito(s) central(is) na abertura da ementa` : '')
+        );
       }
 
       // Autoridade como DESEMPATE (Somente +5 para Vinculante e +3 para Qualificado)
@@ -274,11 +302,16 @@ export class LegalSearchEngine {
         && Array.isArray(payload?.temasRow)
         && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
         && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
+      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
+        && Boolean(payload?.officialApiRecordId)
+        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
       const hasAuditableEvidence = d.verificationStatus === 'VERIFIED_OFFICIAL'
         && /^[a-f0-9]{64}$/i.test(d.contentSha256)
         && Boolean(d.lastVerifiedAt)
         && Boolean(d.rawPayloadPreserved)
-        && (officialUrlIsDirect || hasOfficialDatasetEvidence)
+        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
         && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
         && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
       const evidenceState = hasAuditableEvidence
