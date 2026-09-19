@@ -80,7 +80,8 @@ test('página de catálogo do STJ não pode ser verificada como acórdão', () =
 });
 
 test('consulta exata a tema não aceita coincidência textual genérica de catálogo', () => {
-  const engine = new LegalSearchEngine(new LegalKnowledgeStorage());
+  const emptyStorage = { getDecisions: () => [] } as unknown as LegalKnowledgeStorage;
+  const engine = new LegalSearchEngine(emptyStorage);
   const result = engine.search({ query: 'Qual é a tese do Tema 27 do STJ?', onlyVerified: true });
   assert.equal(result.total, 0);
   assert.deepEqual(result.results, []);
