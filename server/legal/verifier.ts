@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -78,6 +78,9 @@ export class PrecedentVerifier {
     }
     if (decision.sourceId === 'stf-jurisprudencia' && (!isExactStfThemeDetailUrl(officialUrl, decision.themeNumber) || decision.courtCode !== 'STF')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro STF não aponta para o tema individual oficial do leading case.');
+    }
+    if (decision.sourceId === 'trf3-jurisprudencia' && (!isExactTrf3DocumentUrl(officialUrl) || decision.courtCode !== 'TRF3')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TRF3 não aponta para acórdão individual oficial do TRF3.');
     }
 
     // 5. Data de Julgamento ou Publicação Oficial (Não pode ser futura)

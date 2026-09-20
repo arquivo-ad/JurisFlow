@@ -16,6 +16,13 @@ import { PrecedentVerifier } from './verifier.ts';
  */
 
 // Stop words e termos meramente funcionais/procedimentais
+function foldForSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 const LEGAL_STOP_WORDS = new Set([
   'de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'com', 'não', 'uma',
   'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao',
@@ -30,6 +37,8 @@ const LEGAL_STOP_WORDS = new Set([
   'qual', 'tese', 'tema', 'enunciado', 'tribunal', 'stj', 'stf', 'tst', 'trt'
 ]);
 
+const LEGAL_STOP_WORDS_FOLDED = new Set([...LEGAL_STOP_WORDS].map(foldForSearch));
+
 export class LegalSearchEngine {
   private storage: LegalKnowledgeStorage;
 
@@ -40,18 +49,18 @@ export class LegalSearchEngine {
   public search(queryInput: LegalSearchQuery, tenantId?: string): LegalSearchResponse {
     const start = Date.now();
     const query = (queryInput.query || '').trim();
-    const queryLower = query.toLowerCase();
+    const querySearch = foldForSearch(query);
 
     // 1. Classificação Prévia de Ramo, Matéria e Competência
     const classification = LegalCompetenceClassifier.classify(query);
 
     // Extrai tokens substantivos da consulta do usuário
-    const allTokens = queryLower
-      .replace(/[^\w\sáéíóúâêîôûãõç]/gi, ' ')
+    const allTokens = querySearch
+      .replace(/[^\w\s]/gi, ' ')
       .split(/\s+/)
       .filter((t) => t.length >= 3);
 
-    const substantiveTokens = allTokens.filter((t) => !LEGAL_STOP_WORDS.has(t));
+    const substantiveTokens = allTokens.filter((t) => !LEGAL_STOP_WORDS_FOLDED.has(t));
 
     // Recupera acervo canônico respeitando isolamento multi-tenant (excluindo dados de demonstração)
     const candidates = this.storage.getDecisions({
@@ -147,10 +156,11 @@ export class LegalSearchEngine {
 
       // Condição 3: Correspondência material suficiente
       const textCorpus = `${d.rulingThesis || ''} ${d.officialHeadnote} ${d.rawCaseNumber}`.toLowerCase();
+      const textCorpusFolded = foldForSearch(textCorpus);
       const matchedSubstantive: string[] = [];
 
       for (const token of substantiveTokens) {
-        if (textCorpus.includes(token)) {
+        if (textCorpusFolded.includes(token)) {
           matchedSubstantive.push(token);
         }
       }
@@ -158,8 +168,8 @@ export class LegalSearchEngine {
       // Verifica correspondência de institutos jurídicos da classificação
       let matchedEntitiesCount = 0;
       for (const entity of classification.entities) {
-        const entityWords = entity.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-        const hasEntity = entityWords.every((w) => textCorpus.includes(w));
+        const entityWords = foldForSearch(entity).split(/\s+/).filter((w) => w.length > 3);
+        const hasEntity = entityWords.every((w) => textCorpusFolded.includes(w));
         if (hasEntity) {
           matchedEntitiesCount++;
           matchedSubstantive.push(entity);

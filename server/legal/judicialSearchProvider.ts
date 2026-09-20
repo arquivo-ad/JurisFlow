@@ -9,6 +9,7 @@ import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
 import { TstJurisprudenciaAdapter } from './adapters/TstJurisprudenciaAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from './adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from './adapters/TjspJurisprudenciaAdapter.ts';
+import { Trf3JurisprudenciaAdapter } from './adapters/Trf3JurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -190,6 +191,7 @@ export class JudicialSearchService {
   private tstAdapter: TstJurisprudenciaAdapter;
   private trt2Adapter: Trt2JurisprudenciaAdapter;
   private tjspAdapter: TjspJurisprudenciaAdapter;
+  private trf3Adapter: Trf3JurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -198,6 +200,7 @@ export class JudicialSearchService {
     this.tstAdapter = new TstJurisprudenciaAdapter();
     this.trt2Adapter = new Trt2JurisprudenciaAdapter();
     this.tjspAdapter = new TjspJurisprudenciaAdapter();
+    this.trf3Adapter = new Trf3JurisprudenciaAdapter();
   }
 
   /**
@@ -213,10 +216,12 @@ export class JudicialSearchService {
     const requestsTst = classification.isLaborDispute || params.courtCodes?.includes('TST');
     const requestsTrt2 = params.courtCodes?.includes('TRT2') === true;
     const requestsTjsp = params.courtCodes?.includes('TJSP') === true;
+    const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
     const regionalSourcesConsulted: string[] = [];
     let activeTstDecisions = undefined as Awaited<ReturnType<TstJurisprudenciaAdapter['searchOfficialJurisprudence']>>['decisions'] | undefined;
     let trt2Diagnostic = undefined as Awaited<ReturnType<Trt2JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjspDiagnostic = undefined as Awaited<ReturnType<TjspJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let trf3Diagnostic = undefined as Awaited<ReturnType<Trf3JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -236,6 +241,15 @@ export class JudicialSearchService {
       const tjspResult = await this.tjspAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '');
       tjspDiagnostic = tjspResult.diagnostic;
       regionalSourcesConsulted.push('tjsp-jurisprudencia');
+    }
+
+    if (requestsTrf3) {
+      const trf3Result = await this.trf3Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      trf3Diagnostic = trf3Result.diagnostic;
+      regionalSourcesConsulted.push('trf3-jurisprudencia');
+      for (const decision of trf3Result.decisions) {
+        if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
+      }
     }
 
     const searchEngine = activeTstDecisions
@@ -294,7 +308,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjspDiagnostic ?? trt2Diagnostic,
+      diagnostic: trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -424,6 +438,13 @@ export class JudicialSearchService {
         authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://esaj.tjsp.jus.br/cjsg/consultaCompleta.do',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Portal oficial identificado; pesquisa completa exige reCAPTCHA/CAPTCHA interativo e não é contornada pelo JurisFlow.',
+      },
+      {
+        courtCode: 'TRF3', courtName: 'TRF3 - Pesquisa de Jurisprudência', jurisdiction: '3ª Região',
+        jurisprudenceStatus: 'DISPONIVEL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://web.trf3.jus.br/jurisprudencia/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
+        notes: 'Pesquisa oficial automatizada com confirmação do acórdão individual e SHA-256 do documento recebido.',
       },
       ...['TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
         courtCode, courtName: `${courtCode} - conector oficial`, jurisdiction: 'Brasil',

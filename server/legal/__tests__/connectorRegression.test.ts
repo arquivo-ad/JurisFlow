@@ -9,7 +9,8 @@ import { isExactStjDocumentUrl } from '../officialSources.ts';
 import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl } from '../officialSources.ts';
+import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 
 const record = {
@@ -348,4 +349,128 @@ test('busca explícita no TJSP expõe diagnóstico sem fabricar jurisprudência'
   assert.equal(result.results.some((item) => item.courtCode === 'TJSP'), false);
   assert.equal(result.diagnostic?.lifecycleState, 'SOURCE_UNAVAILABLE');
   assert.ok(result.sourcesConsulted.includes('tjsp-jurisprudencia'));
+});
+
+const trf3DetailHtml = `<!doctype html><html><body>
+<section class="processo">
+<div class="dado" id="processo">5003867-82.2023.4.03.6112</div>
+<div class="dado" id="classe">ApCiv - APELAÇÃO CÍVEL</div>
+<div class="dado" id="orgao">8ª Turma</div>
+<div class="dado" id="relator">Relator(a): Desembargador Federal TORU YAMAMOTO</div>
+<div class="dado" id="decisao">Julgamento: 16/09/2026</div>
+<div class="dado info-publicacao" id="publicacao">DJEN Data: 19/09/2026</div>
+</section>
+<section class="ementa" id="divEmenta">
+<p class="titulo-oculto">PODER JUDICIÁRIO Ementa PREVIDENCIÁRIO. BENEFÍCIO PREVIDENCIÁRIO.
+EMBARGOS DE DECLARAÇÃO. OMISSÃO. CORREÇÃO. EMBARGOS ACOLHIDOS.
+A concessão do benefício foi mantida e o período especial reconhecido nos termos da fundamentação.</p>
+</section></body></html>`;
+
+test('TRF3 aceita somente URL individual oficial exata', () => {
+  assert.equal(
+    isExactTrf3DocumentUrl('https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/9?np=1'),
+    true
+  );
+  assert.equal(
+    isExactTrf3DocumentUrl('https://web.trf3.jus.br.evil.example/jurisprudencia/Home/ListaColecao/9?np=1'),
+    false
+  );
+  assert.equal(
+    isExactTrf3DocumentUrl('https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/8?np=1'),
+    false
+  );
+});
+
+function trf3FetchMock(): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith('/jurisprudencia/')) {
+      return new Response('<html>TRF3 Jurisprudência</html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html', 'Set-Cookie': 'TRF3SESSION=test-session; Path=/' },
+      });
+    }
+    if (url.includes('/Home/ResultadoTotais')) {
+      const html = '<a href="/jurisprudencia/Home/ListaColecao/9?np=1">'
+        + '1/1) 5003867-82.2023.4.03.6112 benefício previdenciário</a>';
+      return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+    return new Response(trf3DetailHtml, { status: 200, headers: { 'Content-Type': 'text/html' } });
+  }) as typeof fetch;
+}
+
+test('TRF3 verifica acórdão somente após documento individual oficial', async () => {
+  const result = await new Trf3JurisprudenciaAdapter(trf3FetchMock())
+    .searchOfficialJurisprudence('beneficio previdenciario', 1);
+
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.diagnostic.lifecycleState, 'SEARCH_SUCCESS');
+  assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decisions[0]?.normalizedCnjNumber, '5003867-82.2023.4.03.6112');
+  assert.equal(result.decisions[0]?.courtCode, 'TRF3');
+  assert.equal(result.decisions[0]?.courtOrgan, '8ª Turma');
+  assert.match(result.decisions[0]?.contentSha256 || '', /^[a-f0-9]{64}$/);
+});
+
+test('alteração do documento individual TRF3 muda o SHA-256', () => {
+  const adapter = new Trf3JurisprudenciaAdapter(trf3FetchMock());
+  const evidence = {
+    documentUrl: 'https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/9?np=1',
+    documentStatus: 200,
+    fetchedAt: '2026-09-20T18:00:00.000Z',
+    queryId: 'trf3-query-test',
+    querySha256: 'a'.repeat(64),
+    queryEndpoint: 'https://web.trf3.jus.br/jurisprudencia/Home/ResultadoTotais',
+    responseRecordSha256: 'b'.repeat(64),
+  };
+  const first = adapter.normalizeDecision(trf3DetailHtml, evidence);
+  const second = adapter.normalizeDecision(trf3DetailHtml.replace('OMISSÃO.', 'OMISSÃO SANADA.'), evidence);
+  assert.notEqual(first?.contentSha256, second?.contentSha256);
+});
+
+
+test('busca explícita no TRF3 admite acórdão oficial verificado no ranking', async () => {
+  const adapter = new Trf3JurisprudenciaAdapter(trf3FetchMock());
+  const decision = adapter.normalizeDecision(trf3DetailHtml, {
+    documentUrl: 'https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/9?np=1',
+    documentStatus: 200,
+    fetchedAt: '2026-09-20T18:00:00.000Z',
+    queryId: 'trf3-query-service-test',
+    querySha256: 'c'.repeat(64),
+    queryEndpoint: 'https://web.trf3.jus.br/jurisprudencia/Home/ResultadoTotais',
+    responseRecordSha256: 'd'.repeat(64),
+  });
+  assert.equal(decision?.verificationStatus, 'VERIFIED_OFFICIAL');
+
+  const service = new JudicialSearchService();
+  (service as any).trf3Adapter = {
+    searchOfficialJurisprudence: async () => ({
+      decisions: [decision],
+      totalRecords: 1,
+      diagnostic: {
+        adapter: 'trf3-jurisprudencia',
+        courtCode: 'TRF3',
+        officialUrl: 'https://web.trf3.jus.br/jurisprudencia/Home/ResultadoTotais',
+        timestamp: new Date().toISOString(),
+        httpStatus: 200,
+        latencyMs: 1,
+        lifecycleState: 'SEARCH_SUCCESS',
+        documentsReceived: 1,
+        documentsNormalized: 1,
+        documentsRejected: 0,
+        rejectionReasons: [],
+        connectorStatus: 'HEALTHY',
+      },
+    }),
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'beneficio previdenciario',
+    courtCodes: ['TRF3'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TRF3'), true);
+  assert.equal(result.diagnostic?.lifecycleState, 'SEARCH_SUCCESS');
+  assert.ok(result.sourcesConsulted.includes('trf3-jurisprudencia'));
 });
