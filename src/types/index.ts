@@ -1338,6 +1338,9 @@ export interface JudicialProcessSearchResult {
   sourceUrl: string;
   evidenceState: 'VERIFIED_OFFICIAL' | 'FOUND_PENDING_REVIEW' | 'NOT_VERIFIED_PROHIBITED';
   evidenceId: string;
+  contentSha256?: string;
+  verificationTimestamp?: string;
+  originatingQueryId?: string;
   isAlreadyImported: boolean;
   existingCaseId?: string;
   existingCaseTitle?: string;

@@ -1,4 +1,6 @@
+import crypto from 'node:crypto';
 import { CaseMetadata, CourtMovement } from '../types.ts';
+import { isExactDataJudSearchUrl } from '../officialSources.ts';
 
 /**
  * ADAPTADOR OFICIAL CNJ / DATAJUD
@@ -19,10 +21,18 @@ const DATAJUD_BASE_URL = 'https://api-publica.datajud.cnj.jus.br';
 export class DataJudAdapter {
   private apiKey: string;
   private baseUrl: string;
+  private fetchImpl: typeof fetch;
+  private timeoutMs: number;
 
-  constructor(apiKey?: string, baseUrl?: string) {
+  constructor(apiKey?: string, baseUrl?: string, fetchImpl: typeof fetch = fetch, timeoutMs = 30_000) {
     this.apiKey = apiKey || DEFAULT_DATAJUD_API_KEY;
-    this.baseUrl = baseUrl || DATAJUD_BASE_URL;
+    this.baseUrl = (baseUrl || DATAJUD_BASE_URL).replace(/\/+$/, '');
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+  }
+
+  public static sha256(value: string): string {
+    return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
   }
 
   public isConfigured(): boolean {
@@ -78,22 +88,21 @@ export class DataJudAdapter {
 
     if (j === '8') {
       const stateMap: Record<string, string> = {
-        '26': 'TJSP',
-        '19': 'TJRJ',
-        '13': 'TJMG',
-        '21': 'TJRS',
-        '16': 'TJPR',
-        '24': 'TJSC',
-        '05': 'TJBA',
-        '07': 'TJDFT',
+        '01': 'TJAC', '02': 'TJAL', '03': 'TJAP', '04': 'TJAM', '05': 'TJBA', '06': 'TJCE',
+        '07': 'TJDFT', '08': 'TJES', '09': 'TJGO', '10': 'TJMA', '11': 'TJMT', '12': 'TJMS',
+        '13': 'TJMG', '14': 'TJPA', '15': 'TJPB', '16': 'TJPR', '17': 'TJPE', '18': 'TJPI',
+        '19': 'TJRJ', '20': 'TJRN', '21': 'TJRS', '22': 'TJRO', '23': 'TJRR', '24': 'TJSC',
+        '25': 'TJSE', '26': 'TJSP', '27': 'TJTO',
       };
-      return { courtCode: stateMap[tr] || `TJ_${tr}`, judicialBranch: 'ESTADUAL' };
+      return { courtCode: stateMap[tr] || 'INDEFINIDO', judicialBranch: 'ESTADUAL' };
     } else if (j === '4') {
       return { courtCode: `TRF${parseInt(tr, 10)}`, judicialBranch: 'FEDERAL' };
     } else if (j === '5') {
       return { courtCode: `TRT${parseInt(tr, 10)}`, judicialBranch: 'TRABALHO' };
     } else if (j === '1') {
       return { courtCode: 'STF', judicialBranch: 'SUPERIOR' };
+    } else if (j === '2') {
+      return { courtCode: 'CNJ', judicialBranch: 'CONSELHO' };
     } else if (j === '3') {
       return { courtCode: 'STJ', judicialBranch: 'SUPERIOR' };
     }
@@ -111,6 +120,16 @@ export class DataJudAdapter {
     error?: string;
     statusCode?: number;
     rawPayload?: any;
+    evidence?: {
+      queryId: string;
+      endpoint: string;
+      querySha256: string;
+      responseSha256: string;
+      recordSha256: string;
+      verifiedAt: string;
+      httpStatus: number;
+      latencyMs: number;
+    };
   }> {
     const normalized = DataJudAdapter.normalizeCnjNumber(cnjNumber);
     if (!normalized) {
@@ -130,38 +149,48 @@ export class DataJudAdapter {
     }
 
     const { courtCode } = DataJudAdapter.extractCourtFromCnj(normalized);
+    if (courtCode === 'INDEFINIDO') {
+      return { success: false, statusCode: 422, error: 'Tribunal do número CNJ não possui alias DataJud validado.' };
+    }
     // Endpoint do DataJud para busca por processo por tribunal:
     // POST /api_publica_{sigla_tribunal}/_search
     const endpointAlias = courtCode.toLowerCase().replace(/[^a-z0-9]/g, '');
     const url = `${this.baseUrl}/api_publica_${endpointAlias}/_search`;
+    if (!isExactDataJudSearchUrl(url, endpointAlias)) {
+      return { success: false, statusCode: 400, error: 'Endpoint DataJud fora da allowlist oficial exata.' };
+    }
 
     const requestBody = {
       query: {
-        match: {
+        term: {
           numeroProcesso: normalized.replace(/\D/g, ''),
         },
       },
       size: 1,
     };
 
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    // A API pública do CNJ frequentemente responde entre 6 e 10 segundos.
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const controller = new AbortController();
-      // A API pública do CNJ frequentemente responde entre 6 e 10 segundos.
-      const timeout = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(url, {
+      const requestBodyText = JSON.stringify(requestBody);
+      const querySha256 = DataJudAdapter.sha256(requestBodyText);
+      const queryId = `datajud-query-${querySha256.slice(0, 24)}`;
+      const response = await this.fetchImpl(url, {
         method: 'POST',
         headers: {
           'Authorization': `APIKey ${this.apiKey}`,
           'Content-Type': 'application/json',
           'User-Agent': 'JurisFlow-LegalTech-PrecedentEngine/2026.8 (LGPD-Compliant)',
         },
-        body: JSON.stringify(requestBody),
+        body: requestBodyText,
         signal: controller.signal,
       });
-
-      clearTimeout(timeout);
-
+      const rawResponse = await response.text();
+      const responseSha256 = DataJudAdapter.sha256(rawResponse);
+      const verifiedAt = new Date().toISOString();
       if (!response.ok) {
         // Se a API externa retornar erro (ex: 401, 403, 404), trata transparentemente sem simulação
         return {
@@ -170,18 +199,38 @@ export class DataJudAdapter {
           error: `Falha na consulta oficial DataJud [HTTP ${response.status}]: ${response.statusText}`,
         };
       }
-
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.toLowerCase().includes('json')) {
+        return { success: false, statusCode: 502, error: 'DataJud retornou conteúdo não JSON; resposta rejeitada.' };
+      }
+      let data: any;
+      try {
+        data = JSON.parse(rawResponse);
+      } catch {
+        return { success: false, statusCode: 502, error: 'DataJud retornou JSON inválido; resposta rejeitada.' };
+      }
       const hits = data?.hits?.hits || [];
 
       if (hits.length === 0) {
         return {
           success: false,
           error: `Processo nº ${normalized} não localizado no repositório público do ${courtCode} via DataJud.`,
+          statusCode: 404,
         };
       }
 
       const sourceData = hits[0]._source;
+      const expectedDigits = normalized.replace(/\D/g, '');
+      const receivedDigits = String(sourceData?.numeroProcesso || '').replace(/\D/g, '');
+      const receivedCourt = String(sourceData?.tribunal || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (receivedDigits !== expectedDigits || receivedCourt !== courtCode) {
+        return {
+          success: false,
+          statusCode: 409,
+          error: 'Resposta DataJud rejeitada: identidade do processo ou tribunal divergente da consulta.',
+        };
+      }
+      const recordSha256 = DataJudAdapter.sha256(JSON.stringify(sourceData));
       const isConfidential = sourceData.nivelSigilo ? sourceData.nivelSigilo > 0 : false;
 
       const metadata: CaseMetadata = {
@@ -218,15 +267,22 @@ export class DataJudAdapter {
 
       return {
         success: true,
+        statusCode: response.status,
         metadata,
         movements,
         rawPayload: sourceData,
+        evidence: { queryId, endpoint: url, querySha256, responseSha256, recordSha256, verifiedAt, httpStatus: response.status, latencyMs: Date.now() - startedAt },
       };
     } catch (err: any) {
       return {
         success: false,
-        error: `Exceção ao conectar à API Pública DataJud: ${err.message || String(err)}`,
+        statusCode: err?.name === 'AbortError' ? 408 : 503,
+        error: err?.name === 'AbortError'
+          ? 'Tempo limite ao conectar à API Pública DataJud.'
+          : `Exceção ao conectar à API Pública DataJud: ${err.message || String(err)}`,
       };
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

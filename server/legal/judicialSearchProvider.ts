@@ -82,7 +82,7 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
     // Consulta API pública oficial do DataJud
     const queryResult = await this.adapter.queryProcessByCnj(normalized);
 
-    if (queryResult.success && queryResult.metadata) {
+    if (queryResult.success && queryResult.metadata && queryResult.evidence) {
       const meta = queryResult.metadata;
       const movements: JudicialProcessMovementItem[] = (queryResult.movements || []).map((m) => ({
         id: m.id,
@@ -93,6 +93,16 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
         code: m.movementCode,
         source: 'COURT_API',
       }));
+
+      legalStorage.updateSource('cnj-datajud', {
+        connectorStatus: 'HEALTHY',
+        credentialConfigured: true,
+        lastSuccessfulSyncAt: queryResult.evidence.verifiedAt,
+        checksum: queryResult.evidence.responseSha256,
+        latencyMs: queryResult.evidence.latencyMs,
+        lastErrorCode: undefined,
+        lastErrorMessage: undefined,
+      });
 
       return {
         processNumber: normalized,
@@ -110,15 +120,24 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
         lawyers: [],
         movements,
         documents: [],
-        retrievedAt: new Date().toISOString(),
+        retrievedAt: queryResult.evidence.verifiedAt,
         sourceProvider: 'CNJ DataJud (Res. 331/CNJ)',
-        sourceUrl: 'https://api-publica.datajud.cnj.jus.br/',
+        sourceUrl: queryResult.evidence.endpoint,
         evidenceState: 'VERIFIED_OFFICIAL',
-        evidenceId: `DATAJUD:${normalized}:${meta.collectedAt}`,
+        evidenceId: `DATAJUD:${normalized}:${queryResult.evidence.responseSha256.slice(0, 20)}`,
+        contentSha256: queryResult.evidence.responseSha256,
+        verificationTimestamp: queryResult.evidence.verifiedAt,
+        originatingQueryId: queryResult.evidence.queryId,
         isAlreadyImported: false,
       };
     }
 
+    legalStorage.updateSource('cnj-datajud', {
+      connectorStatus: (queryResult.statusCode === 408 || (queryResult.statusCode || 0) >= 500) ? 'SOURCE_UNAVAILABLE' : 'DEGRADED',
+      lastFailureAt: new Date().toISOString(),
+      lastErrorCode: String(queryResult.statusCode || 'DATAJUD_ERROR'),
+      lastErrorMessage: queryResult.error || 'DataJud não retornou dados verificáveis.',
+    });
     throw new Error(`OFFICIAL_SOURCE_UNAVAILABLE: ${queryResult.error || 'DataJud não retornou dados verificáveis.'}`);
   }
 
@@ -358,7 +377,14 @@ export class JudicialSearchService {
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Consulta pública em tempo real de acórdãos; cada resultado passa por verificação determinística.',
       },
-      ...['STF', 'TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
+      {
+        courtCode: 'STF', courtName: 'STF - Repercussão Geral', jurisdiction: 'Nacional',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'RESTRITO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://portal.stf.jus.br/jurisprudenciaRepercussao/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Temas de repercussão geral implementados com fail-closed; Súmulas Vinculantes ainda não implementadas.',
+      },
+      ...['TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
         courtCode, courtName: `${courtCode} - conector oficial`, jurisdiction: 'Brasil',
         jurisprudenceStatus: 'EM_DESENVOLVIMENTO', processStatus: 'EM_DESENVOLVIMENTO',
         authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: '', latencyMs: 0,

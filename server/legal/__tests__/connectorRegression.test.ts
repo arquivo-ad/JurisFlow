@@ -6,6 +6,8 @@ import { StjDadosAbertosAdapter } from '../adapters/StjDadosAbertosAdapter.ts';
 import { StfJurisprudenciaAdapter } from '../adapters/StfJurisprudenciaAdapter.ts';
 import { PrecedentVerifier } from '../verifier.ts';
 import { isExactStjDocumentUrl } from '../officialSources.ts';
+import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
+import { DataJudSearchProvider } from '../judicialSearchProvider.ts';
 
 const record = {
   id: 'tst-regression-1',
@@ -149,6 +151,65 @@ test('STF retém Tema sem tese oficial em vez de preencher conteúdo', async () 
   assert.equal(result.decision, undefined);
   assert.equal(result.diagnostic.lifecycleState, 'PARSER_ERROR');
   assert.equal(result.diagnostic.documentsRejected, 1);
+});
+
+const dataJudSource = {
+  numeroProcesso: '00008323520184013202',
+  tribunal: 'TRF1',
+  grau: 'G1',
+  classe: { codigo: 7, nome: 'Procedimento Comum Cível' },
+  assuntos: [{ codigo: 9985, nome: 'Direito Administrativo' }],
+  orgaoJulgador: { nome: 'Vara Federal' },
+  dataAjuizamento: '2018-01-10T00:00:00.000Z',
+  dataHoraUltimaAtualizacao: '2026-09-19T12:00:00.000Z',
+  nivelSigilo: 0,
+  movimentos: [{ codigo: 26, nome: 'Distribuição', dataHora: '2018-01-10T00:00:00.000Z' }],
+};
+
+function dataJudFetch(source = dataJudSource): typeof fetch {
+  return (async () => new Response(JSON.stringify({ hits: { hits: [{ _source: source }] } }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })) as typeof fetch;
+}
+
+test('DataJud verifica identidade exata e preserva hashes da consulta e resposta', async () => {
+  const adapter = new DataJudAdapter('chave-publica-de-teste', undefined, dataJudFetch());
+  const result = await adapter.queryProcessByCnj('0000832-35.2018.4.01.3202');
+  assert.equal(result.success, true);
+  assert.equal(result.metadata?.normalizedCnjNumber, '0000832-35.2018.4.01.3202');
+  assert.equal(result.metadata?.courtCode, 'TRF1');
+  assert.match(result.evidence?.endpoint || '', /^https:\/\/api-publica\.datajud\.cnj\.jus\.br\/api_publica_trf1\/_search$/);
+  assert.match(result.evidence?.querySha256 || '', /^[a-f0-9]{64}$/);
+  assert.match(result.evidence?.responseSha256 || '', /^[a-f0-9]{64}$/);
+  assert.match(result.evidence?.recordSha256 || '', /^[a-f0-9]{64}$/);
+});
+
+test('DataJud rejeita hit de processo diferente mesmo com HTTP 200', async () => {
+  const divergent = { ...dataJudSource, numeroProcesso: '11111111111111111111' };
+  const result = await new DataJudAdapter('chave-publica-de-teste', undefined, dataJudFetch(divergent))
+    .queryProcessByCnj('0000832-35.2018.4.01.3202');
+  assert.equal(result.success, false);
+  assert.equal(result.statusCode, 409);
+  assert.match(result.error || '', /identidade do processo/i);
+});
+
+test('mudança da resposta DataJud produz novo hash de evidência', async () => {
+  const first = await new DataJudAdapter('chave-publica-de-teste', undefined, dataJudFetch())
+    .queryProcessByCnj('0000832-35.2018.4.01.3202');
+  const secondSource = { ...dataJudSource, dataHoraUltimaAtualizacao: '2026-09-20T12:00:00.000Z' };
+  const second = await new DataJudAdapter('chave-publica-de-teste', undefined, dataJudFetch(secondSource))
+    .queryProcessByCnj('0000832-35.2018.4.01.3202');
+  assert.notEqual(first.evidence?.responseSha256, second.evidence?.responseSha256);
+});
+
+test('provedor DataJud só exibe selo verificado com evidência criptográfica', async () => {
+  const provider = new DataJudSearchProvider(new DataJudAdapter('chave-publica-de-teste', undefined, dataJudFetch()));
+  const result = await provider.getProcessDetails('0000832-35.2018.4.01.3202');
+  assert.equal(result?.evidenceState, 'VERIFIED_OFFICIAL');
+  assert.match(result?.contentSha256 || '', /^[a-f0-9]{64}$/);
+  assert.match(result?.sourceUrl || '', /api_publica_trf1\/_search$/);
+  assert.match(result?.evidenceId || '', /^DATAJUD:0000832-35\.2018\.4\.01\.3202:[a-f0-9]{20}$/);
 });
 
 test('produção não contém assinatura nem processo DJEN fabricados', () => {

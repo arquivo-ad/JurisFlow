@@ -75,3 +75,17 @@ export function isExactStfThemeDetailUrl(value: string, expectedTheme?: number):
     return false;
   }
 }
+
+export function isExactDataJudSearchUrl(value: string, expectedAlias?: string): boolean {
+  try {
+    const url = new URL(value);
+    const match = url.pathname.match(/^\/api_publica_([a-z0-9]+)\/_search$/);
+    return url.protocol === 'https:'
+      && url.hostname === 'api-publica.datajud.cnj.jus.br'
+      && Boolean(match)
+      && (!expectedAlias || match?.[1] === expectedAlias.toLowerCase())
+      && !url.search;
+  } catch {
+    return false;
+  }
+}
