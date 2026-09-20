@@ -219,11 +219,13 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: `${tj.name} (${tj.code})`,
     courtCode: tj.code,
     jurisdiction: tj.code.replace('TJ', ''),
-    sourceType: 'MANUAL_VERIFICATION_ONLY' as const,
+    sourceType: tj.code === 'TJSP' ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
     officialBaseUrl: tj.url,
     documentationUrl: tj.url,
-    connectorStatus: 'MANUAL_ONLY' as const,
-    coverageStatus: 'Justiça Estadual Comum - Consulta pública via e-SAJ/Projudi (Conferência Humana Obrigatória)',
+    connectorStatus: tj.code === 'TJSP' ? 'DEGRADED' as const : 'MANUAL_ONLY' as const,
+    coverageStatus: tj.code === 'TJSP'
+      ? 'Portal e-SAJ oficial identificado; pesquisa jurisprudencial exige reCAPTCHA/CAPTCHA interativo e permanece fail-closed'
+      : 'Justiça Estadual Comum - Consulta pública via e-SAJ/Projudi (Conferência Humana Obrigatória)',
     verificationMethod: 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,

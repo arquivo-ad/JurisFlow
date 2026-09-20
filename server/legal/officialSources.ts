@@ -3,6 +3,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   STJ: new Set(['processo.stj.jus.br', 'scon.stj.jus.br', 'dadosabertos.web.stj.jus.br']),
   STF: new Set(['portal.stf.jus.br', 'jurisprudencia.stf.jus.br']),
   TRT2: new Set(['pje.trt2.jus.br']),
+  TJSP: new Set(['esaj.tjsp.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -98,6 +99,19 @@ export function isExactTrt2OptionsUrl(value: string): boolean {
     return url.protocol === 'https:'
       && url.hostname === 'pje.trt2.jus.br'
       && url.pathname === '/juris-backend/api/opcoes'
+      && !url.search;
+  } catch {
+    return false;
+  }
+}
+
+
+export function isExactTjspSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'esaj.tjsp.jus.br'
+      && url.pathname === '/cjsg/consultaCompleta.do'
       && !url.search;
   } catch {
     return false;

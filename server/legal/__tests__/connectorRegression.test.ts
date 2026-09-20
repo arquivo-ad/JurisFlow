@@ -8,7 +8,8 @@ import { PrecedentVerifier } from '../verifier.ts';
 import { isExactStjDocumentUrl } from '../officialSources.ts';
 import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter.ts';
-import { isExactTrt2OptionsUrl } from '../officialSources.ts';
+import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 
 const record = {
@@ -286,4 +287,65 @@ test('busca explícita no TRT2 expõe diagnóstico de CAPTCHA sem fabricar acór
   assert.equal(result.results.some((item) => item.courtCode === 'TRT2'), false);
   assert.equal(result.diagnostic?.lifecycleState, 'SOURCE_UNAVAILABLE');
   assert.ok(result.sourcesConsulted.includes('trt2-jurisprudencia'));
+});
+
+
+test('TJSP reconhece somente a consulta completa oficial do e-SAJ', () => {
+  assert.equal(isExactTjspSearchUrl('https://esaj.tjsp.jus.br/cjsg/consultaCompleta.do'), true);
+  assert.equal(isExactTjspSearchUrl('https://esaj.tjsp.jus.br.evil.example/cjsg/consultaCompleta.do'), false);
+});
+
+test('TJSP falha fechado quando a página oficial exige reCAPTCHA', async () => {
+  const html = '<html><form action="/cjsg/resultadoCompleta.do">'
+    + '<input name="dados.buscaInteiroTeor">'
+    + '<input name="recaptcha_response_token">'
+    + '<script>grecaptcha.execute("site-key", {action: "consulta"});</script>'
+    + '</form></html>';
+  const fetchMock = (async () => new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+  })) as typeof fetch;
+
+  const result = await new TjspJurisprudenciaAdapter(fetchMock)
+    .searchOfficialJurisprudence('responsabilidade civil');
+
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.requiresInteractiveChallenge, true);
+  assert.equal(result.diagnostic.lifecycleState, 'SOURCE_UNAVAILABLE');
+  assert.ok(result.diagnostic.rejectionReasons.includes('INTERACTIVE_RECAPTCHA_REQUIRED'));
+});
+
+test('busca explícita no TJSP expõe diagnóstico sem fabricar jurisprudência', async () => {
+  const service = new JudicialSearchService();
+  (service as any).tjspAdapter = {
+    searchOfficialJurisprudence: async () => ({
+      decisions: [],
+      requiresInteractiveChallenge: true,
+      diagnostic: {
+        adapter: 'tjsp-jurisprudencia',
+        courtCode: 'TJSP',
+        officialUrl: 'https://esaj.tjsp.jus.br/cjsg/consultaCompleta.do',
+        timestamp: new Date().toISOString(),
+        httpStatus: 200,
+        latencyMs: 1,
+        lifecycleState: 'SOURCE_UNAVAILABLE',
+        stateDescription: 'reCAPTCHA interativo obrigatório.',
+        documentsReceived: 0,
+        documentsNormalized: 0,
+        documentsRejected: 0,
+        rejectionReasons: ['INTERACTIVE_RECAPTCHA_REQUIRED'],
+        connectorStatus: 'DEGRADED',
+      },
+    }),
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'responsabilidade civil',
+    courtCodes: ['TJSP'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TJSP'), false);
+  assert.equal(result.diagnostic?.lifecycleState, 'SOURCE_UNAVAILABLE');
+  assert.ok(result.sourcesConsulted.includes('tjsp-jurisprudencia'));
 });
