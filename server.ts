@@ -78,6 +78,7 @@ import { syncCoordinator } from './server/legal/syncCoordinator.ts';
 import { legalStorage } from './server/legal/storage.ts';
 import { LegalSearchEngine } from './server/legal/searchEngine.ts';
 import { CitationGuard } from './server/legal/citationGuard.ts';
+import { PrecedentVerifier } from './server/legal/verifier.ts';
 import { geminiLegalService } from './server/legal/geminiLegalService.ts';
 import { DataJudAdapter } from './server/legal/adapters/DataJudAdapter.ts';
 import { LegalSearchQuery } from './server/legal/types.ts';
@@ -645,12 +646,23 @@ class MemoryDatabase {
 }
 
 const db = new MemoryDatabase();
+const serverStartedAt = new Date().toISOString();
 
 // Hydrate from durable local disk database if present
 const localSavedDb = loadLocalDb();
 if (localSavedDb) {
   Object.assign(db, localSavedDb);
 }
+
+// Migração segura de apresentação: dados antigos permanecem preservados no arquivo,
+// mas simulações legadas não voltam ao fluxo de produção após a reidratação.
+db.legalKnowledgeSources = (db.legalKnowledgeSources || [])
+  .filter((item) => item.isCustomOfficeTesis)
+  .map((item) => ({ ...item, articlesIndexed: 0 }));
+db.legalSyncConnectors = [];
+db.legalWebhookLogs = [];
+db.judicialSearchHistory = (db.judicialSearchHistory || []).filter((item) => !item.id.startsWith('jsh-init-'));
+db.precedentFavorites = (db.precedentFavorites || []).filter((item) => item.id !== 'fav-1');
 
 // Garantir que a arquitetura contenha sempre 1 Ativo (Cloud) e 1 DR (LOCAL - OFFLINE)
 function ensureDatabaseDrArchitecture() {
@@ -5293,26 +5305,40 @@ Responda em JSON:
   app.get('/api/ai/legal-knowledge', (req: Request, res: Response) => {
     const sources = legalStorage.getSources();
     const decisions = legalStorage.getDecisions();
-    const qualified = legalStorage.getQualifiedPrecedents();
-    const syncJobs = legalStorage.getSyncJobs(10);
+    const syncJobs = legalStorage.getSyncJobs(10).filter((job) => job.startedAt >= serverStartedAt);
 
-    const verifiedDecisionsCount = decisions.filter((d) => d.verificationStatus === 'VERIFIED_OFFICIAL').length;
+    const strictlyVerifiedDecisions = decisions.filter(
+      (decision) => decision.verificationStatus === 'VERIFIED_OFFICIAL' && PrecedentVerifier.verifyDecision(decision).isPassed
+    );
+    const verifiedDecisionsCount = strictlyVerifiedDecisions.length;
     const cancelledDecisionsCount = decisions.filter((d) => d.verificationStatus === 'CANCELLED' || d.precedentSituation === 'CANCELADO').length;
+    const officialRegistrySources = sources.map((source) => {
+      const verifiedForSource = strictlyVerifiedDecisions.filter((decision) => decision.sourceId === source.sourceId).length;
+      const mustRemainZero = source.connectorStatus === 'NOT_IMPLEMENTED' || source.connectorStatus === 'MANUAL_ONLY';
+      return {
+        ...source,
+        documentsDiscovered: mustRemainZero ? 0 : source.documentsDiscovered,
+        documentsFetched: mustRemainZero ? 0 : source.documentsFetched,
+        documentsValidated: mustRemainZero ? 0 : verifiedForSource,
+        documentsRejected: mustRemainZero ? 0 : source.documentsRejected,
+        lastSuccessfulSyncAt: mustRemainZero ? undefined : source.lastSuccessfulSyncAt,
+      };
+    });
 
     const overview = {
       enterpriseEngineVersion: 'JurisFlow Enterprise Legal 2026.8 (Grounding Verificável com Fontes Oficiais)',
       activeModel: GEMINI_LEGAL_MODEL,
       zeroHallucinationPolicy: true,
-      totalNormsIndexed: decisions.length,
-      totalPrecedentsIndexed: qualified.length + verifiedDecisionsCount,
+      totalNormsIndexed: 0,
+      totalPrecedentsIndexed: verifiedDecisionsCount,
       verifiedDecisionsCount,
       cancelledDecisionsCount,
       sources: db.legalKnowledgeSources,
-      officialRegistrySources: sources,
+      officialRegistrySources,
       syncConnectors: db.legalSyncConnectors,
       webhookLogs: db.legalWebhookLogs,
       recentSyncJobs: syncJobs,
-      supportedJurisdictions: sources
+      supportedJurisdictions: officialRegistrySources
         .filter((source) => source.connectorStatus === 'HEALTHY')
         .map((source) => `${source.name} (${source.courtCode || source.sourceId})`),
     };
