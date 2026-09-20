@@ -474,3 +474,12 @@ test('busca explícita no TRF3 admite acórdão oficial verificado no ranking', 
   assert.equal(result.diagnostic?.lifecycleState, 'SEARCH_SUCCESS');
   assert.ok(result.sourcesConsulted.includes('trf3-jurisprudencia'));
 });
+
+
+test('transporte STF mantém verificação TLS habilitada e usa intermediária oficial', () => {
+  const transport = fs.readFileSync(new URL('../stfSecureFetch.ts', import.meta.url), 'utf8');
+  assert.match(transport, /rejectUnauthorized:\s*true/);
+  assert.doesNotMatch(transport, /rejectUnauthorized:\s*false/);
+  assert.doesNotMatch(transport, /NODE_TLS_REJECT_UNAUTHORIZED/);
+  assert.match(transport, /GlobalSign GCC R6 AlphaSSL CA 2025/);
+});

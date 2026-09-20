@@ -80,7 +80,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     officialBaseUrl: 'https://portal.stf.jus.br/jurisprudencia/',
     documentationUrl: 'https://portal.stf.jus.br/hotsites/corteaberta/',
     connectorStatus: 'PARTIAL',
-    coverageStatus: 'Temas de repercussão geral individualizados; Súmulas Vinculantes permanecem pendentes de verificação cumulativa',
+    coverageStatus: 'Temas de repercussão geral individualizados; cadeia TLS corrigida com intermediária oficial GlobalSign; runtime local ainda recebe HTTP 403 do ELB; Súmulas Vinculantes pendentes',
     verificationMethod: 'OPEN_DATA_DIGEST',
     termsStatus: 'COMPLIANT_PUBLIC_ACCESS',
     documentsDiscovered: 0,

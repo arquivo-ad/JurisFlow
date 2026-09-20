@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { CanonicalLegalDecision, OfficialSourceDiagnostic, PrecedentSituation } from '../types.ts';
 import { isExactStfThemeDetailUrl, isExactStfThemeIndexUrl } from '../officialSources.ts';
 import { PrecedentVerifier } from '../verifier.ts';
+import { secureStfFetch } from '../stfSecureFetch.ts';
 
 type FetchResult = {
   ok: boolean;
@@ -15,7 +16,7 @@ type FetchResult = {
 };
 
 export class StfJurisprudenciaAdapter {
-  constructor(private readonly fetchImpl: typeof fetch = fetch, private readonly timeoutMs = 20_000) {}
+  constructor(private readonly fetchImpl: typeof fetch = secureStfFetch, private readonly timeoutMs = 20_000) {}
 
   public static sha256(value: string | Buffer): string {
     return crypto.createHash('sha256').update(value).digest('hex');
