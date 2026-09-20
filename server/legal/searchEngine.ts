@@ -25,7 +25,8 @@ const LEGAL_STOP_WORDS = new Set([
   'às', 'minha', 'têm', 'numa', 'pelos', 'elas', 'havia', 'seja', 'qual', 'será',
   'nós', 'tenho', 'fui', 'todas', 'todos', 'direito', 'direitos', 'existem',
   'jurisprudências', 'jurisprudencia', 'jurisprudência', 'precedente', 'precedentes',
-  'acórdão', 'acórdãos', 'processo', 'decisão', 'sobre', 'caso', 'artigo', 'lei'
+  'acórdão', 'acórdãos', 'processo', 'decisão', 'sobre', 'caso', 'artigo', 'lei',
+  'qual', 'tese', 'tema', 'enunciado', 'tribunal', 'stj', 'stf', 'tst', 'trt'
 ]);
 
 export class LegalSearchEngine {
@@ -69,8 +70,6 @@ export class LegalSearchEngine {
     const sourcesActuallyConsulted: Set<string> = new Set();
 
     for (const d of candidates) {
-      sourcesActuallyConsulted.add(d.sourceId);
-
       // Bloqueio rigoroso de sementes não verificadas / demo
       if (d.verificationStatus === 'DEMO_UNVERIFIED' || (d as any).environment === 'development') {
         continue;
@@ -122,8 +121,8 @@ export class LegalSearchEngine {
         const queryDigits = classification.extractedProcessNumber.replace(/[^0-9]/g, '');
         const docDigits = d.rawCaseNumber.replace(/[^0-9]/g, '');
         if (
-          (queryProcClean.length >= 6 && (rawCaseClean.includes(queryProcClean) || (cnjClean && cnjClean.includes(queryProcClean)))) ||
-          (queryDigits.length >= 5 && docDigits.includes(queryDigits))
+          (queryProcClean.length >= 6 && (rawCaseClean === queryProcClean || cnjClean === queryDigits)) ||
+          (queryDigits.length >= 5 && docDigits === queryDigits)
         ) {
           condition1 = true;
         }
@@ -166,10 +165,27 @@ export class LegalSearchEngine {
         }
       }
 
+      let leadingLaborConceptCount = 0;
+      if (classification.isLaborDispute) {
+        const leadingHeadnote = `${d.rulingThesis || ''} ${d.officialHeadnote.slice(0, 1200)}`
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+        const leadingConcepts = [
+          /\b(?:clt|celetist\w*)\b/,
+          /\bfundacao\s+publica\b/,
+          /\bcargo\s+(?:em\s+comissao|de\s+confianca)\b|\bfuncao\s+de\s+confianca\b/,
+          /\b(?:dispensa|demissao|rescisao)\b/,
+          /\bverbas?\s+rescisorias\b/,
+        ];
+        leadingLaborConceptCount = leadingConcepts.filter((pattern) => pattern.test(leadingHeadnote)).length;
+      }
+
       // Regra de Admissibilidade Material:
       // Exige ao menos 2 termos substantivos coincidentes OU 1 instituto jurídico completo
       // E proíbe falso match genérico
-      if (matchedEntitiesCount >= 1 || (substantiveTokens.length > 0 && matchedSubstantive.length >= 2)) {
+      const isExactIdentifierQuery = classification.isSpecificCaseNumberQuery || classification.isSpecificThemeOrSumulaQuery;
+      if (!isExactIdentifierQuery && (matchedEntitiesCount >= 1 || (substantiveTokens.length > 0 && matchedSubstantive.length >= 2))) {
         // Se a consulta possui entidades específicas da área trabalhista, exige que a tese ou ementa tenha aderência material
         if (classification.isLaborDispute) {
           const hasLaborConcept = /\b(clt|trabalhador|empregado|cargo de confiança|função de confiança|fundação|verbas rescisórias|rescisão|dispensa|tst|trt)\b/i.test(
@@ -194,6 +210,31 @@ export class LegalSearchEngine {
         continue;
       }
 
+      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
+        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
+      const payload = d.rawPayloadPreserved as any;
+      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
+        && Array.isArray(payload?.processosRow)
+        && Array.isArray(payload?.temasRow)
+        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
+      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
+        && Boolean(payload?.officialApiRecordId)
+        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
+      const hasAuditableEvidence =
+        d.verificationStatus === 'VERIFIED_OFFICIAL'
+        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
+        && Boolean(d.lastVerifiedAt)
+        && Boolean(d.rawPayloadPreserved)
+        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
+        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
+        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
+
+      if (queryInput.onlyVerified && !hasAuditableEvidence) continue;
+      sourcesActuallyConsulted.add(d.sourceId);
+
       // -------------------------------------------------------------
       // 3. PONTUAÇÃO (APENAS PARA OS QUE PASSARAM NO FILTRO DE PERTINÊNCIA)
       // -------------------------------------------------------------
@@ -209,9 +250,16 @@ export class LegalSearchEngine {
         reasons.push(`Correspondência direta de Tema/Súmula pesquisada (${d.themeNumber})`);
       }
       if (condition3) {
-        const basePertinenceScore = Math.min(50, matchedSubstantive.length * 12 + matchedEntitiesCount * 20);
+        const uniqueMaterialMatches = Array.from(new Set(matchedSubstantive));
+        const basePertinenceScore = Math.min(
+          90,
+          uniqueMaterialMatches.length * 4 + matchedEntitiesCount * 12 + leadingLaborConceptCount * 15
+        );
         score += basePertinenceScore;
-        reasons.push(`Correspondência temática material confirmada: ${matchedSubstantive.slice(0, 4).join(', ')}`);
+        reasons.push(
+          `Correspondência temática material confirmada: ${uniqueMaterialMatches.slice(0, 6).join(', ')}`
+          + (leadingLaborConceptCount > 0 ? ` • ${leadingLaborConceptCount} conceito(s) central(is) na abertura da ementa` : '')
+        );
       }
 
       // Autoridade como DESEMPATE (Somente +5 para Vinculante e +3 para Qualificado)
@@ -246,12 +294,36 @@ export class LegalSearchEngine {
 
     const results: LegalSearchResultItem[] = paginated.map((item) => {
       const d = item.decision;
-      const citationBadge =
-        d.verificationStatus === 'VERIFIED_OFFICIAL'
-          ? `[OFICIAL ${d.courtCode} - VERIFICADO]`
-          : d.verificationStatus === 'CANCELLED'
-          ? `[${d.courtCode} - CANCELADO]`
-          : `[${d.courtCode} - NÃO VERIFICADO]`;
+      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
+        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
+      const payload = d.rawPayloadPreserved as any;
+      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
+        && Array.isArray(payload?.processosRow)
+        && Array.isArray(payload?.temasRow)
+        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
+      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
+        && Boolean(payload?.officialApiRecordId)
+        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
+        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
+      const hasAuditableEvidence = d.verificationStatus === 'VERIFIED_OFFICIAL'
+        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
+        && Boolean(d.lastVerifiedAt)
+        && Boolean(d.rawPayloadPreserved)
+        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
+        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
+        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
+      const evidenceState = hasAuditableEvidence
+        ? 'VERIFIED_OFFICIAL'
+        : d.officialUrl
+          ? 'FOUND_PENDING_REVIEW'
+          : 'NOT_VERIFIED_PROHIBITED';
+      const citationBadge = evidenceState === 'VERIFIED_OFFICIAL'
+        ? `[OFICIAL ${d.courtCode} - VERIFICADO]`
+        : evidenceState === 'FOUND_PENDING_REVIEW'
+          ? `[${d.courtCode} - ENCONTRADO, PENDENTE DE CONFERÊNCIA]`
+          : `[${d.courtCode} - NÃO VERIFICADO — PROIBIDO USAR EM PEÇA]`;
 
       const officialCitation = `${d.courtCode}, ${d.rawCaseNumber}, Rel. ${d.rapporteur}, ${d.courtOrgan || ''}, julgado em ${d.judgmentDate || 'N/D'}, DJe ${d.publicationDate || 'N/D'}`;
 
@@ -284,20 +356,11 @@ export class LegalSearchEngine {
         scoreFinal: item.score,
         relevanceReason: item.pertinenceReason,
         verifiedAt: d.lastVerifiedAt,
+        evidenceState,
+        evidenceId: hasAuditableEvidence ? `${d.sourceId}:${d.contentSha256}` : undefined,
+        contentSha256: d.contentSha256,
       };
     });
-
-    // Fontes consultadas dinâmicas
-    const dynamicSources: string[] = [];
-    if (classification.prioritySources) {
-      dynamicSources.push(...classification.prioritySources.map((s) => `${s} (prioritária)`));
-    }
-    if (classification.complementarySources) {
-      dynamicSources.push(...classification.complementarySources.map((s) => `${s} (complementar)`));
-    }
-    if (classification.excludedSources && classification.excludedSources.length > 0) {
-      dynamicSources.push(...classification.excludedSources.map((s) => `${s} (descartada por incompetência material)`));
-    }
 
     return {
       query,
@@ -305,7 +368,7 @@ export class LegalSearchEngine {
       page,
       pageSize,
       results,
-      sourcesConsulted: dynamicSources.length > 0 ? dynamicSources : Array.from(sourcesActuallyConsulted),
+      sourcesConsulted: Array.from(sourcesActuallyConsulted),
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
     };

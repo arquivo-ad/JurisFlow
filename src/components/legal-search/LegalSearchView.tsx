@@ -131,7 +131,7 @@ export const LegalSearchView: React.FC<LegalSearchViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-            Consulta processual unificada pelo CNJ, jurisprudência oficial dos Tribunais Superiores e autenticação criptográfica segura com certificado digital ICP-Brasil.
+            Consulta pública pelo CNJ e pesquisa no acervo sincronizado, sempre exibindo o estado da evidência. Conectores não implementados permanecem bloqueados.
           </p>
         </div>
 
@@ -153,7 +153,7 @@ export const LegalSearchView: React.FC<LegalSearchViewProps> = ({
               className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-2 hover:bg-slate-100 transition-colors shadow-sm"
             >
               <Lock className="w-4 h-4 text-slate-500" />
-              <span>Autenticar Certificado A1/A3</span>
+              <span>Certificado: indisponível</span>
             </button>
           )}
 

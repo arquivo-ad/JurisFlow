@@ -149,10 +149,7 @@ import {
   JudicialProcessSearchResult,
 } from './src/types/index.ts';
 
-dotenv.config({ override: true });
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.SUPABASE_URL) {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.example'), override: true });
-}
+dotenv.config();
 
 // ==========================================
 // SYSTEM MODULES REGISTRY SEED
@@ -957,17 +954,14 @@ ensureDatabaseDrArchitecture();
 // ==========================================
 // GEMINI ENTERPRISE FOR LEGAL (GOOGLE GENAI SDK)
 // ==========================================
-// Primary Model: gemini-3.1-flash-lite (fast, deterministic, zero 503 latency) with fallback to gemini-3.8-flash
-const GEMINI_LEGAL_MODEL = 'gemini-3.1-flash-lite';
-const GEMINI_LEGAL_FALLBACK_MODEL = 'gemini-3.8-flash';
-const GEMINI_LEGAL_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+const GEMINI_LEGAL_MODEL = process.env.GEMINI_MODEL?.trim() || '';
+const GEMINI_LEGAL_FALLBACK_MODEL = '';
+const GEMINI_LEGAL_MODELS = GEMINI_LEGAL_MODEL ? [GEMINI_LEGAL_MODEL] : [];
 
 async function generateGeminiLegalContent(ai: GoogleGenAI, request: any): Promise<any> {
-  const modelsToTry = [
-    request.model || GEMINI_LEGAL_MODEL,
-    'gemini-3.8-flash',
-    'gemini-flash-latest',
-  ];
+  const selectedModel = request.model || GEMINI_LEGAL_MODEL;
+  if (!selectedModel) throw new Error('GEMINI_MODEL não configurado.');
+  const modelsToTry = [selectedModel];
   let lastError: any = null;
   for (const model of modelsToTry) {
     try {
@@ -5668,11 +5662,20 @@ Responda em JSON:
 
   // Consulta Processual Unificada (CNJ, OAB ou Nome da Parte)
   app.post('/api/judicial/search-process', async (req: Request, res: Response) => {
+    const startedAt = Date.now();
     try {
       const tenantId = (req as any).tenantId;
       const userId = (req as any).userId;
       const userName = resolveUserName(tenantId, userId, req.body.userName);
       const { searchType, cnjNumber, courtCode, lawyerOab, partyName } = req.body;
+
+      if ((searchType || 'CNJ') !== 'CNJ') {
+        return res.status(501).json({
+          success: false,
+          code: 'SEARCH_MODE_NOT_IMPLEMENTED',
+          error: 'Busca por OAB ou nome ainda não possui conector oficial habilitado. Nenhum resultado será simulado.',
+        });
+      }
 
       const existingCases = db.cases
         .filter((c) => !tenantId || c.tenantId === tenantId)
@@ -5700,7 +5703,7 @@ Responda em JSON:
         filters: { searchType, courtCode },
         courtCode: courtCode || (result ? result.courtCode : undefined),
         resultsCount: result ? 1 : 0,
-        executionTimeMs: 95,
+        executionTimeMs: Date.now() - startedAt,
         status: result ? 'SUCCESS' : 'NO_RESULTS',
         timestamp: new Date().toISOString(),
       };
@@ -5710,7 +5713,9 @@ Responda em JSON:
       res.json({ success: true, result });
     } catch (err: any) {
       console.error('Erro na consulta processual:', err);
-      res.status(500).json({ error: 'Falha ao consultar processo nos tribunais', details: err.message });
+      const message = err?.message || String(err);
+      const status = message.startsWith('INVALID_CNJ_NUMBER') ? 400 : message.startsWith('OFFICIAL_SOURCE_UNAVAILABLE') ? 503 : 500;
+      res.status(status).json({ success: false, error: 'Consulta oficial não concluída', details: message });
     }
   });
 
@@ -5724,6 +5729,15 @@ Responda em JSON:
       if (!processResult || !processResult.normalizedCnjNumber) {
         return res.status(400).json({ error: 'Metadados do processo são obrigatórios para importação' });
       }
+      if (processResult.evidenceState !== 'VERIFIED_OFFICIAL' || !processResult.evidenceId) {
+        return res.status(422).json({
+          error: 'Importação bloqueada: o processo não possui evidência verificável da fonte oficial.',
+        });
+      }
+      return res.status(501).json({
+        error: 'Importação automática temporariamente bloqueada: o DataJud público não fornece partes/documentos suficientes para criar um cadastro completo sem inventar dados.',
+        code: 'SAFE_IMPORT_NOT_IMPLEMENTED',
+      });
 
       // Verifica se o processo já existe
       const existing = db.cases.find(
@@ -6013,21 +6027,13 @@ Responda em JSON:
     res.json(history);
   });
 
-  // Inspeção Segura de Certificado Digital A1 do Advogado (NUNCA ARMAZENA SENHA)
+  // Certificado exige ponte local Web PKI/PKCS#11; nunca simular inspeção no servidor.
   app.post('/api/judicial/certificate/inspect', (req: Request, res: Response) => {
-    try {
-      const { fileName, passwordLength } = req.body;
-      const certInfo = judicialSearchService.inspectDigitalCertificate(fileName || 'certificado.pfx', passwordLength || 8);
-      const tenantId = (req as any).tenantId || 't-default';
-      db.lawyerCertificates[tenantId] = certInfo;
-      saveLocalDb(db);
-
-      logAudit(req, 'SYSTEM', certInfo.id, 'UPDATE', `Inspecionou Certificado Digital ICP-Brasil: ${certInfo.subjectName} (${certInfo.oabNumber})`);
-
-      res.json({ success: true, certificate: certInfo });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Falha ao inspecionar certificado digital', details: err.message });
-    }
+    res.status(501).json({
+      success: false,
+      code: 'CERTIFICATE_BRIDGE_NOT_IMPLEMENTED',
+      error: 'Ponte local Web PKI/PKCS#11 não instalada. Arquivo e senha não foram recebidos nem armazenados.',
+    });
   });
 
   // Matriz de Conectividade e Disponibilidade dos Tribunais
@@ -6158,7 +6164,7 @@ Responda em JSON:
       totalRequests,
       totalTokens,
       totalCostBRL: Math.round(totalCostBRL * 100) / 100,
-      activeModel: 'Gemini Enterprise for Legal (gemini-3.8-flash)',
+      activeModel: GEMINI_LEGAL_MODEL || 'Não configurado',
       groundingRate: 99.4,
       errorsPrevented: 42 + logs.filter((l) => l.feature === 'DOCUMENT_AUDIT_ERROR_REDUCTION').length * 2,
       recentLogs: logs.slice(0, 10),

@@ -222,24 +222,13 @@ export class BnpAdapter {
     errorMessage?: string;
   }> {
     const start = Date.now();
-    try {
-      const { qualifiedPrecedents, decisions } = this.getOfficialQualifiedPrecedents();
-      return {
-        success: true,
-        fetchedCount: qualifiedPrecedents.length,
-        qualifiedPrecedents,
-        decisions,
-        latencyMs: Date.now() - start,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        fetchedCount: 0,
-        qualifiedPrecedents: [],
-        decisions: [],
-        latencyMs: Date.now() - start,
-        errorMessage: `Erro ao sincronizar BNP/Pangea: ${err.message || String(err)}`,
-      };
-    }
+    return {
+      success: false,
+      fetchedCount: 0,
+      qualifiedPrecedents: [],
+      decisions: [],
+      latencyMs: Date.now() - start,
+      errorMessage: 'SOURCE_NOT_IMPLEMENTED: não há API pública documentada do BNP/Pangea integrada. A lista estática foi retirada do fluxo de produção.',
+    };
   }
 }

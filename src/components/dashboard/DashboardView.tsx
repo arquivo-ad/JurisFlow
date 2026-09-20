@@ -71,7 +71,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-semibold mb-2">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Painel Executivo • JurisFlow AI 3.7 Ativo</span>
+              <span>Painel Executivo • JurisFlow AI</span>
             </div>
             <h1 className="text-xl lg:text-2xl font-bold text-slate-900 tracking-tight">
               Gestão Jurídica Estratégica
