@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactStjDocumentUrl, isExactTstDocumentUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -75,6 +75,9 @@ export class PrecedentVerifier {
     }
     if (decision.sourceId === 'stj-dados-abertos' && (!isExactStjDocumentUrl(officialUrl) || decision.courtCode !== 'STJ')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro STJ não aponta para o inteiro teor individual oficial do STJ.');
+    }
+    if (decision.sourceId === 'stf-jurisprudencia' && (!isExactStfThemeDetailUrl(officialUrl, decision.themeNumber) || decision.courtCode !== 'STF')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro STF não aponta para o tema individual oficial do leading case.');
     }
 
     // 5. Data de Julgamento ou Publicação Oficial (Não pode ser futura)

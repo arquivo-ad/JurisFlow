@@ -6,6 +6,7 @@ import { CanonicalLegalDecision, LegalSearchResultItem, LegalResearchResult, Fai
 import { LegalCompetenceClassifier } from './classifier.ts';
 import { StjDadosAbertosAdapter } from './adapters/StjDadosAbertosAdapter.ts';
 import { TstJurisprudenciaAdapter } from './adapters/TstJurisprudenciaAdapter.ts';
+import { StfJurisprudenciaAdapter } from './adapters/StfJurisprudenciaAdapter.ts';
 
 export const FAIL_CLOSED_EXPLANATIONS: Record<FailClosedReasonCode, { title: string; explanation: string; action: string }> = {
   NO_RELEVANT_PRECEDENT: {
@@ -77,6 +78,7 @@ export class GeminiLegalService {
   private storage: LegalKnowledgeStorage;
   private stjAdapter: StjDadosAbertosAdapter;
   private tstAdapter: TstJurisprudenciaAdapter;
+  private stfAdapter: StfJurisprudenciaAdapter;
 
   public configuredModel: string;
   public activeModel: string;
@@ -106,6 +108,7 @@ export class GeminiLegalService {
     this.citationGuard = new CitationGuard();
     this.stjAdapter = new StjDadosAbertosAdapter();
     this.tstAdapter = new TstJurisprudenciaAdapter();
+    this.stfAdapter = new StfJurisprudenciaAdapter();
 
     this.configuredModel = GeminiLegalService.normalizeModelName(process.env.GEMINI_MODEL);
     this.activeModel = this.configuredModel;
@@ -300,9 +303,14 @@ export class GeminiLegalService {
     const classification = LegalCompetenceClassifier.classify(question);
     let sourceDiagnostic: OfficialSourceDiagnostic | undefined;
     let activeRetrievedDecisions: CanonicalLegalDecision[] | undefined;
-    const mentionsStjOrCase = !classification.isLaborDispute && (
+    const extractedQualified = classification.extractedThemeOrSumula;
+    const extractedProcess = classification.extractedProcessNumber || '';
+    const mentionsStfTheme = extractedQualified?.type === 'TEMA' && extractedQualified.court === 'STF';
+    const mentionsStfBindingSummary = extractedQualified?.type === 'SUMULA_VINCULANTE';
+    const isStfCaseNumber = /^(?:RE|ARE)\b/i.test(extractedProcess);
+    const mentionsStjOrCase = !classification.isLaborDispute && !mentionsStfTheme && !mentionsStfBindingSummary && !isStfCaseNumber && (
       classification.isSpecificCaseNumberQuery ||
-      classification.isSpecificThemeOrSumulaQuery ||
+      (classification.isSpecificThemeOrSumulaQuery && extractedQualified?.court !== 'STF') ||
       /stj|resp|recurso especial|tema 27|juros/i.test(question)
     );
 
@@ -316,7 +324,7 @@ export class GeminiLegalService {
       })),
       sourcesAttempted: classification.isLaborDispute
         ? ['tst-jurisprudencia']
-        : mentionsStjOrCase ? ['stj-dados-abertos'] : [],
+        : [...(mentionsStjOrCase ? ['stj-dados-abertos'] : []), ...(mentionsStfTheme ? ['stf-jurisprudencia'] : [])],
       sourcesSucceeded: [],
       sourcesFailed: [],
       sourcesNotImplemented: classification.isLaborDispute ? [{
@@ -325,6 +333,12 @@ export class GeminiLegalService {
         name: 'Tribunais Regionais do Trabalho',
         lifecycleState: 'SOURCE_NOT_IMPLEMENTED',
         message: 'Ainda não existe uma API pública nacional documentada e integrada para os 24 TRTs.',
+      }] : mentionsStfBindingSummary ? [{
+        sourceId: 'stf-sumulas-vinculantes',
+        courtCode: 'STF',
+        name: 'STF - Súmulas Vinculantes',
+        lifecycleState: 'SOURCE_NOT_IMPLEMENTED',
+        message: 'O registro oficial não fornece cumulativamente relator e acórdão individual para o enunciado; o selo verde permanece bloqueado.',
       }] : [],
     };
 
@@ -402,6 +416,31 @@ export class GeminiLegalService {
       }
     }
 
+    // 2-B. REPERCUSSÃO GERAL DO STF: registro individual do tema e leading case.
+    if (mentionsStfTheme && extractedQualified) {
+      const stfRes = await this.stfAdapter.searchTheme(extractedQualified.number);
+      sourceDiagnostic = stfRes.diagnostic;
+      activeRetrievedDecisions = stfRes.decision ? [stfRes.decision] : [];
+      if (stfRes.decision) {
+        this.storage.upsertDecision(stfRes.decision);
+        routingReport.sourcesSucceeded.push('stf-jurisprudencia');
+      } else {
+        routingReport.sourcesFailed.push('stf-jurisprudencia');
+      }
+    } else if (mentionsStfBindingSummary) {
+      activeRetrievedDecisions = [];
+      sourceDiagnostic = {
+        adapter: 'stf-sumulas-vinculantes', sourceName: 'Supremo Tribunal Federal - Súmulas Vinculantes', courtCode: 'STF',
+        officialUrl: 'https://portal.stf.jus.br/jurisprudencia/sumariosumulas.asp?base=26', timestamp: new Date().toISOString(),
+        httpStatus: 501, latencyMs: 0, lifecycleState: 'SOURCE_NOT_IMPLEMENTED',
+        stateDescription: 'Consulta automatizada ainda não satisfaz cumulativamente todos os requisitos do selo verificado.',
+        bytesTransferred: 0, documentsReceived: 0, documentsNormalized: 0, documentsRejected: 0,
+        recordsRead: 0, recordsAccepted: 0, recordsRejected: 0, parsingErrors: [],
+        rejectionReasons: ['Súmula Vinculante mantida como não implementada até haver confirmação individual cumulativa.'],
+        normalizedQueryNumber: `Súmula Vinculante ${extractedQualified?.number || ''}`, connectorStatus: 'NOT_IMPLEMENTED',
+      };
+    }
+
     // 3. EXECUÇÃO DO MOTOR DE BUSCA JURISPRUDENCIAL COM FILTRO DE PERTINÊNCIA
     const activeSearchEngine = activeRetrievedDecisions
       ? new LegalSearchEngine({ getDecisions: () => activeRetrievedDecisions } as unknown as LegalKnowledgeStorage)
@@ -422,7 +461,9 @@ export class GeminiLegalService {
     if (precedents.length === 0) {
       let failureCode: FailClosedReasonCode = 'NO_RELEVANT_PRECEDENT';
       if (sourceDiagnostic) {
-        if (sourceDiagnostic.httpStatus === 408) {
+        if (sourceDiagnostic.lifecycleState === 'SOURCE_NOT_IMPLEMENTED') {
+          failureCode = 'SOURCE_NOT_IMPLEMENTED';
+        } else if (sourceDiagnostic.httpStatus === 408) {
           failureCode = 'SOURCE_TIMEOUT';
         } else if (sourceDiagnostic.httpStatus >= 500) {
           failureCode = 'SOURCE_UNAVAILABLE';

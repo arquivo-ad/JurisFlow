@@ -3,6 +3,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import { TstJurisprudenciaAdapter } from '../adapters/TstJurisprudenciaAdapter.ts';
 import { StjDadosAbertosAdapter } from '../adapters/StjDadosAbertosAdapter.ts';
+import { StfJurisprudenciaAdapter } from '../adapters/StfJurisprudenciaAdapter.ts';
 import { PrecedentVerifier } from '../verifier.ts';
 import { isExactStjDocumentUrl } from '../officialSources.ts';
 
@@ -105,6 +106,49 @@ test('STJ rejeita HTML ou bloqueio no lugar do inteiro teor', async () => {
   assert.equal(result.success, false);
   assert.equal(result.httpStatus, 403);
   assert.match(result.error || '', /Inteiro teor STJ inválido/);
+});
+
+const stfThemeIndexHtml = `<!doctype html><html><body>
+<h1>Tema</h1><div>Tema: 0069</div><div>Título: Inclusão do ICMS na base de cálculo do PIS e da COFINS.</div>
+<div>Descrição: Recurso extraordinário sobre a base de cálculo das contribuições. Ver assuntos:</div>
+<div>Informações gerais Leading Case: RE 574706 Manifestação Ministro: MIN. CÁRMEN LÚCIA Plenário Virtual</div>
+<div>Data da Repercussão geral: 25/04/2008 Situação: Trânsito em Julgado - 09/09/2021</div>
+<a href="verAndamentoProcesso.asp?classeProcesso=RE&amp;incidente=2585258&amp;numeroProcesso=574706&amp;numeroTema=69">Leading case</a>
+${'registro oficial '.repeat(30)}</body></html>`;
+
+const stfThemeDetailHtml = `<!doctype html><html><body><h1>Tema 69</h1>
+<div>Relator(a): MIN. CÁRMEN LÚCIA</div><div>Leading Case: RE 574706</div>
+<div>Descrição: Recurso extraordinário em que se discute a inclusão do ICMS.</div>
+<div>Tese: O ICMS não compõe a base de cálculo para a incidência do PIS e da COFINS.</div>
+<div>Data Andamento Órgão Julgador Observação Documento</div>
+${'andamento oficial '.repeat(30)}</body></html>`;
+
+function stfFetch(detailHtml = stfThemeDetailHtml): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    const body = url.includes('tema.asp') ? stfThemeIndexHtml : detailHtml;
+    return new Response(body, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }) as typeof fetch;
+}
+
+test('STF verifica Tema de Repercussão Geral em dois registros oficiais individuais', async () => {
+  const result = await new StfJurisprudenciaAdapter(stfFetch()).searchTheme(69);
+  assert.equal(result.diagnostic.lifecycleState, 'SEARCH_SUCCESS');
+  assert.equal(result.decision?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decision?.rawCaseNumber, 'RE 574706');
+  assert.equal(result.decision?.rapporteur, 'MIN. CÁRMEN LÚCIA');
+  assert.equal(result.decision?.courtOrgan, 'Plenário Virtual');
+  assert.match(result.decision?.rulingThesis || '', /ICMS não compõe/);
+  assert.match(result.decision?.contentSha256 || '', /^[a-f0-9]{64}$/);
+  assert.match(result.decision?.officialUrl || '', /verAndamentoProcesso\.asp/);
+});
+
+test('STF retém Tema sem tese oficial em vez de preencher conteúdo', async () => {
+  const withoutThesis = stfThemeDetailHtml.replace('Tese: O ICMS não compõe a base de cálculo para a incidência do PIS e da COFINS.', 'Tese:');
+  const result = await new StfJurisprudenciaAdapter(stfFetch(withoutThesis)).searchTheme(69);
+  assert.equal(result.decision, undefined);
+  assert.equal(result.diagnostic.lifecycleState, 'PARSER_ERROR');
+  assert.equal(result.diagnostic.documentsRejected, 1);
 });
 
 test('produção não contém assinatura nem processo DJEN fabricados', () => {

@@ -43,3 +43,35 @@ export function isExactStjDocumentUrl(value: string): boolean {
     return false;
   }
 }
+
+export function isExactStfThemeIndexUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'portal.stf.jus.br'
+      && url.pathname === '/jurisprudenciaRepercussao/tema.asp'
+      && /^\d{1,4}$/.test(url.searchParams.get('num') || '')
+      && [...url.searchParams.keys()].every((key) => key === 'num');
+  } catch {
+    return false;
+  }
+}
+
+export function isExactStfThemeDetailUrl(value: string, expectedTheme?: number): boolean {
+  try {
+    const url = new URL(value);
+    const allowed = new Set(['classeProcesso', 'incidente', 'numeroProcesso', 'numeroTema']);
+    const theme = url.searchParams.get('numeroTema') || '';
+    return url.protocol === 'https:'
+      && url.hostname === 'portal.stf.jus.br'
+      && url.pathname === '/jurisprudenciaRepercussao/verAndamentoProcesso.asp'
+      && /^(?:RE|ARE|AI)$/i.test(url.searchParams.get('classeProcesso') || '')
+      && /^\d+$/.test(url.searchParams.get('incidente') || '')
+      && /^\d+$/.test(url.searchParams.get('numeroProcesso') || '')
+      && /^\d{1,4}$/.test(theme)
+      && (expectedTheme === undefined || Number(theme) === expectedTheme)
+      && [...url.searchParams.keys()].every((key) => allowed.has(key));
+  } catch {
+    return false;
+  }
+}
