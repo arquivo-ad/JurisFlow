@@ -1082,7 +1082,7 @@ export interface AILegalKnowledgeItem {
   category: 'CONSTITUCIONAL' | 'CIVIL' | 'PROCESSO_CIVIL' | 'TRABALHISTA' | 'TRIBUTARIO' | 'CONSUMIDOR' | 'INTERNO_ESCRITORIO';
   officialSource: string;
   lastUpdated: string;
-  groundingStatus: 'ACTIVE' | 'UPDATING' | 'SYNCED';
+  groundingStatus: 'ACTIVE' | 'UPDATING' | 'SYNCED' | 'UNAVAILABLE' | 'NOT_IMPLEMENTED';
   articlesIndexed: number;
   description: string;
   isCustomOfficeTesis?: boolean;
@@ -1092,7 +1092,7 @@ export interface AILegalSyncConnector {
   id: string;
   name: string;
   type: 'PLANALTO_LEGISLACAO' | 'DJEN_DIARIO_JUSTICA' | 'STF_STJ_PRECEDENTES' | 'TRIBUNAIS_ESTADUAIS_DJE';
-  status: 'CONNECTED' | 'SYNCING' | 'IDLE';
+  status: 'CONNECTED' | 'SYNCING' | 'IDLE' | 'UNAVAILABLE' | 'NOT_IMPLEMENTED';
   protocol: 'REST_API' | 'WEBHOOK' | 'RSS_FEED';
   endpointUrl: string;
   webhookPushUrl?: string;

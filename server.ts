@@ -576,170 +576,10 @@ class MemoryDatabase {
   auditLogs: AuditLog[] = [];
   lgpdConsents: LGPDConsent[] = [];
   aiLogs: AIGatewayLog[] = [];
-  legalKnowledgeSources: AILegalKnowledgeItem[] = [
-    {
-      id: 'lk-cf88',
-      title: 'Constituição da República Federativa do Brasil de 1988',
-      category: 'CONSTITUCIONAL',
-      officialSource: 'Portal da Legislação da Presidência da República (Planalto)',
-      lastUpdated: '2026-08-15',
-      groundingStatus: 'SYNCED',
-      articlesIndexed: 250,
-      description: 'Texto constitucional com Emendas Constitucionais consolidadas até 2026, com foco em Direitos Fundamentais (Art. 5º), Ordem Econômica e Competências Judiciais.',
-    },
-    {
-      id: 'lk-cpc15',
-      title: 'Código de Processo Civil (Lei nº 13.105/2015)',
-      category: 'PROCESSO_CIVIL',
-      officialSource: 'Portal do Planalto & Banco Nacional de Precedentes (CNJ)',
-      lastUpdated: '2026-08-28',
-      groundingStatus: 'ACTIVE',
-      articlesIndexed: 1072,
-      description: 'Regras processuais, prazos em dias úteis (Art. 219), tutelas provisórias (Art. 300), petição inicial (Art. 319) e sistema de precedentes vinculantes (Art. 927).',
-    },
-    {
-      id: 'lk-cc02',
-      title: 'Código Civil Brasileiro (Lei nº 10.406/2002)',
-      category: 'CIVIL',
-      officialSource: 'Portal da Legislação da Presidência da República (Planalto)',
-      lastUpdated: '2026-08-10',
-      groundingStatus: 'SYNCED',
-      articlesIndexed: 2046,
-      description: 'Direito das obrigações, contratos, responsabilidade civil, prescrição e decadência (Arts. 205 e 206), direito de família e sucessões.',
-    },
-    {
-      id: 'lk-clt',
-      title: 'Consolidação das Leis do Trabalho (Decreto-Lei nº 5.452/1943)',
-      category: 'TRABALHISTA',
-      officialSource: 'Portal do Planalto & TST',
-      lastUpdated: '2026-07-20',
-      groundingStatus: 'SYNCED',
-      articlesIndexed: 922,
-      description: 'Normas de Direito Material e Processual do Trabalho, prazos recursais trabalhistas (Art. 895, 896 CLT), súmulas e orientações jurisprudenciais do TST.',
-    },
-    {
-      id: 'lk-cdc',
-      title: 'Código de Defesa do Consumidor (Lei nº 8.078/1990)',
-      category: 'CONSUMIDOR',
-      officialSource: 'Portal da Legislação da Presidência da República (Planalto)',
-      lastUpdated: '2026-06-30',
-      groundingStatus: 'SYNCED',
-      articlesIndexed: 119,
-      description: 'Relações de consumo, responsabilidade objetiva por fato e vício do produto/serviço, inversão do ônus da prova e práticas abusivas.',
-    },
-    {
-      id: 'lk-stf-stj',
-      title: 'Súmulas Vinculantes STF & Teses Repetitivas STJ',
-      category: 'PROCESSO_CIVIL',
-      officialSource: 'Repositório Oficial de Jurisprudência STF / STJ',
-      lastUpdated: '2026-08-30',
-      groundingStatus: 'ACTIVE',
-      articlesIndexed: 3450,
-      description: 'Jurisprudência com filtro anti-alucinação: validação cruzada para garantir que o acórdão existe e não foi cancelado por overruling.',
-    },
-    {
-      id: 'lk-escritorio-teses',
-      title: 'Acervo de Teses e Peças Precedentes do Escritório',
-      category: 'INTERNO_ESCRITORIO',
-      officialSource: 'JurisFlow Private Document Store (Tenant Silveira Advogados)',
-      lastUpdated: '2026-08-31',
-      groundingStatus: 'ACTIVE',
-      articlesIndexed: 184,
-      description: 'Banco de minutas vitoriosas, contratos padrão aprovados e teses proprietárias do escritório indexados via vetorização semântica (RAG Corporativo).',
-      isCustomOfficeTesis: true,
-    },
-  ];
-
-  legalSyncConnectors: AILegalSyncConnector[] = [
-    {
-      id: 'conn-planalto',
-      name: 'Portal da Legislação da Presidência da República (Planalto)',
-      type: 'PLANALTO_LEGISLACAO',
-      status: 'CONNECTED',
-      protocol: 'REST_API',
-      endpointUrl: 'https://legis.planalto.gov.br/legis/api/v2/normas',
-      lastSyncAt: 'Hoje, 03:15 BRT',
-      frequency: 'Diária automatizada (03:00 BRT)',
-      recordsSynced: 7853,
-      description: 'Varredura contínua de Leis Complementares, Leis Ordinárias e Decretos com atualização de vigência e marcação de derrogações no CPC, CC, CLT e CDC.',
-      autoSyncEnabled: true,
-    },
-    {
-      id: 'conn-djen',
-      name: 'DJEN - Diário da Justiça Eletrônico Nacional (CNJ)',
-      type: 'DJEN_DIARIO_JUSTICA',
-      status: 'CONNECTED',
-      protocol: 'WEBHOOK',
-      endpointUrl: 'https://comunicaapi.pje.jus.br/api/v1/comunicacao',
-      webhookPushUrl: '/api/webhooks/djen-intimacoes',
-      lastSyncAt: 'Hoje, 10:45 BRT',
-      frequency: 'Tempo Real (Push Webhook a cada 15 min)',
-      recordsSynced: 1248,
-      description: 'Captura ativa e contínua de publicações forenses e intimações em nome dos advogados da banca com cálculo automático de prazos CPC/2015.',
-      autoSyncEnabled: true,
-    },
-    {
-      id: 'conn-precedentes-stf-stj',
-      name: 'Banco Nacional de Precedentes (STF / STJ)',
-      type: 'STF_STJ_PRECEDENTES',
-      status: 'CONNECTED',
-      protocol: 'REST_API',
-      endpointUrl: 'https://jurisprudencia.stf.jus.br/api/v1/sumulas-repetitivos',
-      lastSyncAt: 'Ontem, 22:00 BRT',
-      frequency: 'Diária (22:00 BRT)',
-      recordsSynced: 3450,
-      description: 'Catalogação de Súmulas Vinculantes do STF, Recursos Especiais Repetitivos do STJ e detecção imediata de superação de teses (overruling).',
-      autoSyncEnabled: true,
-    },
-    {
-      id: 'conn-tjsp-dje',
-      name: 'Diários de Justiça Estaduais (DJe SP, RJ, MG, RS)',
-      type: 'TRIBUNAIS_ESTADUAIS_DJE',
-      status: 'CONNECTED',
-      protocol: 'REST_API',
-      endpointUrl: 'https://dje.tjsp.jus.br/cdje/api/cadernos',
-      lastSyncAt: 'Hoje, 06:00 BRT',
-      frequency: 'Matutina (06:00 BRT)',
-      recordsSynced: 932,
-      description: 'Conector unificado aos cadernos administrativos e judiciais dos Tribunais de Justiça estaduais para checagem de despachos locais.',
-      autoSyncEnabled: true,
-    },
-  ];
-
-  legalWebhookLogs: AILegalWebhookLog[] = [
-    {
-      id: 'wh-log-1',
-      timestamp: 'Hoje, 10:45:12 BRT',
-      source: 'DJEN / CNJ Webhook Inbound',
-      event: 'INTIMACAO_RECEBIDA',
-      payloadSummary: 'Publicação identificada para Dra. Gabriela M. Manni Capitani (OAB/SP 478.370) no Proc. 1092834-12.2026.8.26.0100',
-      status: 'SUCCESS',
-    },
-    {
-      id: 'wh-log-2',
-      timestamp: 'Hoje, 03:15:04 BRT',
-      source: 'Portal do Planalto REST API',
-      event: 'SINC_LEGISLACAO_FEDERAL',
-      payloadSummary: 'Varredura normativo-federal concluída: 7.853 normas validadas. 0 revogações nos Códigos principais.',
-      status: 'SUCCESS',
-    },
-    {
-      id: 'wh-log-3',
-      timestamp: 'Ontem, 22:00:31 BRT',
-      source: 'Banco de Precedentes STJ',
-      event: 'OVERRULING_HEALTH_CHECK',
-      payloadSummary: 'Verificação de Súmulas Repetitivas: Súmula 385/STJ validada sem cancelamento ativo.',
-      status: 'SUCCESS',
-    },
-    {
-      id: 'wh-log-4',
-      timestamp: 'Ontem, 16:20:00 BRT',
-      source: 'DJEN / CNJ Webhook Inbound',
-      event: 'INTIMACAO_RECEBIDA',
-      payloadSummary: 'Intimação eletrônica da 4ª Vara de Família recebida e processada pelo extrator neural.',
-      status: 'SUCCESS',
-    },
-  ];
+  // Não há contagens, conectores ou eventos sintéticos no fluxo de produção.
+  legalKnowledgeSources: AILegalKnowledgeItem[] = [];
+  legalSyncConnectors: AILegalSyncConnector[] = [];
+  legalWebhookLogs: AILegalWebhookLog[] = [];
 
   processedWebhookIds: Set<string> = new Set();
 
@@ -798,53 +638,8 @@ class MemoryDatabase {
     updatedAt: new Date().toISOString(),
   };
 
-  judicialSearchHistory: JudicialSearchHistoryItem[] = [
-    {
-      id: 'jsh-init-1',
-      tenantId: 't-1789481820042',
-      userId: 'u-1789481820042-admin',
-      userName: 'Dra. Gabriela M. Manni Capitani',
-      searchType: 'JURISPRUDENCE',
-      query: 'prescrição intercorrente cumprimento de sentença',
-      filters: { courtCodes: ['STJ'] },
-      courtCode: 'STJ',
-      resultsCount: 1,
-      executionTimeMs: 48,
-      status: 'SUCCESS',
-      timestamp: new Date(Date.now() - 3600 * 1000).toISOString(),
-    },
-    {
-      id: 'jsh-init-2',
-      tenantId: 't-1789481820042',
-      userId: 'u-1789481820042-admin',
-      userName: 'Dra. Gabriela M. Manni Capitani',
-      searchType: 'PROCESS',
-      query: '1092834-12.2026.8.26.0100',
-      filters: { searchType: 'CNJ' },
-      courtCode: 'TJSP',
-      resultsCount: 1,
-      executionTimeMs: 112,
-      status: 'SUCCESS',
-      timestamp: new Date(Date.now() - 7200 * 1000).toISOString(),
-    },
-  ];
-
-  precedentFavorites: PrecedentFavoriteItem[] = [
-    {
-      id: 'fav-1',
-      decisionId: 'bnp-stf-sumula_vinculante-10',
-      tenantId: 't-1789481820042',
-      userId: 'u-1789481820042-admin',
-      title: 'Súmula Vinculante 10 - STF (Cláusula de Reserva de Plenário)',
-      courtCode: 'STF',
-      citation: 'STF, Súmula Vinculante 10, Rel. Tribunal Pleno, DJe 2008-06-18',
-      headnote: 'Viola a cláusula de reserva de plenário (CF, art. 97) a decisão de órgão fracionário de Tribunal que, embora não declare expressamente a inconstitucionalidade de lei ou ato normativo do Poder Público, afasta sua incidência, no todo ou em parte.',
-      thesis: 'Cláusula de reserva de plenário (CF, art. 97) de observância obrigatória por órgãos fracionários.',
-      officialUrl: 'https://portal.stf.jus.br/jurisprudencia/sumulaVinculante.asp?id=10',
-      favoritedAt: new Date(Date.now() - 86400 * 1000).toISOString(),
-      tags: ['Constitucional', 'Reserva de Plenário', 'Art. 97 CF'],
-    },
-  ];
+  judicialSearchHistory: JudicialSearchHistoryItem[] = [];
+  precedentFavorites: PrecedentFavoriteItem[] = [];
 
   lawyerCertificates: Record<string, LawyerDigitalCertificateInfo> = {};
 }
@@ -3836,35 +3631,11 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto introdutório nem marcações
   });
 
   app.post('/api/documents/:id/sign', (req: Request, res: Response) => {
-    const tenantId = (req as any).tenantId;
-    const doc = db.documents.find((d) => d.id === req.params.id && d.tenantId === tenantId);
-    if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
-
-    const signerName = req.body.signerName || resolveUserName(tenantId, (req as any).userId);
-    const signerCpf = req.body.signerCpf || '***.458.918-**';
-    const signerRole = req.body.signerRole || 'Advogada Titular - OAB/SP 478.370';
-    const randomHex = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    const verificationCode = `JURIS-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const signatureInfo = {
-      id: `sig-${Date.now()}`,
-      signerName,
-      signerCpf,
-      signerRole,
-      signedAt: new Date().toISOString(),
-      ipAddress: '189.120.45.18',
-      hashSha256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855${randomHex.substring(0, 8)}`,
-      verificationCode,
-      certificateAuthority: 'Autoridade Certificadora JurisFlow ICP-Brasil v4',
-      status: 'VALID' as const,
-    };
-
-    doc.digitalSignature = signatureInfo;
-    doc.status = 'APPROVED';
-    doc.updatedAt = new Date().toISOString();
-
-    logAudit(req, 'DOCUMENT', doc.id, 'UPDATE', `Assinou digitalmente o documento ${doc.title} (Código: ${verificationCode})`);
-    res.json(doc);
+    res.status(501).json({
+      success: false,
+      code: 'DIGITAL_SIGNATURE_NOT_IMPLEMENTED',
+      error: 'Assinatura digital ICP-Brasil não implementada. Nenhum carimbo, IP, código ou autoridade certificadora foi gerado.',
+    });
   });
 
   app.get('/api/templates', (req: Request, res: Response) => {
@@ -5541,16 +5312,9 @@ Responda em JSON:
       syncConnectors: db.legalSyncConnectors,
       webhookLogs: db.legalWebhookLogs,
       recentSyncJobs: syncJobs,
-      supportedJurisdictions: [
-        'Superior Tribunal de Justiça (STJ) - Dados Abertos',
-        'Conselho Nacional de Justiça (CNJ) - DataJud API',
-        'Banco Nacional de Precedentes (BNP / Pangea - Justiça 4.0)',
-        'Supremo Tribunal Federal (STF) - Corte Aberta & Súmulas Vinculantes',
-        'Tribunal Superior do Trabalho (TST) - Jurisprudência',
-        'Tribunais de Justiça Estaduais (TJSP, TJRJ, TJMG, TJRS, etc.)',
-        'Tribunais Regionais Federais (TRF1 a TRF6)',
-        'Portal da Legislação da Presidência da República (Planalto)',
-      ],
+      supportedJurisdictions: sources
+        .filter((source) => source.connectorStatus === 'HEALTHY')
+        .map((source) => `${source.name} (${source.courtCode || source.sourceId})`),
     };
     res.json(overview);
   });
@@ -5564,8 +5328,9 @@ Responda em JSON:
 
       logAudit(req, 'CASE', 'ai-legal-sync', 'UPDATE', syncResult.summary);
 
-      res.json({
-        success: true,
+      const success = syncResult.jobs.every((job) => job.status === 'SUCCESS' && job.failures === 0);
+      res.status(success ? 200 : 207).json({
+        success,
         message: syncResult.summary,
         syncedAt: new Date().toISOString(),
         jobs: syncResult.jobs,
@@ -5720,164 +5485,12 @@ Responda em JSON:
   });
 
   // Importação de Processo do Tribunal para a Base do JurisFlow
-  app.post('/api/judicial/import-process', async (req: Request, res: Response) => {
-    try {
-      const tenantId = (req as any).tenantId;
-      const userId = (req as any).userId;
-      const { processResult, responsibleLawyerId }: { processResult: JudicialProcessSearchResult; responsibleLawyerId?: string } = req.body;
-
-      if (!processResult || !processResult.normalizedCnjNumber) {
-        return res.status(400).json({ error: 'Metadados do processo são obrigatórios para importação' });
-      }
-      if (processResult.evidenceState !== 'VERIFIED_OFFICIAL' || !processResult.evidenceId) {
-        return res.status(422).json({
-          error: 'Importação bloqueada: o processo não possui evidência verificável da fonte oficial.',
-        });
-      }
-      return res.status(501).json({
-        error: 'Importação automática temporariamente bloqueada: o DataJud público não fornece partes/documentos suficientes para criar um cadastro completo sem inventar dados.',
-        code: 'SAFE_IMPORT_NOT_IMPLEMENTED',
-      });
-
-      // Verifica se o processo já existe
-      const existing = db.cases.find(
-        (c) => c.tenantId === tenantId && c.caseNumber.replace(/\D/g, '') === processResult.normalizedCnjNumber.replace(/\D/g, '')
-      );
-      if (existing) {
-        return res.status(409).json({
-          error: 'Este processo já está cadastrado no JurisFlow',
-          existingCaseId: existing.id,
-          existingCaseTitle: existing.title,
-        });
-      }
-
-      const branchId = db.branches.find((b) => b.tenantId === tenantId)?.id || 'branch-default';
-      const caseId = `case-${Date.now()}`;
-
-      const autor = processResult.parties.find((p) => p.role === 'AUTOR')?.name || 'Autor';
-      const reu = processResult.parties.find((p) => p.role === 'REU')?.name || 'Réu';
-
-      // Cria ou vincula cliente/pessoa se necessário
-      let clientPerson = db.persons.find((p) => p.tenantId === tenantId && p.name.toLowerCase() === autor.toLowerCase());
-      if (!clientPerson) {
-        clientPerson = {
-          id: `person-${Date.now()}-aut`,
-          tenantId: tenantId || 't-default',
-          type: autor.includes('Ltda') || autor.includes('S.A.') ? 'PJ' : 'PF',
-          name: autor,
-          document: processResult.parties.find((p) => p.role === 'AUTOR')?.document || '00.000.000/0001-00',
-          email: 'contato@cliente.com.br',
-          phone: '(11) 99999-0000',
-          address: {
-            street: 'Av. Paulista',
-            number: '1000',
-            neighborhood: 'Bela Vista',
-            city: 'São Paulo',
-            state: 'SP',
-            zipCode: '01310-100',
-          },
-          tags: ['Importado Tribunal'],
-          createdAt: new Date().toISOString(),
-        };
-        db.persons.push(clientPerson);
-        syncPersonToSupabase(clientPerson).catch(() => {});
-      }
-
-      const newCase: Case = {
-        id: caseId,
-        tenantId: tenantId || 't-default',
-        branchId,
-        caseNumber: processResult.normalizedCnjNumber,
-        title: `${autor} x ${reu}`,
-        notes: `Processo importado via ${processResult.sourceProvider}. Classe: ${processResult.processClass}. Órgão: ${processResult.courtOrgan}.`,
-        court: processResult.courtCode,
-        judicialBranch: processResult.courtOrgan,
-        judgeName: processResult.judgeName || 'MM. Juiz de Direito',
-        distributionDate: processResult.distributionDate,
-        claimValue: processResult.claimValue || 0,
-        contingencyRisk: 'POSSIBLE',
-        phase: 'INICIAL',
-        status: 'ACTIVE',
-        type: 'JUDICIAL',
-        legalArea: 'CIVIL',
-        responsibleLawyerId: responsibleLawyerId || userId || 'u-default',
-        parties: [
-          {
-            id: `cp-${Date.now()}-1`,
-            tenantId: tenantId || 't-default',
-            caseId,
-            personId: clientPerson.id,
-            role: 'AUTOR',
-            isMainClient: true,
-          },
-        ],
-        movementsCount: (processResult.movements || []).length,
-        deadlinesCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      db.cases.unshift(newCase);
-      syncCaseToSupabase(newCase).catch(() => {});
-
-      // Importa movimentações
-      let movsCount = 0;
-      for (const m of processResult.movements || []) {
-        const newMov: Movement = {
-          id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          tenantId: tenantId || 't-default',
-          caseId,
-          title: m.title,
-          content: m.content || m.title,
-          date: m.date,
-          source: 'COURT_API',
-          isRead: true,
-          createdBy: userId || 'u-default',
-          createdAt: new Date().toISOString(),
-        };
-        db.movements.push(newMov);
-        syncCaseMovementToSupabase(newMov).catch(() => {});
-        movsCount++;
-      }
-
-      // Importa documentos com hash SHA-256
-      let docsCount = 0;
-      for (const doc of processResult.documents || []) {
-        const newDoc: DocumentItem = {
-          id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          tenantId: tenantId || 't-default',
-          caseId,
-          title: doc.title,
-          description: `Documento processual público importado do tribunal (${processResult.courtCode}). Hash SHA-256: ${doc.sha256}`,
-          category: 'PETICAO',
-          currentVersion: 1,
-          fileSize: doc.sizeBytes || 150000,
-          fileType: 'application/pdf',
-          isDraft: false,
-          content: `Documento canônico com integridade SHA-256: ${doc.sha256}`,
-          status: 'FILED',
-          createdBy: userId || 'u-default',
-          createdAt: new Date().toISOString(),
-          updatedAt: doc.date,
-        };
-        db.documents.push(newDoc);
-        syncDocumentToSupabase(newDoc).catch(() => {});
-        docsCount++;
-      }
-
-      saveLocalDb(db);
-      logAudit(req, 'CASE', caseId, 'CREATE', `Importou processo oficial do tribunal: ${newCase.caseNumber} via ${processResult.sourceProvider}`);
-
-      res.status(201).json({
-        success: true,
-        case: newCase,
-        importedMovementsCount: movsCount,
-        importedDocumentsCount: docsCount,
-      });
-    } catch (err: any) {
-      console.error('Erro na importação de processo:', err);
-      res.status(500).json({ error: 'Falha ao importar processo para o JurisFlow', details: err.message });
-    }
+  app.post('/api/judicial/import-process', (_req: Request, res: Response) => {
+    res.status(501).json({
+      success: false,
+      code: 'SAFE_IMPORT_NOT_IMPLEMENTED',
+      error: 'Importação automática não implementada: o DataJud público não fornece todos os dados necessários para criar um cadastro sem completar informações por suposição.',
+    });
   });
 
   // Sincronização Incremental de Atualizações do Tribunal (Evita Duplicidade)
@@ -6049,22 +5662,12 @@ Responda em JSON:
   });
 
   // 5.5 Endpoint Webhook Inbound para Diários Oficiais (DJEN / Tribunais)
-  app.post('/api/webhooks/djen-intimacoes', (req: Request, res: Response) => {
-    const payload = req.body || {};
-    const now = new Date();
-    const processNumber = payload.processNumber || payload.numeroProcesso || '1092834-12.2026.8.26.0100';
-
-    const newLog: AILegalWebhookLog = {
-      id: `wh-inbound-${Date.now()}`,
-      timestamp: `${now.toLocaleTimeString('pt-BR')} BRT`,
-      source: 'DJEN Webhook Push (CNJ)',
-      event: 'NOVA_INTIMACAO_PUSH',
-      payloadSummary: `Intimação eletrônica processada para o processo nº ${processNumber}.`,
-      status: 'SUCCESS',
-    };
-    db.legalWebhookLogs.unshift(newLog);
-
-    res.status(200).json({ received: true, eventId: newLog.id });
+  app.post('/api/webhooks/djen-intimacoes', (_req: Request, res: Response) => {
+    res.status(501).json({
+      received: false,
+      code: 'DJEN_AUTHENTICATED_WEBHOOK_NOT_IMPLEMENTED',
+      error: 'DJEN indisponível: recepção autenticada e homologada ainda não foi implementada; nenhum evento foi persistido.',
+    });
   });
 
   // 6. Cadastro de Nova Fonte / Tese do Escritório para Grounding (RAG Corporativo)
@@ -6081,7 +5684,7 @@ Responda em JSON:
       officialSource: officialSource || 'Repositório Privado de Teses do Escritório',
       lastUpdated: formatDateToYMD(new Date()),
       groundingStatus: 'ACTIVE',
-      articlesIndexed: 12,
+      articlesIndexed: 0,
       description,
       isCustomOfficeTesis: true,
     };
@@ -6118,9 +5721,9 @@ Responda em JSON:
         userId,
         userName: effectiveUserName,
         feature: 'LEGAL_CHAT',
-        promptTokens: 240,
-        completionTokens: 420,
-        estimatedCostBRL: 0.009,
+        promptTokens: 0,
+        completionTokens: 0,
+        estimatedCostBRL: 0,
         executionTimeMs: execTime,
         status: 'SUCCESS',
         modelUsed: GEMINI_LEGAL_MODEL,
@@ -6156,17 +5759,17 @@ Responda em JSON:
   app.get('/api/ai/stats', (req: Request, res: Response) => {
     const tenantId = (req as any).tenantId;
     const logs = db.aiLogs.filter((l) => l.tenantId === tenantId);
-    const totalRequests = logs.length + 28; // include baseline seed metrics
-    const totalTokens = logs.reduce((acc, l) => acc + l.promptTokens + l.completionTokens, 0) + 48200;
-    const totalCostBRL = logs.reduce((acc, l) => acc + l.estimatedCostBRL, 0) + 1.62;
+    const totalRequests = logs.length;
+    const totalTokens = 0; // O provedor atual não devolve telemetria de tokens auditável.
+    const totalCostBRL = 0; // Custo não é inferido a partir de estimativas locais.
 
     res.json({
       totalRequests,
       totalTokens,
       totalCostBRL: Math.round(totalCostBRL * 100) / 100,
       activeModel: GEMINI_LEGAL_MODEL || 'Não configurado',
-      groundingRate: 99.4,
-      errorsPrevented: 42 + logs.filter((l) => l.feature === 'DOCUMENT_AUDIT_ERROR_REDUCTION').length * 2,
+      groundingRate: null,
+      errorsPrevented: null,
       recentLogs: logs.slice(0, 10),
     });
   });

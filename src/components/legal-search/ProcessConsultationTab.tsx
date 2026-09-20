@@ -127,7 +127,7 @@ export const ProcessConsultationTab: React.FC<ProcessConsultationTabProps> = ({
     try {
       const res = await api.syncProcessUpdates(matchedExistingCase.id, matchedExistingCase.caseNumber);
       if (res.success) {
-        onShowToast(`Sincronização concluída: ${res.newMovementsAdded} novas movimentações adicionadas.`);
+        onShowToast(`Consulta oficial concluída para este processo: ${res.newMovementsAdded} movimentações novas confirmadas na fonte.`);
       }
     } catch (err: any) {
       onShowToast(`Erro ao sincronizar: ${err.message}`);

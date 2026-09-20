@@ -1,6 +1,7 @@
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResponse, LegalSearchResultItem } from './types.ts';
 import { LegalKnowledgeStorage } from './storage.ts';
 import { LegalCompetenceClassifier } from './classifier.ts';
+import { PrecedentVerifier } from './verifier.ts';
 
 /**
  * MOTOR DE PESQUISA JURISPRUDENCIAL COM ADMISSÃO POR PERTINÊNCIA E ZERO-HALLUCINATION
@@ -210,27 +211,9 @@ export class LegalSearchEngine {
         continue;
       }
 
-      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
-        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
-      const payload = d.rawPayloadPreserved as any;
-      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
-        && Array.isArray(payload?.processosRow)
-        && Array.isArray(payload?.temasRow)
-        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
-      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
-        && Boolean(payload?.officialApiRecordId)
-        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
       const hasAuditableEvidence =
         d.verificationStatus === 'VERIFIED_OFFICIAL'
-        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
-        && Boolean(d.lastVerifiedAt)
-        && Boolean(d.rawPayloadPreserved)
-        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
-        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
-        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
+        && PrecedentVerifier.verifyDecision(d).isPassed;
 
       if (queryInput.onlyVerified && !hasAuditableEvidence) continue;
       sourcesActuallyConsulted.add(d.sourceId);
@@ -294,26 +277,8 @@ export class LegalSearchEngine {
 
     const results: LegalSearchResultItem[] = paginated.map((item) => {
       const d = item.decision;
-      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
-        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
-      const payload = d.rawPayloadPreserved as any;
-      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
-        && Array.isArray(payload?.processosRow)
-        && Array.isArray(payload?.temasRow)
-        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
-      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
-        && Boolean(payload?.officialApiRecordId)
-        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
       const hasAuditableEvidence = d.verificationStatus === 'VERIFIED_OFFICIAL'
-        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
-        && Boolean(d.lastVerifiedAt)
-        && Boolean(d.rawPayloadPreserved)
-        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
-        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
-        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
+        && PrecedentVerifier.verifyDecision(d).isPassed;
       const evidenceState = hasAuditableEvidence
         ? 'VERIFIED_OFFICIAL'
         : d.officialUrl

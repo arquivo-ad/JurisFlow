@@ -1,6 +1,6 @@
-import crypto from 'crypto';
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
+import { isAllowedOfficialUrl, isExactTstDocumentUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -30,17 +30,10 @@ export class PrecedentVerifier {
 
     // 1. Oficialidade do Domínio ou Repositório
     const officialUrl = decision.officialUrl || '';
-    const isOfficialDomain =
-      officialUrl.includes('.jus.br') ||
-      officialUrl.includes('.gov.br') ||
-      officialUrl.includes('stj.jus.br') ||
-      officialUrl.includes('stf.jus.br') ||
-      officialUrl.includes('tst.jus.br') ||
-      officialUrl.includes('cnj.jus.br') ||
-      officialUrl.includes('pdpj.jus.br');
+    const isOfficialDomain = isAllowedOfficialUrl(officialUrl, decision.courtCode);
 
     if (!isOfficialDomain) {
-      issues.push('DOMINIO_NAO_OFICIAL: URL da decisão não pertence à infraestrutura pública oficial (.jus.br / .gov.br).');
+      issues.push('DOMINIO_NAO_OFICIAL: hostname não consta da lista exata permitida para o tribunal informado.');
     }
 
     // 2. Identificador Unívoco Verificável
@@ -71,8 +64,14 @@ export class PrecedentVerifier {
     }
 
     // 4. Tribunal e Órgão Julgador
-    if (!decision.courtCode || !decision.court) {
-      issues.push('TRIBUNAL_AUSENTE: Tribunal de origem ou instância julgadora não especificados.');
+    if (!decision.courtCode || !decision.court || !decision.courtOrgan || !decision.rapporteur) {
+      issues.push('METADADOS_JULGAMENTO_INCOMPLETOS: tribunal, órgão julgador e relator devem vir da fonte oficial.');
+    }
+    if (decision.courtCode === 'TST' && decision.judicialBranch !== 'TRABALHO') {
+      issues.push('COMPETENCIA_INCOMPATIVEL: decisão do TST deve pertencer ao ramo TRABALHO.');
+    }
+    if (decision.sourceId === 'tst-jurisprudencia' && (!isExactTstDocumentUrl(officialUrl) || decision.courtCode !== 'TST')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TST não aponta para documento individual oficial do TST.');
     }
 
     // 5. Data de Julgamento ou Publicação Oficial (Não pode ser futura)
@@ -99,11 +98,32 @@ export class PrecedentVerifier {
       issues.push('PRECEDENTE_SUPERADO: Precedente objeto de overruling superado por nova tese vinculante.');
     }
 
-    // 8. Hash Criptográfico do Conteúdo
-    const computedHash = crypto
-      .createHash('sha256')
-      .update(`${rawCaseNum}|${decision.rapporteur || ''}|${judgmentDate || ''}|${textBody}`, 'utf8')
-      .digest('hex');
+    // 8-10. Documento individual, hash recebido, horário e consulta originária.
+    const evidence = (decision.rawPayloadPreserved as any)?.verificationEvidence;
+    const individualDocument = evidence?.individualDocument;
+    const originatingQuery = evidence?.originatingQuery;
+    if (!individualDocument?.confirmed || individualDocument?.httpStatus !== 200) {
+      issues.push('DOCUMENTO_INDIVIDUAL_NAO_CONFIRMADO: a consulta ao documento individual não retornou confirmação HTTP 200.');
+    }
+    if (individualDocument?.url !== officialUrl || !isAllowedOfficialUrl(individualDocument?.url || '', decision.courtCode)) {
+      issues.push('DOCUMENTO_INDIVIDUAL_DIVERGENTE: a evidência não corresponde ao link oficial individualizado.');
+    }
+    if (!/^[a-f0-9]{64}$/i.test(individualDocument?.contentSha256 || '') || individualDocument?.contentSha256 !== decision.contentSha256) {
+      issues.push('HASH_DOCUMENTO_AUSENTE: o SHA-256 deve ser calculado sobre o conteúdo recebido do documento oficial.');
+    }
+    if (!individualDocument?.fetchedAt || !decision.lastVerifiedAt) {
+      issues.push('DATA_VERIFICACAO_AUSENTE: a confirmação oficial deve registrar data e hora.');
+    }
+    if (
+      !originatingQuery?.id
+      || !/^[a-f0-9]{64}$/i.test(originatingQuery?.querySha256 || '')
+      || !/^[a-f0-9]{64}$/i.test(originatingQuery?.responseRecordSha256 || '')
+      || !originatingQuery?.endpoint
+    ) {
+      issues.push('CONSULTA_ORIGINARIA_AUSENTE: o precedente deve registrar a consulta oficial que o recuperou.');
+    }
+
+    const computedHash = individualDocument?.contentSha256 || '';
 
     // Determinação do Status Canônico
     let status: PrecedentVerificationStatus = 'VERIFIED_OFFICIAL';
