@@ -2,6 +2,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TST: new Set(['jurisprudencia-backend.tst.jus.br', 'jurisprudencia.tst.jus.br']),
   STJ: new Set(['processo.stj.jus.br', 'scon.stj.jus.br', 'dadosabertos.web.stj.jus.br']),
   STF: new Set(['portal.stf.jus.br', 'jurisprudencia.stf.jus.br']),
+  TRT2: new Set(['pje.trt2.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -84,6 +85,19 @@ export function isExactDataJudSearchUrl(value: string, expectedAlias?: string): 
       && url.hostname === 'api-publica.datajud.cnj.jus.br'
       && Boolean(match)
       && (!expectedAlias || match?.[1] === expectedAlias.toLowerCase())
+      && !url.search;
+  } catch {
+    return false;
+  }
+}
+
+
+export function isExactTrt2OptionsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'pje.trt2.jus.br'
+      && url.pathname === '/juris-backend/api/opcoes'
       && !url.search;
   } catch {
     return false;

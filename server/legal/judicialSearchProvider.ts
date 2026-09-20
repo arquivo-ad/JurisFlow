@@ -7,6 +7,7 @@ import {
 } from '../../src/types/index.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
 import { TstJurisprudenciaAdapter } from './adapters/TstJurisprudenciaAdapter.ts';
+import { Trt2JurisprudenciaAdapter } from './adapters/Trt2JurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -186,12 +187,14 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
 export class JudicialSearchService {
   private datajudProvider: DataJudSearchProvider;
   private tstAdapter: TstJurisprudenciaAdapter;
+  private trt2Adapter: Trt2JurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
   constructor() {
     this.datajudProvider = new DataJudSearchProvider();
     this.tstAdapter = new TstJurisprudenciaAdapter();
+    this.trt2Adapter = new Trt2JurisprudenciaAdapter();
   }
 
   /**
@@ -205,7 +208,9 @@ export class JudicialSearchService {
     const start = Date.now();
     const classification = LegalCompetenceClassifier.classify(params.query || '');
     const requestsTst = classification.isLaborDispute || params.courtCodes?.includes('TST');
+    const requestsTrt2 = params.courtCodes?.includes('TRT2') === true;
     let activeTstDecisions = undefined as Awaited<ReturnType<TstJurisprudenciaAdapter['searchOfficialJurisprudence']>>['decisions'] | undefined;
+    let trt2Diagnostic = undefined as Awaited<ReturnType<Trt2JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -214,6 +219,12 @@ export class JudicialSearchService {
         legalStorage.upsertDecision(decision);
       }
     }
+
+    if (requestsTrt2) {
+      const trt2Result = await this.trt2Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '');
+      trt2Diagnostic = trt2Result.diagnostic;
+    }
+
     const searchEngine = activeTstDecisions
       ? new LegalSearchEngine({ getDecisions: () => activeTstDecisions } as unknown as typeof legalStorage)
       : new LegalSearchEngine(legalStorage);
@@ -265,9 +276,12 @@ export class JudicialSearchService {
       page: params.page || 1,
       pageSize: params.pageSize || 12,
       results: filteredResults,
-      sourcesConsulted: response.sourcesConsulted,
+      sourcesConsulted: requestsTrt2
+        ? Array.from(new Set([...response.sourcesConsulted, 'trt2-jurisprudencia']))
+        : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
+      diagnostic: trt2Diagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -383,6 +397,13 @@ export class JudicialSearchService {
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://portal.stf.jus.br/jurisprudenciaRepercussao/',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Temas de repercussão geral implementados com fail-closed; Súmulas Vinculantes ainda não implementadas.',
+      },
+      {
+        courtCode: 'TRT2', courtName: 'TRT da 2ª Região - Jurisprudência PJe', jurisdiction: 'SP',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://pje.trt2.jus.br/jurisprudencia/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Portal e backend oficiais identificados; pesquisa jurisprudencial exige CAPTCHA interativo e não é contornada pelo JurisFlow.',
       },
       ...['TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
         courtCode, courtName: `${courtCode} - conector oficial`, jurisdiction: 'Brasil',

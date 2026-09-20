@@ -7,7 +7,9 @@ import { StfJurisprudenciaAdapter } from '../adapters/StfJurisprudenciaAdapter.t
 import { PrecedentVerifier } from '../verifier.ts';
 import { isExactStjDocumentUrl } from '../officialSources.ts';
 import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
-import { DataJudSearchProvider } from '../judicialSearchProvider.ts';
+import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter.ts';
+import { isExactTrt2OptionsUrl } from '../officialSources.ts';
+import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 
 const record = {
   id: 'tst-regression-1',
@@ -217,4 +219,71 @@ test('produção não contém assinatura nem processo DJEN fabricados', () => {
   assert.doesNotMatch(server, /Autoridade Certificadora JurisFlow ICP-Brasil/);
   assert.doesNotMatch(server, /payload\.numeroProcesso \|\| '\d{7}-\d{2}/);
   assert.match(server, /DIGITAL_SIGNATURE_NOT_IMPLEMENTED/);
+});
+
+
+test('TRT2 reconhece somente o endpoint oficial exato de opções', () => {
+  assert.equal(
+    isExactTrt2OptionsUrl('https://pje.trt2.jus.br/juris-backend/api/opcoes'),
+    true
+  );
+  assert.equal(
+    isExactTrt2OptionsUrl('https://pje.trt2.jus.br.evil.example/juris-backend/api/opcoes'),
+    false
+  );
+});
+
+test('TRT2 falha fechado quando o portal exige CAPTCHA interativo', async () => {
+  const fetchMock = (async () => new Response(JSON.stringify({
+    regional: 'TRT da 2ª Região',
+    captchaOption: '2',
+    version: '1.5.0-i1',
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })) as typeof fetch;
+
+  const result = await new Trt2JurisprudenciaAdapter(fetchMock)
+    .searchOfficialJurisprudence('adicional de periculosidade');
+
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.requiresInteractiveChallenge, true);
+  assert.equal(result.diagnostic.lifecycleState, 'SOURCE_UNAVAILABLE');
+  assert.ok(result.diagnostic.rejectionReasons.includes('INTERACTIVE_CAPTCHA_REQUIRED'));
+});
+
+
+test('busca explícita no TRT2 expõe diagnóstico de CAPTCHA sem fabricar acórdão', async () => {
+  const service = new JudicialSearchService();
+  (service as any).trt2Adapter = {
+    searchOfficialJurisprudence: async () => ({
+      decisions: [],
+      requiresInteractiveChallenge: true,
+      diagnostic: {
+        adapter: 'trt2-jurisprudencia',
+        courtCode: 'TRT2',
+        officialUrl: 'https://pje.trt2.jus.br/juris-backend/api/opcoes',
+        timestamp: new Date().toISOString(),
+        httpStatus: 200,
+        latencyMs: 1,
+        lifecycleState: 'SOURCE_UNAVAILABLE',
+        stateDescription: 'CAPTCHA interativo obrigatório.',
+        documentsReceived: 0,
+        documentsNormalized: 0,
+        documentsRejected: 0,
+        rejectionReasons: ['INTERACTIVE_CAPTCHA_REQUIRED'],
+        connectorStatus: 'DEGRADED',
+      },
+    }),
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'adicional de periculosidade',
+    courtCodes: ['TRT2'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TRT2'), false);
+  assert.equal(result.diagnostic?.lifecycleState, 'SOURCE_UNAVAILABLE');
+  assert.ok(result.sourcesConsulted.includes('trt2-jurisprudencia'));
 });

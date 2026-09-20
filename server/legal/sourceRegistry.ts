@@ -177,7 +177,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
   // 4. JUSTIÇA DO TRABALHO (TRT1 A TRT24)
   ...([
     { region: 1, name: 'TRT1 (Rio de Janeiro)', url: 'https://www.trt1.jus.br/' },
-    { region: 2, name: 'TRT2 (São Paulo Capital/Litoral)', url: 'https://ww2.trtsp.jus.br/' },
+    { region: 2, name: 'TRT2 (São Paulo Capital/Litoral)', url: 'https://pje.trt2.jus.br/jurisprudencia/' },
     { region: 3, name: 'TRT3 (Minas Gerais)', url: 'https://portal.trt3.jus.br/' },
     { region: 4, name: 'TRT4 (Rio Grande do Sul)', url: 'https://www.trt4.jus.br/' },
     { region: 15, name: 'TRT15 (Campinas / SP Interior)', url: 'https://trt15.jus.br/' },
@@ -186,11 +186,13 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: item.name,
     courtCode: `TRT${item.region}`,
     jurisdiction: `TRT${item.region}`,
-    sourceType: 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: item.url,
-    documentationUrl: `${item.url}jurisprudencia`,
-    connectorStatus: 'MANUAL_ONLY' as const,
-    coverageStatus: 'Jurisprudência Regional Trabalhista - Conferência Humana Obrigatória',
+    sourceType: item.region === 2 ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
+    officialBaseUrl: item.region === 2 ? 'https://pje.trt2.jus.br/jurisprudencia/' : item.url,
+    documentationUrl: item.region === 2 ? 'https://pje.trt2.jus.br/jurisprudencia/' : `${item.url}jurisprudencia`,
+    connectorStatus: item.region === 2 ? 'DEGRADED' as const : 'MANUAL_ONLY' as const,
+    coverageStatus: item.region === 2
+      ? 'Portal oficial identificado; pesquisa pública exige CAPTCHA interativo e permanece fail-closed na automação'
+      : 'Jurisprudência Regional Trabalhista - Conferência Humana Obrigatória',
     verificationMethod: 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
