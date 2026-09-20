@@ -657,7 +657,7 @@ if (localSavedDb) {
 // Migração segura de apresentação: dados antigos permanecem preservados no arquivo,
 // mas simulações legadas não voltam ao fluxo de produção após a reidratação.
 db.legalKnowledgeSources = (db.legalKnowledgeSources || [])
-  .filter((item) => item.isCustomOfficeTesis)
+  .filter((item) => item.isCustomOfficeTesis && item.id !== 'lk-escritorio-teses')
   .map((item) => ({ ...item, articlesIndexed: 0 }));
 db.legalSyncConnectors = [];
 db.legalWebhookLogs = [];
@@ -5314,14 +5314,14 @@ Responda em JSON:
     const cancelledDecisionsCount = decisions.filter((d) => d.verificationStatus === 'CANCELLED' || d.precedentSituation === 'CANCELADO').length;
     const officialRegistrySources = sources.map((source) => {
       const verifiedForSource = strictlyVerifiedDecisions.filter((decision) => decision.sourceId === source.sourceId).length;
-      const mustRemainZero = source.connectorStatus === 'NOT_IMPLEMENTED' || source.connectorStatus === 'MANUAL_ONLY';
+      const currentJob = syncJobs.find((job) => job.sourceId === source.sourceId);
       return {
         ...source,
-        documentsDiscovered: mustRemainZero ? 0 : source.documentsDiscovered,
-        documentsFetched: mustRemainZero ? 0 : source.documentsFetched,
-        documentsValidated: mustRemainZero ? 0 : verifiedForSource,
-        documentsRejected: mustRemainZero ? 0 : source.documentsRejected,
-        lastSuccessfulSyncAt: mustRemainZero ? undefined : source.lastSuccessfulSyncAt,
+        documentsDiscovered: currentJob?.documentsFound || 0,
+        documentsFetched: currentJob?.documentsFound || 0,
+        documentsValidated: verifiedForSource,
+        documentsRejected: currentJob?.documentsRejected || 0,
+        lastSuccessfulSyncAt: currentJob?.status === 'SUCCESS' ? currentJob.finishedAt : undefined,
       };
     });
 
