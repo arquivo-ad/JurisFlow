@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import { TstJurisprudenciaAdapter } from '../adapters/TstJurisprudenciaAdapter.ts';
+import { StjDadosAbertosAdapter } from '../adapters/StjDadosAbertosAdapter.ts';
 import { PrecedentVerifier } from '../verifier.ts';
+import { isExactStjDocumentUrl } from '../officialSources.ts';
 
 const record = {
   id: 'tst-regression-1',
@@ -55,6 +57,54 @@ test('hostname parecido com jus.br é rejeitado pela lista exata', () => {
   });
   assert.equal(result.isPassed, false);
   assert.ok(result.issues.some((issue) => issue.startsWith('DOMINIO_NAO_OFICIAL')));
+});
+
+test('STJ constrói apenas URL individual oficial com registro e data válidos', () => {
+  const url = StjDadosAbertosAdapter.buildOfficialDocumentUrl('2009-03-10', '200801199924');
+  assert.equal(
+    url,
+    'https://processo.stj.jus.br/SCON/GetInteiroTeorDoAcordao?dt_publicacao=10%2F03%2F2009&num_registro=200801199924'
+  );
+  assert.equal(isExactStjDocumentUrl(url || ''), true);
+  assert.equal(StjDadosAbertosAdapter.buildOfficialDocumentUrl('data inválida', '200801199924'), null);
+  assert.equal(StjDadosAbertosAdapter.buildOfficialDocumentUrl('2009-03-10', '123'), null);
+  assert.equal(
+    isExactStjDocumentUrl('https://processo.stj.jus.br.evil.example/SCON/GetInteiroTeorDoAcordao?dt_publicacao=10%2F03%2F2009&num_registro=200801199924'),
+    false
+  );
+});
+
+test('STJ confirma PDF individual e calcula SHA-256 sobre os bytes recebidos', async () => {
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(2048, 65)]);
+  const fetchPdf = (async () => new Response(pdf, {
+    status: 200,
+    headers: { 'Content-Type': 'application/pdf' },
+  })) as typeof fetch;
+  const adapter = new StjDadosAbertosAdapter(
+    undefined,
+    fetchPdf,
+    30_000,
+    async () => `RECURSO ESPECIAL Nº 1.061.530 - RS (2008/0119992-4)\nRELATORA: MINISTRA NANCY ANDRIGHI\nEMENTA\nTexto oficial.\nACÓRDÃO\nVistos, relatados e discutidos estes autos, acordam os Ministros da SEGUNDA SEÇÃO do Superior Tribunal de Justiça.\nDocumento: 826356 - Inteiro Teor do Acórdão.`
+  );
+  const url = StjDadosAbertosAdapter.buildOfficialDocumentUrl('2009-03-10', '200801199924')!;
+  const result = await adapter.fetchOfficialDocument(url);
+  assert.equal(result.success, true);
+  assert.equal(result.httpStatus, 200);
+  assert.equal(result.bytes, pdf.length);
+  assert.equal(result.contentSha256, StjDadosAbertosAdapter.computeBufferSha256(pdf));
+});
+
+test('STJ rejeita HTML ou bloqueio no lugar do inteiro teor', async () => {
+  const fetchHtml = (async () => new Response('<html>challenge</html>', {
+    status: 403,
+    headers: { 'Content-Type': 'text/html' },
+  })) as typeof fetch;
+  const adapter = new StjDadosAbertosAdapter(undefined, fetchHtml, 30_000, async () => '');
+  const url = StjDadosAbertosAdapter.buildOfficialDocumentUrl('2009-03-10', '200801199924')!;
+  const result = await adapter.fetchOfficialDocument(url);
+  assert.equal(result.success, false);
+  assert.equal(result.httpStatus, 403);
+  assert.match(result.error || '', /Inteiro teor STJ inválido/);
 });
 
 test('produção não contém assinatura nem processo DJEN fabricados', () => {

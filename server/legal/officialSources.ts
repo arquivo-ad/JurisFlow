@@ -30,3 +30,16 @@ export function isExactTstDocumentUrl(value: string): boolean {
     return false;
   }
 }
+
+export function isExactStjDocumentUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'processo.stj.jus.br'
+      && url.pathname === '/SCON/GetInteiroTeorDoAcordao'
+      && /^\d{2}\/\d{2}\/\d{4}$/.test(url.searchParams.get('dt_publicacao') || '')
+      && /^\d{10,14}$/.test(url.searchParams.get('num_registro') || '');
+  } catch {
+    return false;
+  }
+}
