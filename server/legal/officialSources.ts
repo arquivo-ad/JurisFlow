@@ -13,6 +13,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJPE: new Set(['consultajurisprudencia.app.tjpe.jus.br']),
   TJAL: new Set(['www2.tjal.jus.br']),
   TJMS: new Set(['esaj.tjms.jus.br']),
+  TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
   TJAC: new Set(['esaj.tjac.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
@@ -455,6 +456,31 @@ export function isExactEsajDocumentUrl(value: string, courtCode: string): boolea
     return /^\d+$/.test(cdAcordao)
       && /^\d+$/.test(cdForo)
       && [...url.searchParams.keys()].every((key) => allowed.has(key));
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjpiSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjpi.jus.br') return false;
+    if (url.pathname !== '/jurisprudences/search') return false;
+    const allowed = new Set(['q', 'tipo']);
+    if (![...url.searchParams.keys()].every((key) => allowed.has(key))) return false;
+    return Boolean(url.searchParams.get('q')) && url.searchParams.get('tipo') === 'Acórdão';
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjpiDetailUrl(value: string, expectedId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjpi.jus.br') return false;
+    const match = url.pathname.match(/^\/jurisprudences\/(\d+)\/public$/);
+    if (!match || url.search || url.hash) return false;
+    return !expectedId || match[1] === expectedId;
   } catch {
     return false;
   }

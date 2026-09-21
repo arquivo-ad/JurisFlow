@@ -21,9 +21,10 @@ import { TjbaJurisprudenciaAdapter } from '../adapters/TjbaJurisprudenciaAdapter
 import { TjceJurisprudenciaAdapter } from '../adapters/TjceJurisprudenciaAdapter.ts';
 import { TjpeJurisprudenciaAdapter } from '../adapters/TjpeJurisprudenciaAdapter.ts';
 import { EsajJurisprudenciaAdapter } from '../adapters/EsajJurisprudenciaAdapter.ts';
+import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1580,4 +1581,82 @@ test('busca e-SAJ parcial respeita onlyVerified', async () => {
     onlyVerified: true,
   });
   assert.equal(verified.results.some((item) => item.courtCode === 'TJAC'), false);
+});
+
+const tjpiSearchHtml =
+  '<html><body>Exibindo 1 - 1 de um total de 1 jurisprudência(s)'
+  + '<a href="/jurisprudences/36378193/public">Empréstimo consignado 0800669-70.2025.8.18.0065 Acórdão de 2º Grau</a>'
+  + '</body></html>';
+
+const tjpiDetailHtml =
+  '<html><body>'
+  + '<h4>Ementa</h4><div>DIREITO PROCESSUAL CIVIL. DANO MORAL. EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO.</div>'
+  + '<h4>Acórdão</h4><div>' + 'Inteiro teor oficial do acórdão TJPI. '.repeat(80) + '</div>'
+  + '<strong>Processo</strong><p class="text-muted">0800669-70.2025.8.18.0065</p>'
+  + '<strong>Órgão Julgador Colegiado</strong><p class="text-muted">3ª Câmara Especializada Cível</p>'
+  + '<strong>Relator(a)</strong><p class="text-muted">LUCICLEIDE PEREIRA BELO</p>'
+  + '<strong>Classe Judicial</strong><p class="text-muted">AGRAVO INTERNO CÍVEL</p>'
+  + '<strong>Publicação</strong><p class="text-muted">14/09/2026</p>'
+  + '</body></html>';
+
+function tjpiFetchMock(detail = tjpiDetailHtml): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    return url.includes('/search?')
+      ? new Response(tjpiSearchHtml, { status: 200, headers: { 'Content-Type': 'text/html' } })
+      : new Response(detail, { status: 200, headers: { 'Content-Type': 'text/html' } });
+  }) as typeof fetch;
+}
+
+test('TJPI aceita somente busca e detalhe individuais oficiais exatos', () => {
+  assert.equal(
+    isExactTjpiSearchUrl('https://jurisprudencia.tjpi.jus.br/jurisprudences/search?q=dano+moral&tipo=Ac%C3%B3rd%C3%A3o'),
+    true
+  );
+  assert.equal(
+    isExactTjpiDetailUrl('https://jurisprudencia.tjpi.jus.br/jurisprudences/36378193/public', '36378193'),
+    true
+  );
+  assert.equal(
+    isExactTjpiDetailUrl('https://jurisprudencia.tjpi.jus.br.evil.example/jurisprudences/36378193/public'),
+    false
+  );
+});
+
+test('TJPI verifica somente página individual com o mesmo CNJ da busca', async () => {
+  const result = await new TjpiJurisprudenciaAdapter(tjpiFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJPI');
+  assert.equal(decision.normalizedCnjNumber, '0800669-70.2025.8.18.0065');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJPI - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJPI rejeita página individual divergente da busca', async () => {
+  const divergent = tjpiDetailHtml.replace(
+    /0800669-70\.2025\.8\.18\.0065/g,
+    '0800000-00.2025.8.18.0001'
+  );
+  const result = await new TjpiJurisprudenciaAdapter(tjpiFetchMock(divergent))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('divergente')));
+});
+
+test('busca explícita no TJPI admite apenas decisão verificada', async () => {
+  const official = await new TjpiJurisprudenciaAdapter(tjpiFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjpiAdapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJPI'],
+    onlyVerified: true,
+  });
+  assert.equal(result.results.some((item) => item.courtCode === 'TJPI'), true);
+  assert.ok(result.sourcesConsulted.includes('tjpi-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjpi-jurisprudencia');
 });

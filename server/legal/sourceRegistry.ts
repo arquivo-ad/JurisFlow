@@ -306,6 +306,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     { code: 'TJAL', name: 'Tribunal de Justiça do Estado de Alagoas', url: 'https://www2.tjal.jus.br/cjsg/consultaCompleta.do' },
     { code: 'TJAM', name: 'Tribunal de Justiça do Estado do Amazonas', url: 'https://consultasaj.tjam.jus.br/cjsg/consultaCompleta.do' },
     { code: 'TJMS', name: 'Tribunal de Justiça do Estado de Mato Grosso do Sul', url: 'https://esaj.tjms.jus.br/cjsg/consultaCompleta.do' },
+    { code: 'TJPI', name: 'Tribunal de Justiça do Estado do Piauí', url: 'https://jurisprudencia.tjpi.jus.br/' },
     { code: 'TJDFT', name: 'Tribunal de Justiça do Distrito Federal e Territórios', url: 'https://pesquisajurisprudencia.tjdft.jus.br/' },
   ].map((tj) => ({
     sourceId: `${tj.code.toLowerCase()}-jurisprudencia`,
@@ -314,7 +315,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     jurisdiction: tj.code.replace('TJ', ''),
     sourceType: tj.code === 'TJDFT' || tj.code === 'TJBA' || tj.code === 'TJCE'
       ? 'OFFICIAL_API' as const
-      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS'
+      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI'
         ? 'OFFICIAL_SEARCH' as const
         : 'MANUAL_VERIFICATION_ONLY' as const,
     officialBaseUrl: tj.code === 'TJPR'
@@ -341,7 +342,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
               : tj.url,
     connectorStatus: tj.code === 'TJSP'
       ? 'DEGRADED' as const
-      : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS'
+      : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI'
         ? 'READY' as const
         : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM'
             ? 'PARTIAL' as const
@@ -372,11 +373,13 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                           ? 'Portal Projudi oficial identificado. Pesquisa e AJAX de texto formatado exigem Turnstile/Cloudflare; automação permanece INTERACTIVE_REQUIRED e fail-closed.'
                           : tj.code === 'TJMS'
                             ? 'Pesquisa e-SAJ automatizada com acórdão individual PDF via getArquivo.do e SHA-256; VERIFIED_OFFICIAL.'
-                            : tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM'
+                            : tj.code === 'TJPI'
+                              ? 'JusPI público com pesquisa atual, página individual oficial por ID, ementa/acórdão completos e SHA-256.'
+                              : tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM'
                               ? 'Pesquisa e-SAJ automatizada com ementa completa. Inteiro teor individual exige reCAPTCHA; resultados permanecem FOUND_UNVERIFIED.'
                               : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
-    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
+    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
+    termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,
