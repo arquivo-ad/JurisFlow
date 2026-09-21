@@ -198,13 +198,23 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: `Tribunal Regional Federal da ${region}ª Região (TRF${region})`,
     courtCode: `TRF${region}`,
     jurisdiction: `TRF${region}`,
-    sourceType: region === 3 ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: region === 3 ? 'https://web.trf3.jus.br/jurisprudencia/' : `https://www.trf${region}.jus.br/`,
-    documentationUrl: region === 3 ? 'https://web.trf3.jus.br/jurisprudencia/' : `https://www.trf${region}.jus.br/jurisprudencia`,
-    connectorStatus: region === 3 ? 'READY' as const : 'MANUAL_ONLY' as const,
+    sourceType: region === 3 || region === 4 ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
+    officialBaseUrl: region === 3
+      ? 'https://web.trf3.jus.br/jurisprudencia/'
+      : region === 4
+        ? 'https://eproc.trf4.jus.br/eproc2trf4/'
+        : `https://www.trf${region}.jus.br/`,
+    documentationUrl: region === 3
+      ? 'https://web.trf3.jus.br/jurisprudencia/'
+      : region === 4
+        ? 'https://eproc.trf4.jus.br/eproc2trf4/'
+        : `https://www.trf${region}.jus.br/jurisprudencia`,
+    connectorStatus: region === 3 ? 'READY' as const : region === 4 ? 'PARTIAL' as const : 'MANUAL_ONLY' as const,
     coverageStatus: region === 3
       ? 'Pesquisa oficial automatizada de acórdãos com verificação individual e SHA-256'
-      : 'Jurisprudência Regional Federal - Conferência Humana Obrigatória',
+      : region === 4
+        ? 'Família eproc identificada; acesso principal usa SSO e o portal expõe consultas públicas específicas. Automação de consulta ainda não habilitada.'
+        : 'Jurisprudência Regional Federal - Conferência Humana Obrigatória',
     verificationMethod: region === 3 ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: region === 3 ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
@@ -261,13 +271,15 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: `${tj.name} (${tj.code})`,
     courtCode: tj.code,
     jurisdiction: tj.code.replace('TJ', ''),
-    sourceType: tj.code === 'TJSP' ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: tj.url,
-    documentationUrl: tj.url,
-    connectorStatus: tj.code === 'TJSP' ? 'DEGRADED' as const : 'MANUAL_ONLY' as const,
+    sourceType: tj.code === 'TJSP' || tj.code === 'TJPR' ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
+    officialBaseUrl: tj.code === 'TJPR' ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp' : tj.url,
+    documentationUrl: tj.code === 'TJPR' ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp' : tj.url,
+    connectorStatus: tj.code === 'TJSP' ? 'DEGRADED' as const : tj.code === 'TJPR' ? 'PARTIAL' as const : 'MANUAL_ONLY' as const,
     coverageStatus: tj.code === 'TJSP'
       ? 'Portal e-SAJ oficial identificado; pesquisa jurisprudencial exige reCAPTCHA/CAPTCHA interativo e permanece fail-closed'
-      : 'Justiça Estadual Comum - Consulta pública via e-SAJ/Projudi (Conferência Humana Obrigatória)',
+      : tj.code === 'TJPR'
+        ? 'Família Projudi identificada; portal público oferece consulta processual, validação por chave e precedentes. Operações específicas ainda não automatizadas.'
+        : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
     verificationMethod: 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,

@@ -45,9 +45,9 @@ test('termo impossível não recebe precedente por autoridade ou fallback', () =
   assert.deepEqual(result.sourcesConsulted, []);
 });
 
-test('certificado digital não é simulado', () => {
+test('certificado digital não é enviado nem simulado pelo backend', () => {
   const service = new JudicialSearchService();
-  assert.throws(() => service.inspectDigitalCertificate(), /CERTIFICATE_BRIDGE_NOT_IMPLEMENTED/);
+  assert.throws(() => service.inspectDigitalCertificate(), /SERVER_CERTIFICATE_UPLOAD_DISABLED/);
 });
 
 test('BNP sem API pública integrada não declara sincronização concluída', async () => {

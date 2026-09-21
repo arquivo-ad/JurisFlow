@@ -5733,13 +5733,31 @@ Responda em JSON:
     res.json(history);
   });
 
-  // Certificado exige ponte local Web PKI/PKCS#11; nunca simular inspeção no servidor.
-  app.post('/api/judicial/certificate/inspect', (req: Request, res: Response) => {
+  // Upload server-side de certificados é proibido; A1 usa a ponte local em 127.0.0.1.
+  app.post('/api/judicial/certificate/inspect', (_req: Request, res: Response) => {
     res.status(501).json({
       success: false,
-      code: 'CERTIFICATE_BRIDGE_NOT_IMPLEMENTED',
-      error: 'Ponte local Web PKI/PKCS#11 não instalada. Arquivo e senha não foram recebidos nem armazenados.',
+      code: 'SERVER_CERTIFICATE_UPLOAD_DISABLED',
+      error: 'O JurisFlow não recebe arquivo, chave privada, PIN ou senha de certificado no backend. Use a ponte local em 127.0.0.1:43119.',
     });
+  });
+
+
+  // Diagnóstico das famílias tecnológicas dos tribunais (PJe/e-SAJ/eproc/Projudi)
+  app.get('/api/judicial/court-family-capabilities', async (req: Request, res: Response) => {
+    try {
+      const courtCode = typeof req.query.courtCode === 'string' ? req.query.courtCode : undefined;
+      const results = await judicialSearchService.probeCourtFamilies(courtCode);
+      res.json({
+        timestamp: new Date().toISOString(),
+        results,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        error: 'Falha ao verificar capacidades das famílias de tribunais',
+        details: err?.message || String(err),
+      });
+    }
   });
 
   // Matriz de Conectividade e Disponibilidade dos Tribunais

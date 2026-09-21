@@ -14,6 +14,7 @@ import { Trt2JurisprudenciaAdapter } from './adapters/Trt2JurisprudenciaAdapter.
 import { TjspJurisprudenciaAdapter } from './adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from './adapters/Trf3JurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from './adapters/DjenPublicationsAdapter.ts';
+import { CourtFamilyProbeAdapter } from './adapters/CourtFamilyProbeAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -198,6 +199,7 @@ export class JudicialSearchService {
   private tjspAdapter: TjspJurisprudenciaAdapter;
   private trf3Adapter: Trf3JurisprudenciaAdapter;
   private djenAdapter: DjenPublicationsAdapter;
+  private courtFamilyProbeAdapter: CourtFamilyProbeAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -209,6 +211,7 @@ export class JudicialSearchService {
     this.tjspAdapter = new TjspJurisprudenciaAdapter();
     this.trf3Adapter = new Trf3JurisprudenciaAdapter();
     this.djenAdapter = new DjenPublicationsAdapter();
+    this.courtFamilyProbeAdapter = new CourtFamilyProbeAdapter();
   }
 
   /**
@@ -351,6 +354,12 @@ export class JudicialSearchService {
     return this.djenAdapter.searchPublications(params);
   }
 
+  public async probeCourtFamilies(courtCode?: string) {
+    return courtCode
+      ? [await this.courtFamilyProbeAdapter.probe(courtCode)]
+      : this.courtFamilyProbeAdapter.probeAll();
+  }
+
   /**
    * Pesquisa processual com conferência contra casos existentes no JurisFlow
    */
@@ -422,7 +431,7 @@ export class JudicialSearchService {
   }
 
   public inspectDigitalCertificate(): never {
-    throw new Error('CERTIFICATE_BRIDGE_NOT_IMPLEMENTED: nenhuma ponte local Web PKI/PKCS#11 foi instalada.');
+    throw new Error('SERVER_CERTIFICATE_UPLOAD_DISABLED: certificados devem ser inspecionados exclusivamente pela ponte local em 127.0.0.1:43119.');
   }
 
   /**
@@ -481,6 +490,20 @@ export class JudicialSearchService {
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://web.trf3.jus.br/jurisprudencia/',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
         notes: 'Pesquisa oficial automatizada com confirmação do acórdão individual e SHA-256 do documento recebido.',
+      },
+      {
+        courtCode: 'TRF4', courtName: 'TRF4 - eproc', jurisdiction: '4ª Região',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'RESTRITO',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://eproc.trf4.jus.br/eproc2trf4/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Família eproc identificada. Acesso principal redireciona para SSO; consultas públicas específicas existem, mas ainda não são automatizadas pelo JurisFlow.',
+      },
+      {
+        courtCode: 'TJPR', courtName: 'TJPR - Projudi', jurisdiction: 'PR',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Família Projudi identificada com portal público, consulta por chave e precedentes. Operações específicas ainda não automatizadas.',
       },
       ...['TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
         courtCode, courtName: `${courtCode} - conector oficial`, jurisdiction: 'Brasil',

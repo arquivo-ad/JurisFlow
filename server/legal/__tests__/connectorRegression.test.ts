@@ -12,9 +12,11 @@ import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter
 import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
+import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
 import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
+import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
 
 const record = {
   id: 'tst-regression-1',
@@ -690,4 +692,50 @@ test('frontend do certificado conversa diretamente com localhost e não envia PF
   assert.match(client, /\/v1\/certificates\/a1\/inspect/);
   assert.doesNotMatch(modal, /api\.inspectDigitalCertificate/);
   assert.match(modal, /inspectA1CertificateLocally/);
+});
+
+
+test('registro de famílias aceita somente hosts oficiais configurados', () => {
+  const trf4 = getCourtFamilyConfig('TRF4');
+  const tjpr = getCourtFamilyConfig('TJPR');
+  assert.equal(trf4?.family, 'EPROC');
+  assert.equal(tjpr?.family, 'PROJUDI');
+  assert.equal(isAllowedCourtFamilyUrl(trf4!, 'https://eproc.trf4.jus.br/eproc2trf4/'), true);
+  assert.equal(isAllowedCourtFamilyUrl(trf4!, 'https://eproc-sso.trf4.jus.br/realms/eproc/'), true);
+  assert.equal(isAllowedCourtFamilyUrl(trf4!, 'https://eproc.trf4.jus.br.evil.example/eproc2trf4/'), false);
+  assert.equal(isAllowedCourtFamilyUrl(tjpr!, 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'), true);
+});
+
+test('probe e-SAJ identifica desafio interativo sem tentar contorno', async () => {
+  const mock = (async () => new Response(
+    '<html><title>Consulta de Jurisprudência</title><script>grecaptcha.execute("key",{action:"consulta"})</script></html>',
+    { status: 200, headers: { 'Content-Type': 'text/html' } }
+  )) as typeof fetch;
+  const result = await new CourtFamilyProbeAdapter(mock).probe('TJSP');
+  assert.equal(result.family, 'ESAJ');
+  assert.equal(result.capabilityState, 'INTERACTIVE_REQUIRED');
+  assert.equal(result.interactiveChallengeDetected, true);
+});
+
+test('probe eproc preserva autenticação e consulta pública como capacidades distintas', async () => {
+  const mock = (async () => new Response(
+    '<html><title>Sign in to eproc</title><a>Consulta Pública</a><a>Consulta Processo por Chave</a><form>login senha</form></html>',
+    { status: 200, headers: { 'Content-Type': 'text/html' } }
+  )) as typeof fetch;
+  const result = await new CourtFamilyProbeAdapter(mock).probe('TRF4');
+  assert.equal(result.family, 'EPROC');
+  assert.equal(result.capabilityState, 'AUTH_REQUIRED');
+  assert.equal(result.authenticationDetected, true);
+  assert.equal(result.publicConsultationDetected, true);
+});
+
+test('probe Projudi reconhece portal de consulta pública sem declarar automação pronta', async () => {
+  const mock = (async () => new Response(
+    '<html><title>Projudi</title><a id="consultaPublica">Consulta Pública</a><a>Consulta Precedentes</a></html>',
+    { status: 200, headers: { 'Content-Type': 'text/html' } }
+  )) as typeof fetch;
+  const result = await new CourtFamilyProbeAdapter(mock).probe('TJPR');
+  assert.equal(result.family, 'PROJUDI');
+  assert.equal(result.capabilityState, 'PUBLIC_PORTAL');
+  assert.equal(result.publicConsultationDetected, true);
 });
