@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -92,6 +92,9 @@ export class PrecedentVerifier {
     }
     if (decision.sourceId === 'tjsc-jurisprudencia' && (!isExactTjscDocumentUrl(officialUrl) || decision.courtCode !== 'TJSC')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJSC não aponta para inteiro teor individual oficial do eproc/TJSC.');
+    }
+    if (decision.sourceId === 'tjba-jurisprudencia' && (!isExactTjbaDocumentUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJBA')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJBA não aponta para inteiro teor individual oficial por hash.');
     }
     if (decision.sourceId === 'falcao-jurisprudencia' && (!isExactFalcaoDocumentUrl(officialUrl, decision.courtCode) || !/^TRT(?:[1-9]|1\d|2[0-4])$/.test(decision.courtCode))) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro Falcão não aponta para acórdão individual oficial do TRT informado.');

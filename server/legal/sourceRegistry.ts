@@ -301,7 +301,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: `${tj.name} (${tj.code})`,
     courtCode: tj.code,
     jurisdiction: tj.code.replace('TJ', ''),
-    sourceType: tj.code === 'TJDFT'
+    sourceType: tj.code === 'TJDFT' || tj.code === 'TJBA'
       ? 'OFFICIAL_API' as const
       : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG'
         ? 'OFFICIAL_SEARCH' as const
@@ -310,19 +310,21 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
       ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
       : tj.code === 'TJDFT'
         ? 'https://jurisdf.tjdft.jus.br/api/v1/pesquisa'
-        : tj.url,
+        : tj.code === 'TJBA'
+          ? 'https://jurisprudenciaws.tjba.jus.br/graphql'
+          : tj.url,
     documentationUrl: tj.code === 'TJPR'
       ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
       : tj.code === 'TJDFT'
         ? 'https://www.tjdft.jus.br/transparencia/tecnologia-da-informacao-e-comunicacao/dados-abertos/webservice-ou-api'
-        : tj.url,
+        : tj.code === 'TJBA'
+          ? 'https://jurisprudencia.tjba.jus.br/'
+          : tj.url,
     connectorStatus: tj.code === 'TJSP'
       ? 'DEGRADED' as const
-      : tj.code === 'TJDFT'
+      : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA'
         ? 'READY' as const
-        : tj.code === 'TJSC'
-          ? 'READY' as const
-          : tj.code === 'TJPR' || tj.code === 'TJRS'
+        : tj.code === 'TJPR' || tj.code === 'TJRS'
             ? 'PARTIAL' as const
           : tj.code === 'TJRJ' || tj.code === 'TJMG'
             ? 'DEGRADED' as const
@@ -339,11 +341,13 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
               ? 'Desde 04/02/2026 a jurisprudência está dividida entre eJURIS legado e eproc. O eJURIS exige reCAPTCHA v3 no fluxo de pesquisa; o eproc 2G redireciona para SSO. JurisFlow não contorna CAPTCHA nem autenticação.'
               : tj.code === 'TJSC'
                 ? 'Pesquisa pública eproc automatizada com inteiro teor individual oficial, URL canônica e SHA-256.'
-                : tj.code === 'TJMG'
+                : tj.code === 'TJBA'
+                  ? 'GraphQL oficial público com busca estruturada e inteiro teor individual por hash UUID, confirmado com SHA-256.'
+                  : tj.code === 'TJMG'
                   ? 'Sistema legado de jurisprudência possui pesquisa e espelhos individuais, mas a descoberta exige CAPTCHA. O novo eproc reconhece a ação de jurisprudência, porém atualmente retorna falha de processamento sem formulário público.'
                   : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
-    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJDFT' || tj.code === 'TJSC' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: tj.code === 'TJRS' || tj.code === 'TJDFT' || tj.code === 'TJSC' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
+    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
+    termsStatus: tj.code === 'TJRS' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,

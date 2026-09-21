@@ -17,9 +17,10 @@ import { FalcaoJurisprudenciaAdapter } from '../adapters/FalcaoJurisprudenciaAda
 import { TjrsJurisprudenciaAdapter, isExactTjrsAjaxUrl } from '../adapters/TjrsJurisprudenciaAdapter.ts';
 import { TjdftJurisprudenciaAdapter } from '../adapters/TjdftJurisprudenciaAdapter.ts';
 import { TjscJurisprudenciaAdapter } from '../adapters/TjscJurisprudenciaAdapter.ts';
+import { TjbaJurisprudenciaAdapter } from '../adapters/TjbaJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1186,4 +1187,87 @@ test('busca explícita no TJSC admite acórdão verificado no ranking', async ()
   assert.equal(result.results.some((item) => item.courtCode === 'TJSC'), true);
   assert.ok(result.sourcesConsulted.includes('tjsc-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjsc-jurisprudencia');
+});
+
+const tjbaRecord = {
+  dataPublicacao: '2026-09-02T03:00:00Z',
+  relator: { id: '17', nome: 'RELATOR OFICIAL TJBA' },
+  orgaoJulgador: { id: '6', nome: 'PRIMEIRA CAMARA CÍVEL' },
+  classe: { id: '198', descricao: 'Apelação' },
+  conteudo: '<p>Conteúdo oficial do acórdão TJBA.</p>',
+  tipoDecisao: 'ACORDAO',
+  ementa: 'DIREITO CIVIL. DANO MORAL. APELAÇÃO. EMENTA OFICIAL SUFICIENTE PARA TESTE DETERMINÍSTICO.',
+  hash: '77bf1556-ae37-3070-a6a9-f339f81a0480',
+  numeroProcesso: '0575531-27.2017.8.05.0001',
+};
+
+function tjbaFetchMock(mode: 'ok' | 'bad-doc' = 'ok'): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith('/graphql')) {
+      return new Response(JSON.stringify({
+        data: { filter: { decisoes: [tjbaRecord], pageCount: 1, itemCount: 1 } },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.includes('/inteiroTeor/')) {
+      if (mode === 'bad-doc') {
+        return new Response('<html>bloqueio</html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
+      return new Response('<html><body>' + 'Inteiro teor oficial TJBA. '.repeat(100) + '</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJBA aceita somente GraphQL e inteiro teor oficiais exatos', () => {
+  const doc = 'https://jurisprudenciaws.tjba.jus.br/inteiroTeor/77bf1556-ae37-3070-a6a9-f339f81a0480';
+  assert.equal(isExactTjbaGraphqlUrl('https://jurisprudenciaws.tjba.jus.br/graphql'), true);
+  assert.equal(isExactTjbaDocumentUrl(doc, tjbaRecord.hash), true);
+  assert.equal(isExactTjbaDocumentUrl(doc.replace('tjba.jus.br', 'tjba.jus.br.evil.example')), false);
+});
+test('TJBA verifica acórdão somente após inteiro teor individual por hash', async () => {
+  const result = await new TjbaJurisprudenciaAdapter(tjbaFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJBA');
+  assert.equal(decision.normalizedCnjNumber, '0575531-27.2017.8.05.0001');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJBA - VERIFICADO]');
+  assert.equal(decision.alternativeNumber, tjbaRecord.hash);
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJBA rejeita inteiro teor insuficiente mesmo com HTTP 200', async () => {
+  const result = await new TjbaJurisprudenciaAdapter(tjbaFetchMock('bad-doc'))
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('Inteiro teor TJBA inválido')));
+});
+test('busca explícita no TJBA admite acórdão verificado no ranking', async () => {
+  const official = await new TjbaJurisprudenciaAdapter(tjbaFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  const service = new JudicialSearchService();
+  (service as any).tjbaAdapter = {
+    searchOfficialJurisprudence: async () => official,
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJBA'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TJBA'), true);
+  assert.ok(result.sourcesConsulted.includes('tjba-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjba-jurisprudencia');
 });

@@ -8,6 +8,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TRF4: new Set(['jurisprudencia.trf4.jus.br']),
   TJDFT: new Set(['jurisdf.tjdft.jus.br']),
   TJSC: new Set(['eprocwebcon.tjsc.jus.br']),
+  TJBA: new Set(['jurisprudenciaws.tjba.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -314,6 +315,31 @@ export function isExactTjscSearchUrl(value: string): boolean {
       && url.pathname === '/consulta1g/externo_controlador.php'
       && url.searchParams.get('acao') === 'jurisprudencia@jurisprudencia/listar_resultados'
       && [...url.searchParams.keys()].every((key) => key === 'acao');
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjbaGraphqlUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'jurisprudenciaws.tjba.jus.br'
+      && url.pathname === '/graphql'
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjbaDocumentUrl(value: string, expectedHash?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudenciaws.tjba.jus.br') return false;
+    const match = url.pathname.match(/^\/inteiroTeor\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i);
+    if (!match || url.search || url.hash) return false;
+    return !expectedHash || match[1].toLowerCase() === expectedHash.toLowerCase();
   } catch {
     return false;
   }
