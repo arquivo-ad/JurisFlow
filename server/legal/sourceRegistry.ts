@@ -238,15 +238,25 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: item.name,
     courtCode: `TRT${item.region}`,
     jurisdiction: `TRT${item.region}`,
-    sourceType: item.region === 2 ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: item.region === 2 ? 'https://pje.trt2.jus.br/jurisprudencia/' : item.url,
-    documentationUrl: item.region === 2 ? 'https://pje.trt2.jus.br/jurisprudencia/' : `${item.url}jurisprudencia`,
-    connectorStatus: item.region === 2 ? 'DEGRADED' as const : 'MANUAL_ONLY' as const,
+    sourceType: item.region === 2 || item.region === 15 ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
+    officialBaseUrl: item.region === 2
+      ? 'https://pje.trt2.jus.br/jurisprudencia/'
+      : item.region === 15
+        ? 'https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam'
+        : item.url,
+    documentationUrl: item.region === 2
+      ? 'https://pje.trt2.jus.br/jurisprudencia/'
+      : item.region === 15
+        ? 'https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam?tipo=IRDR'
+        : `${item.url}jurisprudencia`,
+    connectorStatus: item.region === 2 ? 'DEGRADED' as const : item.region === 15 ? 'PARTIAL' as const : 'MANUAL_ONLY' as const,
     coverageStatus: item.region === 2
       ? 'Portal oficial identificado; pesquisa pública exige CAPTCHA interativo e permanece fail-closed na automação'
-      : 'Jurisprudência Regional Trabalhista - Conferência Humana Obrigatória',
+      : item.region === 15
+        ? 'Índice público oficial PJe-JT de IRDR/IAC integrado com hash da página e dos registros; detalhe individual ainda sem URL estável verificável. Pesquisa jurisprudencial geral exige reCAPTCHA.'
+        : 'Jurisprudência Regional Trabalhista - Conferência Humana Obrigatória',
     verificationMethod: 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: 'MANUAL_ONLY' as const,
+    termsStatus: item.region === 15 ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,
@@ -278,7 +288,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     coverageStatus: tj.code === 'TJSP'
       ? 'Portal e-SAJ oficial identificado; pesquisa jurisprudencial exige reCAPTCHA/CAPTCHA interativo e permanece fail-closed'
       : tj.code === 'TJPR'
-        ? 'Família Projudi identificada; portal público oferece consulta processual, validação por chave e precedentes. Operações específicas ainda não automatizadas.'
+        ? 'Família Projudi identificada; consulta processual e consulta pública de precedentes exigem reCAPTCHA no submit. JurisFlow permanece fail-closed e não contorna o desafio interativo.'
         : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
     verificationMethod: 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: 'MANUAL_ONLY' as const,

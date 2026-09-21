@@ -32,6 +32,17 @@ export const COURT_FAMILY_CONFIGS: readonly CourtFamilyConfig[] = [
     notes: 'Portal público de jurisprudência identificado; a pesquisa exige CAPTCHA interativo.',
   },
   {
+    courtCode: 'TRT15',
+    courtName: 'Tribunal Regional do Trabalho da 15ª Região',
+    family: 'PJE',
+    officialPortalUrl: 'https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam?tipo=IRDR',
+    probeUrl: 'https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam?tipo=IRDR',
+    expectedHosts: ['pje.trt15.jus.br'],
+    capabilityHint: 'PUBLIC_PORTAL',
+    publicConsultationKnown: true,
+    notes: 'Índice público PJe-JT de IRDR/IAC disponível sem CAPTCHA; pesquisa jurisprudencial geral do TRT15 exige reCAPTCHA.',
+  },
+  {
     courtCode: 'TJSP',
     courtName: 'Tribunal de Justiça de São Paulo',
     family: 'ESAJ',
@@ -60,9 +71,9 @@ export const COURT_FAMILY_CONFIGS: readonly CourtFamilyConfig[] = [
     officialPortalUrl: 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp',
     probeUrl: 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp',
     expectedHosts: ['consulta.tjpr.jus.br'],
-    capabilityHint: 'PUBLIC_PORTAL',
+    capabilityHint: 'INTERACTIVE_REQUIRED',
     publicConsultationKnown: true,
-    notes: 'Portal Projudi público identificado com Consulta Pública, validação por chave e consulta de precedentes.',
+    notes: 'Portal Projudi público identificado; consultas processual e de precedentes exigem reCAPTCHA no envio e permanecem fail-closed.',
   },
 ] as const;
 

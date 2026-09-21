@@ -16,6 +16,7 @@ import { Trf3JurisprudenciaAdapter } from './adapters/Trf3JurisprudenciaAdapter.
 import { Trf4JurisprudenciaAdapter } from './adapters/Trf4JurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from './adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from './adapters/CourtFamilyProbeAdapter.ts';
+import { Trt15PrecedentsAdapter, type Trt15PrecedentType } from './adapters/Trt15PrecedentsAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -202,6 +203,7 @@ export class JudicialSearchService {
   private trf4Adapter: Trf4JurisprudenciaAdapter;
   private djenAdapter: DjenPublicationsAdapter;
   private courtFamilyProbeAdapter: CourtFamilyProbeAdapter;
+  private trt15PrecedentsAdapter: Trt15PrecedentsAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -215,6 +217,7 @@ export class JudicialSearchService {
     this.trf4Adapter = new Trf4JurisprudenciaAdapter();
     this.djenAdapter = new DjenPublicationsAdapter();
     this.courtFamilyProbeAdapter = new CourtFamilyProbeAdapter();
+    this.trt15PrecedentsAdapter = new Trt15PrecedentsAdapter();
   }
 
   /**
@@ -374,6 +377,10 @@ export class JudicialSearchService {
       : this.courtFamilyProbeAdapter.probeAll();
   }
 
+  public async listTrt15QualifiedPrecedents(type: Trt15PrecedentType) {
+    return this.trt15PrecedentsAdapter.list(type);
+  }
+
   /**
    * Pesquisa processual com conferência contra casos existentes no JurisFlow
    */
@@ -513,11 +520,18 @@ export class JudicialSearchService {
         notes: 'Pesquisa pública eproc automatizada com confirmação do inteiro teor individual oficial e SHA-256. Consulta processual autenticada continua fora deste conector.',
       },
       {
+        courtCode: 'TRT15', courtName: 'TRT15 - Precedentes PJe-JT', jurisdiction: '15ª Região',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'RESTRITO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam?tipo=IRDR',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Índice público oficial de IRDR/IAC integrado com hash da página e dos registros. Itens permanecem sem selo individual; pesquisa jurisprudencial geral exige reCAPTCHA.',
+      },
+      {
         courtCode: 'TJPR', courtName: 'TJPR - Projudi', jurisdiction: 'PR',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
         authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Família Projudi identificada com portal público, consulta por chave e precedentes. Operações específicas ainda não automatizadas.',
+        notes: 'Família Projudi identificada. Consulta processual e precedentes exigem reCAPTCHA no submit; JurisFlow não contorna o desafio interativo.',
       },
       ...['TRT', 'TJ', 'TRF'].map((courtCode): CourtAvailabilityMatrixItem => ({
         courtCode, courtName: `${courtCode} - conector oficial`, jurisdiction: 'Brasil',

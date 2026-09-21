@@ -5743,6 +5743,27 @@ Responda em JSON:
   });
 
 
+  // Índice público de precedentes qualificados do TRT15 (PJe-JT/NUGEPNAC)
+  app.get('/api/judicial/trt15-qualified-precedents', async (req: Request, res: Response) => {
+    try {
+      const rawType = typeof req.query.type === 'string' ? req.query.type.toUpperCase() : 'IRDR';
+      if (rawType !== 'IRDR' && rawType !== 'IAC') {
+        return res.status(400).json({
+          error: 'Tipo de precedente TRT15 inválido. Use IRDR ou IAC.',
+        });
+      }
+
+      const result = await judicialSearchService.listTrt15QualifiedPrecedents(rawType);
+      const statusCode = result.lifecycleState === 'SOURCE_UNAVAILABLE' ? 503 : 200;
+      res.status(statusCode).json(result);
+    } catch (err: any) {
+      res.status(500).json({
+        error: 'Falha ao consultar o índice público de precedentes TRT15',
+        details: err?.message || String(err),
+      });
+    }
+  });
+
   // Diagnóstico das famílias tecnológicas dos tribunais (PJe/e-SAJ/eproc/Projudi)
   app.get('/api/judicial/court-family-capabilities', async (req: Request, res: Response) => {
     try {

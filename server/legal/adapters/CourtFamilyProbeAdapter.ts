@@ -97,7 +97,7 @@ export class CourtFamilyProbeAdapter {
         method: 'GET',
         headers: {
           Accept: 'text/html,application/xhtml+xml,application/json',
-          'User-Agent': 'JurisFlow/1.4 CourtFamilyCapabilityProbe',
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) JurisFlow/1.4 CourtFamilyCapabilityProbe',
         },
         redirect: 'manual',
         signal: controller.signal,
@@ -183,7 +183,7 @@ export class CourtFamilyProbeAdapter {
   }
 
   public async probeAll(): Promise<CourtFamilyProbeResult[]> {
-    const courts = ['TRT2', 'TJSP', 'TRF4', 'TJPR'];
+    const courts = ['TRT2', 'TRT15', 'TJSP', 'TRF4', 'TJPR'];
     return Promise.all(courts.map((court) => this.probe(court)));
   }
 

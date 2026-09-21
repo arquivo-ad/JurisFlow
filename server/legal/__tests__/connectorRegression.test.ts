@@ -12,6 +12,7 @@ import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter
 import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
 import { Trf4JurisprudenciaAdapter } from '../adapters/Trf4JurisprudenciaAdapter.ts';
+import { Trt15PrecedentsAdapter, isExactTrt15PrecedentsListUrl } from '../adapters/Trt15PrecedentsAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
 import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl } from '../officialSources.ts';
@@ -811,4 +812,30 @@ test('busca explícita no TRF4 admite acórdão verificado no ranking', async ()
   assert.equal(result.results.some((item) => item.courtCode === 'TRF4'), true);
   assert.equal(result.diagnostic?.lifecycleState, 'SEARCH_SUCCESS');
   assert.ok(result.sourcesConsulted.includes('trf4-jurisprudencia'));
+});
+
+const trt15IrdHtml =
+  '<html><body><table id="tabelaTemas"><tbody id="tabelaTemas:tb">' +
+  '<tr><td>06 - Incidente de Resolução de Demandas Repetitivas (IRDR)</td>' +
+  '<td><a>0027</a><br/>Controvérsia acerca da aplicação do artigo 58, § 2º, da CLT aos trabalhadores rurais.</td>' +
+  '<td><a>0</a></td><td></td></tr>' +
+  '</tbody></table></body></html>';
+
+test('TRT15 aceita somente a listagem pública exata de IRDR/IAC', () => {
+  assert.equal(isExactTrt15PrecedentsListUrl('https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam?tipo=IRDR', 'IRDR'), true);
+  assert.equal(isExactTrt15PrecedentsListUrl('https://pje.trt15.jus.br/precedentesWeb/pages/public/TemaLista.seam?tipo=IAC', 'IAC'), true);
+  assert.equal(isExactTrt15PrecedentsListUrl('https://pje.trt15.jus.br.evil.example/precedentesWeb/pages/public/TemaLista.seam?tipo=IRDR', 'IRDR'), false);
+});
+
+test('TRT15 indexa tema público sem promover para VERIFIED_OFFICIAL', async () => {
+  const mock = (async () => new Response(Buffer.from(trt15IrdHtml, 'latin1'), {
+    status: 200, headers: { 'Content-Type': 'text/html;charset=ISO-8859-1' }
+  })) as typeof fetch;
+  const result = await new Trt15PrecedentsAdapter(mock).list('IRDR');
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.themeNumber, 27);
+  assert.equal(result.items[0]?.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.match(result.items[0]?.pageSha256 || '', /^[a-f0-9]{64}$/);
+  assert.match(result.items[0]?.recordSha256 || '', /^[a-f0-9]{64}$/);
+  assert.equal((result.items[0] as any)?.verificationBadge, undefined);
 });
