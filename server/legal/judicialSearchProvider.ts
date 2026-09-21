@@ -7,12 +7,13 @@ import {
 } from '../../src/types/index.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
 import { TstJurisprudenciaAdapter } from './adapters/TstJurisprudenciaAdapter.ts';
+import { TstNormativeCollectionAdapter, TstNormativeType } from './adapters/TstNormativeCollectionAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from './adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from './adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from './adapters/Trf3JurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
-import { LegalSearchQuery, LegalSearchResultItem } from './types.ts';
+import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
 import { LegalCompetenceClassifier } from './classifier.ts';
 
 /**
@@ -189,6 +190,7 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
 export class JudicialSearchService {
   private datajudProvider: DataJudSearchProvider;
   private tstAdapter: TstJurisprudenciaAdapter;
+  private tstNormativeAdapter: TstNormativeCollectionAdapter;
   private trt2Adapter: Trt2JurisprudenciaAdapter;
   private tjspAdapter: TjspJurisprudenciaAdapter;
   private trf3Adapter: Trf3JurisprudenciaAdapter;
@@ -198,6 +200,7 @@ export class JudicialSearchService {
   constructor() {
     this.datajudProvider = new DataJudSearchProvider();
     this.tstAdapter = new TstJurisprudenciaAdapter();
+    this.tstNormativeAdapter = new TstNormativeCollectionAdapter();
     this.trt2Adapter = new Trt2JurisprudenciaAdapter();
     this.tjspAdapter = new TjspJurisprudenciaAdapter();
     this.trf3Adapter = new Trf3JurisprudenciaAdapter();
@@ -213,20 +216,44 @@ export class JudicialSearchService {
 
     const start = Date.now();
     const classification = LegalCompetenceClassifier.classify(params.query || '');
-    const requestsTst = classification.isLaborDispute || params.courtCodes?.includes('TST');
+    const extractedNormative = classification.extractedThemeOrSumula;
+    const requestsTstNormative = Boolean(
+      extractedNormative
+      && (!extractedNormative.court || extractedNormative.court === 'TST')
+      && ['SUMULA', 'OJ', 'PN'].includes(extractedNormative.type)
+    );
+    const requestsTst = (classification.isLaborDispute || params.courtCodes?.includes('TST')) && !requestsTstNormative;
     const requestsTrt2 = params.courtCodes?.includes('TRT2') === true;
     const requestsTjsp = params.courtCodes?.includes('TJSP') === true;
     const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
     const regionalSourcesConsulted: string[] = [];
-    let activeTstDecisions = undefined as Awaited<ReturnType<TstJurisprudenciaAdapter['searchOfficialJurisprudence']>>['decisions'] | undefined;
+    const nationalSourcesConsulted: string[] = [];
+    let activeTstDecisions = undefined as CanonicalLegalDecision[] | undefined;
+    let tstDiagnostic = undefined as Awaited<ReturnType<TstJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tstNormativeDiagnostic = undefined as Awaited<ReturnType<TstNormativeCollectionAdapter['searchNormative']>>['diagnostic'] | undefined;
     let trt2Diagnostic = undefined as Awaited<ReturnType<Trt2JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjspDiagnostic = undefined as Awaited<ReturnType<TjspJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let trf3Diagnostic = undefined as Awaited<ReturnType<Trf3JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
+      tstDiagnostic = officialResult.diagnostic;
+      nationalSourcesConsulted.push('tst-jurisprudencia');
       activeTstDecisions = officialResult.decisions.filter((decision) => decision.verificationStatus === 'VERIFIED_OFFICIAL');
       for (const decision of activeTstDecisions) {
+        legalStorage.upsertDecision(decision);
+      }
+    }
+
+    if (requestsTstNormative && extractedNormative) {
+      const normativeType = extractedNormative.type as TstNormativeType;
+      const normativeResult = await this.tstNormativeAdapter.searchNormative(normativeType, extractedNormative.number);
+      tstNormativeDiagnostic = normativeResult.diagnostic;
+      nationalSourcesConsulted.push('tst-normativos');
+      activeTstDecisions = params.onlyVerified
+        ? normativeResult.decisions.filter((decision) => decision.verificationStatus === 'VERIFIED_OFFICIAL')
+        : normativeResult.decisions;
+      for (const decision of normativeResult.decisions) {
         legalStorage.upsertDecision(decision);
       }
     }
@@ -303,12 +330,12 @@ export class JudicialSearchService {
       page: params.page || 1,
       pageSize: params.pageSize || 12,
       results: filteredResults,
-      sourcesConsulted: regionalSourcesConsulted.length > 0
-        ? Array.from(new Set([...response.sourcesConsulted, ...regionalSourcesConsulted]))
+      sourcesConsulted: (regionalSourcesConsulted.length > 0 || nationalSourcesConsulted.length > 0)
+        ? Array.from(new Set([...response.sourcesConsulted, ...nationalSourcesConsulted, ...regionalSourcesConsulted]))
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic,
+      diagnostic: trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -416,7 +443,7 @@ export class JudicialSearchService {
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'RESTRITO',
         authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisprudencia.tst.jus.br/',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Consulta pública em tempo real de acórdãos; cada resultado passa por verificação determinística.',
+        notes: 'Consulta pública em tempo real de acórdãos + coleção oficial de Súmulas/OJs/Precedentes Normativos; cada evidência passa por verificação determinística.',
       },
       {
         courtCode: 'STF', courtName: 'STF - Repercussão Geral', jurisdiction: 'Nacional',

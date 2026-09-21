@@ -149,6 +149,10 @@ export class LegalSearchEngine {
           if (!court || court === d.courtCode) {
             condition2 = true;
           }
+        } else if (type === 'OJ' && d.documentType === 'ORIENTACAO_JURISPRUDENCIAL' && d.themeNumber === number) {
+          if (!court || court === d.courtCode) condition2 = true;
+        } else if (type === 'PN' && d.documentType === 'PRECEDENTE_NORMATIVO' && d.themeNumber === number) {
+          if (!court || court === d.courtCode) condition2 = true;
         } else if (d.rawCaseNumber.toLowerCase().includes(`tema ${number}`) || d.rawCaseNumber.toLowerCase().includes(`súmula ${number}`)) {
           condition2 = true;
         }
@@ -294,13 +298,19 @@ export class LegalSearchEngine {
         : d.officialUrl
           ? 'FOUND_PENDING_REVIEW'
           : 'NOT_VERIFIED_PROHIBITED';
-      const citationBadge = evidenceState === 'VERIFIED_OFFICIAL'
-        ? `[OFICIAL ${d.courtCode} - VERIFICADO]`
-        : evidenceState === 'FOUND_PENDING_REVIEW'
-          ? `[${d.courtCode} - ENCONTRADO, PENDENTE DE CONFERÊNCIA]`
-          : `[${d.courtCode} - NÃO VERIFICADO — PROIBIDO USAR EM PEÇA]`;
+      const citationBadge = d.verificationStatus === 'CANCELLED'
+        ? (d.verificationBadge || `[OFICIAL ${d.courtCode} - CANCELADO]`)
+        : evidenceState === 'VERIFIED_OFFICIAL'
+          ? (d.verificationBadge || `[OFICIAL ${d.courtCode} - VERIFICADO]`)
+          : evidenceState === 'FOUND_PENDING_REVIEW'
+            ? `[${d.courtCode} - ENCONTRADO, PENDENTE DE CONFERÊNCIA]`
+            : `[${d.courtCode} - NÃO VERIFICADO — PROIBIDO USAR EM PEÇA]`;
 
-      const officialCitation = `${d.courtCode}, ${d.rawCaseNumber}, Rel. ${d.rapporteur}, ${d.courtOrgan || ''}, julgado em ${d.judgmentDate || 'N/D'}, DJe ${d.publicationDate || 'N/D'}`;
+      const isNormativeCitation = ['SUMULA', 'SUMULA_VINCULANTE', 'ORIENTACAO_JURISPRUDENCIAL', 'PRECEDENTE_NORMATIVO', 'ENUNCIADO']
+        .includes(d.documentType);
+      const officialCitation = isNormativeCitation
+        ? `${d.courtCode}, ${d.rawCaseNumber}, ${d.courtOrgan || ''}, coleção oficial disponível em ${d.availabilityDate || d.publicationDate || 'N/D'}`
+        : `${d.courtCode}, ${d.rawCaseNumber}, Rel. ${d.rapporteur}, ${d.courtOrgan || ''}, julgado em ${d.judgmentDate || 'N/D'}, DJe ${d.publicationDate || 'N/D'}`;
 
       return {
         id: d.id,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import { TstJurisprudenciaAdapter } from '../adapters/TstJurisprudenciaAdapter.ts';
+import { TstNormativeCollectionAdapter } from '../adapters/TstNormativeCollectionAdapter.ts';
 import { StjDadosAbertosAdapter } from '../adapters/StjDadosAbertosAdapter.ts';
 import { StfJurisprudenciaAdapter } from '../adapters/StfJurisprudenciaAdapter.ts';
 import { PrecedentVerifier } from '../verifier.ts';
@@ -10,8 +11,9 @@ import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
+import { LegalCompetenceClassifier } from '../classifier.ts';
 
 const record = {
   id: 'tst-regression-1',
@@ -482,4 +484,78 @@ test('transporte STF mantém verificação TLS habilitada e usa intermediária o
   assert.doesNotMatch(transport, /rejectUnauthorized:\s*false/);
   assert.doesNotMatch(transport, /NODE_TLS_REJECT_UNAUTHORIZED/);
   assert.match(transport, /GlobalSign GCC R6 AlphaSSL CA 2025/);
+});
+
+
+const tstNormativeText = `
+SUM-331 CONTRATO DE PRESTAÇÃO DE SERVIÇOS. LEGALIDADE
+(item I cancelado por perda de eficácia a partir de 11.11.2017, pela Lei 13.467/2017) – Res. 225/2025.
+I - A contratação de trabalhadores por empresa interposta é ilegal.
+II - A contratação irregular não gera vínculo com a Administração Pública.
+VI - A responsabilidade subsidiária abrange as verbas decorrentes da condenação.
+SUM-332 HONORÁRIOS ADVOCATÍCIOS. Texto seguinte para delimitar a Súmula anterior.
+OJ-SDI1-383 TERCEIRIZAÇÃO. EMPREGADOS DA EMPRESA PRESTADORA DE SERVIÇOS E DA TOMADORA.
+(cancelada por perda de eficácia a partir de 11.11.2017, pela Lei 13.467/2017) - Res. 225/2025.
+A contratação irregular não afasta, pelo princípio da isonomia, direitos dos terceirizados.
+OJ-SDI1-384 TRABALHADOR AVULSO. PRESCRIÇÃO BIENAL. Texto seguinte para delimitação.
+PN-47 DISPENSA DE EMPREGADO (positivo)
+O empregado despedido será informado, por escrito, dos motivos da dispensa.
+PN-48 ASSISTÊNCIA MÉDICA. Texto seguinte para delimitação.
+${'conteúdo oficial consolidado da coleção normativa do TST. '.repeat(2600)}
+`;
+
+function tstNormativeFetchMock(): typeof fetch {
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.5\n'), Buffer.alloc(110_000, 65)]);
+  return (async () => new Response(pdf, {
+    status: 200,
+    headers: { 'Content-Type': 'application/pdf' },
+  })) as typeof fetch;
+}
+
+function tstNormativeAdapterMocked(): TstNormativeCollectionAdapter {
+  return new TstNormativeCollectionAdapter(
+    tstNormativeFetchMock(),
+    30_000,
+    60_000,
+    async () => tstNormativeText
+  );
+}
+
+test('TST coleção normativa aceita somente o PDF oficial exato', () => {
+  assert.equal(
+    isExactTstNormativeCollectionUrl('https://www.tst.jus.br/documents/d/guest/livrointernet-12-pdf'),
+    true
+  );
+  assert.equal(
+    isExactTstNormativeCollectionUrl('https://www.tst.jus.br.evil.example/documents/d/guest/livrointernet-12-pdf'),
+    false
+  );
+});
+
+test('Súmula TST parcialmente alterada permanece vigente como verbete', async () => {
+  const result = await tstNormativeAdapterMocked().searchNormative('SUMULA', 331);
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decisions[0]?.precedentSituation, 'VIGENTE');
+  assert.equal(result.decisions[0]?.rawCaseNumber, 'Súmula 331/TST');
+  assert.match(result.decisions[0]?.verificationBadge || '', /NORMATIVO VERIFICADO/);
+});
+
+test('OJ integralmente cancelada preserva status CANCELLED', async () => {
+  const result = await tstNormativeAdapterMocked().searchNormative('OJ', 383);
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.decisions[0]?.precedentSituation, 'CANCELADO');
+  assert.equal(result.decisions[0]?.verificationStatus, 'CANCELLED');
+  assert.match(result.decisions[0]?.verificationBadge || '', /CANCELADO/);
+});
+
+test('Precedente Normativo TST é reconhecido por identificador exato', async () => {
+  const classified = LegalCompetenceClassifier.classify('PN 47 TST');
+  assert.equal(classified.extractedThemeOrSumula?.type, 'PN');
+  assert.equal(classified.extractedThemeOrSumula?.number, 47);
+
+  const result = await tstNormativeAdapterMocked().searchNormative('PN', 47);
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decisions[0]?.documentType, 'PRECEDENTE_NORMATIVO');
 });

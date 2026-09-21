@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -64,8 +64,13 @@ export class PrecedentVerifier {
     }
 
     // 4. Tribunal e Órgão Julgador
-    if (!decision.courtCode || !decision.court || !decision.courtOrgan || !decision.rapporteur) {
-      issues.push('METADADOS_JULGAMENTO_INCOMPLETOS: tribunal, órgão julgador e relator devem vir da fonte oficial.');
+    const normativeTypes = new Set([
+      'SUMULA', 'SUMULA_VINCULANTE', 'ORIENTACAO_JURISPRUDENCIAL',
+      'PRECEDENTE_NORMATIVO', 'ENUNCIADO',
+    ]);
+    const isNormativeDocument = normativeTypes.has(decision.documentType || '');
+    if (!decision.courtCode || !decision.court || !decision.courtOrgan || (!isNormativeDocument && !decision.rapporteur)) {
+      issues.push('METADADOS_JULGAMENTO_INCOMPLETOS: tribunal, órgão julgador e, quando aplicável, relator devem vir da fonte oficial.');
     }
     if (decision.courtCode === 'TST' && decision.judicialBranch !== 'TRABALHO') {
       issues.push('COMPETENCIA_INCOMPATIVEL: decisão do TST deve pertencer ao ramo TRABALHO.');
@@ -82,9 +87,12 @@ export class PrecedentVerifier {
     if (decision.sourceId === 'trf3-jurisprudencia' && (!isExactTrf3DocumentUrl(officialUrl) || decision.courtCode !== 'TRF3')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TRF3 não aponta para acórdão individual oficial do TRF3.');
     }
+    if (decision.sourceId === 'tst-normativos' && (!isExactTstNormativeCollectionUrl(officialUrl) || decision.courtCode !== 'TST')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: verbete normativo TST não aponta para a coleção oficial permitida.');
+    }
 
-    // 5. Data de Julgamento ou Publicação Oficial (Não pode ser futura)
-    const judgmentDate = decision.judgmentDate || decision.publicationDate;
+    // 5. Data de Julgamento, Publicação ou Disponibilidade Oficial (Não pode ser futura)
+    const judgmentDate = decision.judgmentDate || decision.publicationDate || decision.availabilityDate;
     if (!judgmentDate) {
       issues.push('DATA_AUSENTE: Decisão sem data de julgamento ou publicação registrada.');
     } else {

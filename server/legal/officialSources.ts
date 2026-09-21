@@ -1,5 +1,5 @@
 const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
-  TST: new Set(['jurisprudencia-backend.tst.jus.br', 'jurisprudencia.tst.jus.br']),
+  TST: new Set(['jurisprudencia-backend.tst.jus.br', 'jurisprudencia.tst.jus.br', 'www.tst.jus.br']),
   STJ: new Set(['processo.stj.jus.br', 'scon.stj.jus.br', 'dadosabertos.web.stj.jus.br']),
   STF: new Set(['portal.stf.jus.br', 'jurisprudencia.stf.jus.br']),
   TRT2: new Set(['pje.trt2.jus.br']),
@@ -128,6 +128,19 @@ export function isExactTrf3DocumentUrl(value: string): boolean {
       && url.pathname === '/jurisprudencia/Home/ListaColecao/9'
       && /^\d+$/.test(url.searchParams.get('np') || '')
       && [...url.searchParams.keys()].every((key) => key === 'np');
+  } catch {
+    return false;
+  }
+}
+
+
+export function isExactTstNormativeCollectionUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'www.tst.jus.br'
+      && url.pathname === '/documents/d/guest/livrointernet-12-pdf'
+      && !url.search;
   } catch {
     return false;
   }
