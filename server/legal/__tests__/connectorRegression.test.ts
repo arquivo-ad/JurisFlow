@@ -13,9 +13,10 @@ import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter
 import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
 import { Trf4JurisprudenciaAdapter } from '../adapters/Trf4JurisprudenciaAdapter.ts';
 import { Trt15PrecedentsAdapter, isExactTrt15PrecedentsListUrl } from '../adapters/Trt15PrecedentsAdapter.ts';
+import { FalcaoJurisprudenciaAdapter } from '../adapters/FalcaoJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -838,4 +839,106 @@ test('TRT15 indexa tema público sem promover para VERIFIED_OFFICIAL', async () 
   assert.match(result.items[0]?.pageSha256 || '', /^[a-f0-9]{64}$/);
   assert.match(result.items[0]?.recordSha256 || '', /^[a-f0-9]{64}$/);
   assert.equal((result.items[0] as any)?.verificationBadge, undefined);
+});
+
+
+const falcaoRecord = {
+  numeroProcesso: '0011087-14.2015.5.03.0035',
+  siglaClasseProcesso: 'ROT',
+  classeProcesso: 'Recurso Ordinário Trabalhista',
+  relator: 'JULIANA VIGNOLI CORDEIRO',
+  tribunal: 'TRT3',
+  turma: '11ª Turma',
+  textoAcordao: '<p>Inteiro teor oficial do acórdão trabalhista.</p>',
+  ementa: '<p>PREVIDENCIÁRIO TRABALHISTA. BENEFÍCIO. RECURSO ORDINÁRIO. FUNDAMENTAÇÃO OFICIAL SUFICIENTE PARA TESTE.</p>',
+  possuiEmenta: 'S',
+  idDocumentoAcordao: '10712368',
+  referenciaLegislativa: ['art_476_clt'],
+  dataJulgamento: '06/12/2016',
+  dataJuntada: '08/12/2016',
+};
+
+function falcaoFetchMock(mode: 'ok' | 'rate-limit' | 'mismatch' = 'ok'): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (mode === 'rate-limit') {
+      return new Response(JSON.stringify({ userMessage: 'Too Many Requests' }), {
+        status: 429, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.includes('/acordaos/')) {
+      const individual = mode === 'mismatch'
+        ? { ...falcaoRecord, idDocumentoAcordao: '99999999' }
+        : falcaoRecord;
+      return new Response(JSON.stringify({ documentos: [individual] }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({
+      documentos: [falcaoRecord],
+      temasTopFive: [],
+      quantidadeTotal: 1,
+    }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+test('Falcão aceita somente busca e documento individual oficiais exatos', () => {
+  const search = 'https://jurisprudencia.jt.jus.br/jurisprudencia-nacional-backend/api/no-auth/pesquisa?sessionId=_abc1234&latitude=&longitude=&texto=teste&tribunais=TRT3&colecao=acordaos&page=0&size=5';
+  const doc = 'https://jurisprudencia.jt.jus.br/jurisprudencia-nacional-backend/api/no-auth/pesquisa/acordaos/TRT3/10712368?sessionId=_abc1234&latitude=&longitude=';
+  assert.equal(isExactFalcaoSearchUrl(search, 'TRT3'), true);
+  assert.equal(isExactFalcaoDocumentUrl(doc, 'TRT3', '10712368'), true);
+  assert.equal(isExactFalcaoDocumentUrl(doc.replace('jurisprudencia.jt.jus.br', 'jurisprudencia.jt.jus.br.evil.example'), 'TRT3'), false);
+});
+
+test('Falcão verifica acórdão somente após confirmação individual oficial', async () => {
+  const result = await new FalcaoJurisprudenciaAdapter(falcaoFetchMock())
+    .searchOfficialJurisprudence('beneficio previdenciario', 'TRT3', 1);
+
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decisions[0]?.courtCode, 'TRT3');
+  assert.equal(result.decisions[0]?.normalizedCnjNumber, '0011087-14.2015.5.03.0035');
+  assert.equal(result.decisions[0]?.alternativeNumber, '10712368');
+  assert.equal(result.decisions[0]?.verificationBadge, '[OFICIAL FALCÃO/TRT3 - VERIFICADO]');
+  assert.match(result.decisions[0]?.contentSha256 || '', /^[a-f0-9]{64}$/);
+});
+
+test('Falcão rejeita documento individual divergente', async () => {
+  const result = await new FalcaoJurisprudenciaAdapter(falcaoFetchMock('mismatch'))
+    .searchOfficialJurisprudence('beneficio previdenciario', 'TRT3', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('divergente')));
+});
+
+test('Falcão trata HTTP 429 em fail-closed sem reutilizar decisões', async () => {
+  const result = await new FalcaoJurisprudenciaAdapter(falcaoFetchMock('rate-limit'))
+    .searchOfficialJurisprudence('beneficio previdenciario', 'TRT3', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.diagnostic.httpStatus, 429);
+  assert.equal(result.diagnostic.connectorStatus, 'DEGRADED');
+});
+
+
+test('busca explícita em TRT regional usa Falcão sem ser substituída pelo TST', async () => {
+  const official = await new FalcaoJurisprudenciaAdapter(falcaoFetchMock())
+    .searchOfficialJurisprudence('beneficio previdenciario', 'TRT3', 1);
+  assert.equal(official.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+
+  const service = new JudicialSearchService();
+  (service as any).falcaoAdapter = {
+    searchOfficialJurisprudence: async () => official,
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'beneficio previdenciario',
+    courtCodes: ['TRT3'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TRT3'), true);
+  assert.ok(result.sourcesConsulted.includes('falcao-jurisprudencia'));
+  assert.equal(result.sourcesConsulted.includes('tst-jurisprudencia'), false);
+  assert.equal(result.diagnostic?.adapter, 'falcao-jurisprudencia');
 });

@@ -17,6 +17,7 @@ import { Trf4JurisprudenciaAdapter } from './adapters/Trf4JurisprudenciaAdapter.
 import { DjenPublicationsAdapter } from './adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from './adapters/CourtFamilyProbeAdapter.ts';
 import { Trt15PrecedentsAdapter, type Trt15PrecedentType } from './adapters/Trt15PrecedentsAdapter.ts';
+import { FalcaoJurisprudenciaAdapter } from './adapters/FalcaoJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -204,6 +205,7 @@ export class JudicialSearchService {
   private djenAdapter: DjenPublicationsAdapter;
   private courtFamilyProbeAdapter: CourtFamilyProbeAdapter;
   private trt15PrecedentsAdapter: Trt15PrecedentsAdapter;
+  private falcaoAdapter: FalcaoJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -218,6 +220,7 @@ export class JudicialSearchService {
     this.djenAdapter = new DjenPublicationsAdapter();
     this.courtFamilyProbeAdapter = new CourtFamilyProbeAdapter();
     this.trt15PrecedentsAdapter = new Trt15PrecedentsAdapter();
+    this.falcaoAdapter = new FalcaoJurisprudenciaAdapter();
   }
 
   /**
@@ -236,7 +239,9 @@ export class JudicialSearchService {
       && (!extractedNormative.court || extractedNormative.court === 'TST')
       && ['SUMULA', 'OJ', 'PN'].includes(extractedNormative.type)
     );
-    const requestsTst = (classification.isLaborDispute || params.courtCodes?.includes('TST')) && !requestsTstNormative;
+    const hasExplicitCourts = Boolean(params.courtCodes && params.courtCodes.length > 0);
+    const requestsTst = ((classification.isLaborDispute && !hasExplicitCourts) || params.courtCodes?.includes('TST')) && !requestsTstNormative;
+    const requestedTrtCodes = (params.courtCodes || []).filter((code) => /^TRT(?:[1-9]|1\d|2[0-4])$/.test(code));
     const requestsTrt2 = params.courtCodes?.includes('TRT2') === true;
     const requestsTjsp = params.courtCodes?.includes('TJSP') === true;
     const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
@@ -250,6 +255,7 @@ export class JudicialSearchService {
     let tjspDiagnostic = undefined as Awaited<ReturnType<TjspJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let trf3Diagnostic = undefined as Awaited<ReturnType<Trf3JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let trf4Diagnostic = undefined as Awaited<ReturnType<Trf4JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let falcaoDiagnostic = undefined as Awaited<ReturnType<FalcaoJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -278,6 +284,19 @@ export class JudicialSearchService {
       const trt2Result = await this.trt2Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '');
       trt2Diagnostic = trt2Result.diagnostic;
       regionalSourcesConsulted.push('trt2-jurisprudencia');
+    }
+
+    for (const trtCode of requestedTrtCodes) {
+      const falcaoResult = await this.falcaoAdapter.searchOfficialJurisprudence(
+        params.query || params.caseNumber || '',
+        trtCode,
+        5
+      );
+      falcaoDiagnostic = falcaoDiagnostic ?? falcaoResult.diagnostic;
+      regionalSourcesConsulted.push('falcao-jurisprudencia');
+      for (const decision of falcaoResult.decisions) {
+        if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
+      }
     }
 
     if (requestsTjsp) {
@@ -360,7 +379,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -483,6 +502,13 @@ export class JudicialSearchService {
         authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisprudencia.tst.jus.br/',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Consulta pública em tempo real de acórdãos + coleção oficial de Súmulas/OJs/Precedentes Normativos; cada evidência passa por verificação determinística.',
+      },
+      {
+        courtCode: 'FALCAO', courtName: 'Falcão - Jurisprudência Nacional da Justiça do Trabalho', jurisdiction: 'Nacional',
+        jurisprudenceStatus: 'DISPONIVEL', processStatus: 'RESTRITO',
+        authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisprudencia.jt.jus.br/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
+        notes: 'Repositório oficial nacional dos TRT1 a TRT24. Pesquisa pública por tribunal com confirmação do acórdão individual e SHA-256; HTTP 429 é tratado em fail-closed.',
       },
       {
         courtCode: 'STF', courtName: 'STF - Repercussão Geral', jurisdiction: 'Nacional',

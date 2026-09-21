@@ -9,6 +9,12 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
+for (let region = 1; region <= 24; region++) {
+  const code = `TRT${region}`;
+  const current = OFFICIAL_HOSTS_BY_COURT[code] || new Set<string>();
+  OFFICIAL_HOSTS_BY_COURT[code] = new Set([...current, 'jurisprudencia.jt.jus.br']);
+}
+
 export function getExactHostname(value: string): string | null {
   try {
     const url = new URL(value);
@@ -215,6 +221,53 @@ export function isExactTrf4SearchUrl(value: string): boolean {
       && url.pathname === '/eproc2trf4/externo_controlador.php'
       && url.searchParams.get('acao') === 'jurisprudencia@jurisprudencia/listar_resultados'
       && [...url.searchParams.keys()].every((key) => key === 'acao');
+  } catch {
+    return false;
+  }
+}
+
+
+const FALCAO_ALLOWED_SEARCH_PARAMS = new Set([
+  'sessionId', 'latitude', 'longitude', 'texto', 'precedente', 'verTodosPrecedentes',
+  'tipoPrecedente', 'tribunais', 'nomeRelator', 'orgaoJulgador', 'classeProcesso',
+  'faseProcessual', 'prioridade', 'temEmenta', 'pesquisaSomenteNasEmentas',
+  'ordenacao', 'filtroRapidoData', 'dataInicio', 'dataFim', 'colecao', 'page', 'size',
+]);
+
+export function isExactFalcaoSearchUrl(value: string, expectedCourt?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'jurisprudencia.jt.jus.br'
+      || url.pathname !== '/jurisprudencia-nacional-backend/api/no-auth/pesquisa'
+    ) return false;
+    if (![...url.searchParams.keys()].every((key) => FALCAO_ALLOWED_SEARCH_PARAMS.has(key))) return false;
+    if (!/^_[a-z0-9]{7}$/.test(url.searchParams.get('sessionId') || '')) return false;
+    if (url.searchParams.get('colecao') !== 'acordaos') return false;
+    if (url.searchParams.get('page') !== '0' || url.searchParams.get('size') !== '5') return false;
+    const court = url.searchParams.get('tribunais') || '';
+    return /^TRT(?:[1-9]|1\d|2[0-4])$/.test(court)
+      && (!expectedCourt || court === expectedCourt);
+  } catch {
+    return false;
+  }
+}
+
+export function isExactFalcaoDocumentUrl(value: string, expectedCourt?: string, expectedId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.jt.jus.br') return false;
+    const match = url.pathname.match(/^\/jurisprudencia-nacional-backend\/api\/no-auth\/pesquisa\/acordaos\/(TRT(?:[1-9]|1\d|2[0-4]))\/(\d+)$/);
+    if (!match) return false;
+    const [, court, id] = match;
+    const allowed = new Set(['sessionId', 'latitude', 'longitude']);
+    return [...url.searchParams.keys()].every((key) => allowed.has(key))
+      && /^_[a-z0-9]{7}$/.test(url.searchParams.get('sessionId') || '')
+      && url.searchParams.has('latitude')
+      && url.searchParams.has('longitude')
+      && (!expectedCourt || court === expectedCourt)
+      && (!expectedId || id === expectedId);
   } catch {
     return false;
   }
