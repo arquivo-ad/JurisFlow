@@ -575,6 +575,13 @@ export class JudicialSearchService {
         notes: 'Pesquisa oficial automatizada com CNJ, relator, órgão julgador, datas, ementa e inteiro teor em Base64. Sem selo VERIFIED_OFFICIAL enquanto não houver URL individual oficial estável.',
       },
       {
+        courtCode: 'TJRJ', courtName: 'TJRJ - eJURIS / eproc', jurisdiction: 'RJ',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Consulta pública existe, mas desde 04/02/2026 há duas bases: eJURIS legado e eproc. eJURIS usa reCAPTCHA v3 no fluxo de pesquisa e eproc 2G redireciona para SSO; automação permanece fail-closed.',
+      },
+      {
         courtCode: 'TJDFT', courtName: 'TJDFT - API Pública de Jurisprudência', jurisdiction: 'DF',
         jurisprudenceStatus: 'DISPONIVEL', processStatus: 'DISPONIVEL_PUBLICO',
         authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisdf.tjdft.jus.br/api/v1/pesquisa',

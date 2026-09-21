@@ -289,7 +289,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
   // 5. TRIBUNAIS DE JUSTIÇA ESTADUAIS (AMOSTRA REPRESENTATIVA E LINKS OFICIAIS)
   ...([
     { code: 'TJSP', name: 'Tribunal de Justiça de São Paulo', url: 'https://esaj.tjsp.jus.br/cjsg/' },
-    { code: 'TJRJ', name: 'Tribunal de Justiça do Rio de Janeiro', url: 'http://www.tjrj.jus.br/jurisprudencia' },
+    { code: 'TJRJ', name: 'Tribunal de Justiça do Rio de Janeiro', url: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx' },
     { code: 'TJMG', name: 'Tribunal de Justiça de Minas Gerais', url: 'https://www.tjmg.jus.br/jurisprudencia/' },
     { code: 'TJRS', name: 'Tribunal de Justiça do Rio Grande do Sul', url: 'https://www.tjrs.jus.br/novo/jurisprudencia/' },
     { code: 'TJPR', name: 'Tribunal de Justiça do Paraná', url: 'https://www.tjpr.jus.br/jurisprudencia' },
@@ -303,7 +303,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     jurisdiction: tj.code.replace('TJ', ''),
     sourceType: tj.code === 'TJDFT'
       ? 'OFFICIAL_API' as const
-      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS'
+      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ'
         ? 'OFFICIAL_SEARCH' as const
         : 'MANUAL_VERIFICATION_ONLY' as const,
     officialBaseUrl: tj.code === 'TJPR'
@@ -322,7 +322,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
         ? 'READY' as const
         : tj.code === 'TJPR' || tj.code === 'TJRS'
           ? 'PARTIAL' as const
-          : 'MANUAL_ONLY' as const,
+          : tj.code === 'TJRJ'
+            ? 'DEGRADED' as const
+            : 'MANUAL_ONLY' as const,
     coverageStatus: tj.code === 'TJSP'
       ? 'Portal e-SAJ oficial identificado; pesquisa jurisprudencial exige reCAPTCHA/CAPTCHA interativo e permanece fail-closed'
       : tj.code === 'TJPR'
@@ -331,7 +333,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
           ? 'Pesquisa oficial Solr automatizada com metadados, ementa e inteiro teor em Base64. Registros permanecem FOUND_UNVERIFIED por ausência de URL individual oficial estável.'
           : tj.code === 'TJDFT'
             ? 'API pública oficial documentada; busca estruturada e confirmação individual por UUID com SHA-256.'
-            : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
+            : tj.code === 'TJRJ'
+              ? 'Desde 04/02/2026 a jurisprudência está dividida entre eJURIS legado e eproc. O eJURIS exige reCAPTCHA v3 no fluxo de pesquisa; o eproc 2G redireciona para SSO. JurisFlow não contorna CAPTCHA nem autenticação.'
+              : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
     verificationMethod: tj.code === 'TJRS' || tj.code === 'TJDFT' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: tj.code === 'TJRS' || tj.code === 'TJDFT' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
