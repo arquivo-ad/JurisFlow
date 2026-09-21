@@ -202,21 +202,21 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     officialBaseUrl: region === 3
       ? 'https://web.trf3.jus.br/jurisprudencia/'
       : region === 4
-        ? 'https://eproc.trf4.jus.br/eproc2trf4/'
+        ? 'https://jurisprudencia.trf4.jus.br/'
         : `https://www.trf${region}.jus.br/`,
     documentationUrl: region === 3
       ? 'https://web.trf3.jus.br/jurisprudencia/'
       : region === 4
-        ? 'https://eproc.trf4.jus.br/eproc2trf4/'
+        ? 'https://jurisprudencia.trf4.jus.br/'
         : `https://www.trf${region}.jus.br/jurisprudencia`,
-    connectorStatus: region === 3 ? 'READY' as const : region === 4 ? 'PARTIAL' as const : 'MANUAL_ONLY' as const,
+    connectorStatus: region === 3 || region === 4 ? 'READY' as const : 'MANUAL_ONLY' as const,
     coverageStatus: region === 3
       ? 'Pesquisa oficial automatizada de acórdãos com verificação individual e SHA-256'
       : region === 4
-        ? 'Família eproc identificada; acesso principal usa SSO e o portal expõe consultas públicas específicas. Automação de consulta ainda não habilitada.'
+        ? 'Pesquisa pública eproc automatizada com inteiro teor individual oficial, verificação determinística e SHA-256'
         : 'Jurisprudência Regional Federal - Conferência Humana Obrigatória',
-    verificationMethod: region === 3 ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: region === 3 ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
+    verificationMethod: region === 3 || region === 4 ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
+    termsStatus: region === 3 || region === 4 ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,

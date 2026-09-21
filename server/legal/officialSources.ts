@@ -5,6 +5,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TRT2: new Set(['pje.trt2.jus.br']),
   TJSP: new Set(['esaj.tjsp.jus.br']),
   TRF3: new Set(['web.trf3.jus.br']),
+  TRF4: new Set(['jurisprudencia.trf4.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -182,6 +183,38 @@ export function isExactDjenCertificateUrl(value: string, expectedHash?: string):
     const match = url.pathname.match(/^\/api\/v1\/comunicacao\/([A-Za-z0-9_-]+)\/certidao$/);
     if (!match) return false;
     return expectedHash ? match[1] === expectedHash : true;
+  } catch {
+    return false;
+  }
+}
+
+
+export function isExactTrf4DocumentUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'jurisprudencia.trf4.jus.br'
+      || url.pathname !== '/eproc2trf4/externo_controlador.php'
+      || url.searchParams.get('acao') !== 'jurisprudencia@jurisprudencia/download_inteiro_teor'
+    ) return false;
+    const id = url.searchParams.get('id_jurisprudencia') || '';
+    if (!/^\d{20,40}$/.test(id)) return false;
+    const allowed = new Set(['acao', 'id_jurisprudencia', 'termosPesquisados']);
+    return [...url.searchParams.keys()].every((key) => allowed.has(key));
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTrf4SearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'jurisprudencia.trf4.jus.br'
+      && url.pathname === '/eproc2trf4/externo_controlador.php'
+      && url.searchParams.get('acao') === 'jurisprudencia@jurisprudencia/listar_resultados'
+      && [...url.searchParams.keys()].every((key) => key === 'acao');
   } catch {
     return false;
   }

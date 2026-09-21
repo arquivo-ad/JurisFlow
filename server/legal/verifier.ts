@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -86,6 +86,9 @@ export class PrecedentVerifier {
     }
     if (decision.sourceId === 'trf3-jurisprudencia' && (!isExactTrf3DocumentUrl(officialUrl) || decision.courtCode !== 'TRF3')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TRF3 não aponta para acórdão individual oficial do TRF3.');
+    }
+    if (decision.sourceId === 'trf4-jurisprudencia' && (!isExactTrf4DocumentUrl(officialUrl) || decision.courtCode !== 'TRF4')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TRF4 não aponta para inteiro teor individual oficial do eproc/TRF4.');
     }
     if (decision.sourceId === 'tst-normativos' && (!isExactTstNormativeCollectionUrl(officialUrl) || decision.courtCode !== 'TST')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: verbete normativo TST não aponta para a coleção oficial permitida.');

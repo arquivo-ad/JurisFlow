@@ -11,9 +11,10 @@ import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
+import { Trf4JurisprudenciaAdapter } from '../adapters/Trf4JurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -738,4 +739,76 @@ test('probe Projudi reconhece portal de consulta pública sem declarar automaç�
   assert.equal(result.family, 'PROJUDI');
   assert.equal(result.capabilityState, 'PUBLIC_PORTAL');
   assert.equal(result.publicConsultationDetected, true);
+});
+
+const trf4ResultHtml =
+  '<html><body>' +
+  '<a href="javascript:void(0)" class="text-dark inteiroTeor" ' +
+  'data-link="externo_controlador.php?acao=jurisprudencia@jurisprudencia/download_inteiro_teor&id_jurisprudencia=41789749459516495890278691697&termosPesquisados=YmVuZWZpY2lv"></a>' +
+  '<div class="card-body">' +
+  '<div class="resValueTipoJurisprudencia">Acórdão</div>' +
+  '<a class="numero-processo">5000871-13.2026.4.04.7201/TRF4</a><span>AC - Apelação Cível</span>' +
+  '<div class="resLabel">ÓRGÃO JULGADOR</div><div class="resValue">1ª Turma</div>' +
+  '<div class="resLabel">DATA DO JULGAMENTO</div><div class="resValue">18/09/2026</div>' +
+  '<div class="resLabel">DATA DA PUBLICAÇÃO</div><div class="resValue">18/09/2026</div>' +
+  '<div class="resLabel">RELATOR</div><div class="resValue completo">MARCELO DE NARDI</div>' +
+  '<div class="resLabel">DECISÃO</div><div class="resValue completo">Negado provimento à apelação por unanimidade.</div>' +
+  '<div class="resLabel">EMENTA</div><div class="resValue completo">PREVIDENCIÁRIO. BENEFÍCIO PREVIDENCIÁRIO. REQUISITOS PREENCHIDOS. MANUTENÇÃO DA SENTENÇA.</div>' +
+  '</div></body></html>';
+
+const trf4DocumentHtml = '<html><body><h1>Documento oficial TRF4</h1><p>'
+  + 'Inteiro teor oficial do acórdão previdenciário. '.repeat(80)
+  + '</p></body></html>';
+
+function latin1Response(body: string, init: ResponseInit = {}): Response {
+  return new Response(Buffer.from(body, 'latin1'), {
+    status: init.status || 200,
+    headers: {
+      'Content-Type': 'text/html; charset=ISO-8859-1',
+      ...(init.headers || {}),
+    },
+  });
+}
+
+function trf4FetchMock(): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes('acao=jurisprudencia@jurisprudencia/pesquisar')) {
+      return latin1Response('<html>TRF4 Jurisprudência</html>', { headers: { 'Set-Cookie': 'PHPSESSID=test-session; Path=/' } });
+    }
+    if (url.includes('acao=jurisprudencia@jurisprudencia/listar_resultados')) return latin1Response(trf4ResultHtml);
+    if (url.includes('id_jurisprudencia=')) return latin1Response(trf4DocumentHtml);
+    return latin1Response('<html>not found</html>', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TRF4 aceita somente endpoints oficiais exatos do eproc', () => {
+  assert.equal(isExactTrf4SearchUrl('https://jurisprudencia.trf4.jus.br/eproc2trf4/externo_controlador.php?acao=jurisprudencia@jurisprudencia/listar_resultados'), true);
+  assert.equal(isExactTrf4DocumentUrl('https://jurisprudencia.trf4.jus.br/eproc2trf4/externo_controlador.php?acao=jurisprudencia@jurisprudencia/download_inteiro_teor&id_jurisprudencia=41789749459516495890278691697'), true);
+  assert.equal(isExactTrf4DocumentUrl('https://jurisprudencia.trf4.jus.br.evil.example/eproc2trf4/externo_controlador.php?acao=jurisprudencia@jurisprudencia/download_inteiro_teor&id_jurisprudencia=41789749459516495890278691697'), false);
+});
+
+test('TRF4 verifica acórdão somente após inteiro teor individual oficial', async () => {
+  const result = await new Trf4JurisprudenciaAdapter(trf4FetchMock()).searchOfficialJurisprudence('beneficio previdenciario', 1);
+  assert.equal(result.decisions.length, 1);
+  assert.equal(result.diagnostic.lifecycleState, 'SEARCH_SUCCESS');
+  assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(result.decisions[0]?.normalizedCnjNumber, '5000871-13.2026.4.04.7201');
+  assert.equal(result.decisions[0]?.courtCode, 'TRF4');
+  assert.equal(result.decisions[0]?.courtOrgan, '1ª Turma');
+  assert.equal(result.decisions[0]?.verificationBadge, '[OFICIAL TRF4 - VERIFICADO]');
+  assert.equal(result.decisions[0]?.officialUrl.includes('termosPesquisados'), false);
+  assert.match(result.decisions[0]?.contentSha256 || '', /^[a-f0-9]{64}$/);
+});
+
+test('busca explícita no TRF4 admite acórdão verificado no ranking', async () => {
+  const adapter = new Trf4JurisprudenciaAdapter(trf4FetchMock());
+  const official = await adapter.searchOfficialJurisprudence('beneficio previdenciario', 1);
+  assert.equal(official.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+  const service = new JudicialSearchService();
+  (service as any).trf4Adapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({ query: 'beneficio previdenciario', courtCodes: ['TRF4'], onlyVerified: true });
+  assert.equal(result.results.some((item) => item.courtCode === 'TRF4'), true);
+  assert.equal(result.diagnostic?.lifecycleState, 'SEARCH_SUCCESS');
+  assert.ok(result.sourcesConsulted.includes('trf4-jurisprudencia'));
 });

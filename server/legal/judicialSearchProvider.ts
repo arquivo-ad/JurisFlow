@@ -13,6 +13,7 @@ import { TstNormativeCollectionAdapter, TstNormativeType } from './adapters/TstN
 import { Trt2JurisprudenciaAdapter } from './adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from './adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from './adapters/Trf3JurisprudenciaAdapter.ts';
+import { Trf4JurisprudenciaAdapter } from './adapters/Trf4JurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from './adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from './adapters/CourtFamilyProbeAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
@@ -198,6 +199,7 @@ export class JudicialSearchService {
   private trt2Adapter: Trt2JurisprudenciaAdapter;
   private tjspAdapter: TjspJurisprudenciaAdapter;
   private trf3Adapter: Trf3JurisprudenciaAdapter;
+  private trf4Adapter: Trf4JurisprudenciaAdapter;
   private djenAdapter: DjenPublicationsAdapter;
   private courtFamilyProbeAdapter: CourtFamilyProbeAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
@@ -210,6 +212,7 @@ export class JudicialSearchService {
     this.trt2Adapter = new Trt2JurisprudenciaAdapter();
     this.tjspAdapter = new TjspJurisprudenciaAdapter();
     this.trf3Adapter = new Trf3JurisprudenciaAdapter();
+    this.trf4Adapter = new Trf4JurisprudenciaAdapter();
     this.djenAdapter = new DjenPublicationsAdapter();
     this.courtFamilyProbeAdapter = new CourtFamilyProbeAdapter();
   }
@@ -234,6 +237,7 @@ export class JudicialSearchService {
     const requestsTrt2 = params.courtCodes?.includes('TRT2') === true;
     const requestsTjsp = params.courtCodes?.includes('TJSP') === true;
     const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
+    const requestsTrf4 = params.courtCodes?.includes('TRF4') === true;
     const regionalSourcesConsulted: string[] = [];
     const nationalSourcesConsulted: string[] = [];
     let activeTstDecisions = undefined as CanonicalLegalDecision[] | undefined;
@@ -242,6 +246,7 @@ export class JudicialSearchService {
     let trt2Diagnostic = undefined as Awaited<ReturnType<Trt2JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjspDiagnostic = undefined as Awaited<ReturnType<TjspJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let trf3Diagnostic = undefined as Awaited<ReturnType<Trf3JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let trf4Diagnostic = undefined as Awaited<ReturnType<Trf4JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -283,6 +288,15 @@ export class JudicialSearchService {
       trf3Diagnostic = trf3Result.diagnostic;
       regionalSourcesConsulted.push('trf3-jurisprudencia');
       for (const decision of trf3Result.decisions) {
+        if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
+      }
+    }
+
+    if (requestsTrf4) {
+      const trf4Result = await this.trf4Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      trf4Diagnostic = trf4Result.diagnostic;
+      regionalSourcesConsulted.push('trf4-jurisprudencia');
+      for (const decision of trf4Result.decisions) {
         if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
       }
     }
@@ -343,7 +357,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -492,11 +506,11 @@ export class JudicialSearchService {
         notes: 'Pesquisa oficial automatizada com confirmação do acórdão individual e SHA-256 do documento recebido.',
       },
       {
-        courtCode: 'TRF4', courtName: 'TRF4 - eproc', jurisdiction: '4ª Região',
-        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'RESTRITO',
-        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://eproc.trf4.jus.br/eproc2trf4/',
-        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Família eproc identificada. Acesso principal redireciona para SSO; consultas públicas específicas existem, mas ainda não são automatizadas pelo JurisFlow.',
+        courtCode: 'TRF4', courtName: 'TRF4 - Jurisprudência eproc', jurisdiction: '4ª Região',
+        jurisprudenceStatus: 'DISPONIVEL', processStatus: 'RESTRITO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://jurisprudencia.trf4.jus.br/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
+        notes: 'Pesquisa pública eproc automatizada com confirmação do inteiro teor individual oficial e SHA-256. Consulta processual autenticada continua fora deste conector.',
       },
       {
         courtCode: 'TJPR', courtName: 'TJPR - Projudi', jurisdiction: 'PR',
