@@ -75,6 +75,17 @@ export const COURT_FAMILY_CONFIGS: readonly CourtFamilyConfig[] = [
     publicConsultationKnown: true,
     notes: 'Portal Projudi público identificado; consultas processual e de precedentes exigem reCAPTCHA no envio e permanecem fail-closed.',
   },
+  {
+    courtCode: 'TJGO',
+    courtName: 'Tribunal de Justiça do Estado de Goiás',
+    family: 'PROJUDI',
+    officialPortalUrl: 'https://projudi.tjgo.jus.br/ConsultaJurisprudencia',
+    probeUrl: 'https://projudi.tjgo.jus.br/ConsultaJurisprudencia',
+    expectedHosts: ['projudi.tjgo.jus.br'],
+    capabilityHint: 'INTERACTIVE_REQUIRED',
+    publicConsultationKnown: true,
+    notes: 'Portal Projudi público identificado. O POST de jurisprudência e o AJAX de texto formatado exigem token Turnstile/Cloudflare; JurisFlow permanece fail-closed.',
+  },
 ] as const;
 
 export function getCourtFamilyConfig(courtCode: string): CourtFamilyConfig | undefined {

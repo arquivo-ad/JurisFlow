@@ -1451,3 +1451,20 @@ test('busca TJPE respeita onlyVerified e nunca promove fonte parcial', async () 
   });
   assert.equal(verified.results.some((item) => item.courtCode === 'TJPE'), false);
 });
+
+test('TJGO permanece Projudi interativo e fail-closed', () => {
+  const config = getCourtFamilyConfig('TJGO');
+  assert.ok(config);
+  assert.equal(config?.family, 'PROJUDI');
+  assert.equal(config?.capabilityHint, 'INTERACTIVE_REQUIRED');
+  assert.equal(config?.publicConsultationKnown, true);
+  assert.equal(
+    isAllowedCourtFamilyUrl(config!, 'https://projudi.tjgo.jus.br/ConsultaJurisprudencia'),
+    true
+  );
+  assert.equal(
+    isAllowedCourtFamilyUrl(config!, 'https://projudi.tjgo.jus.br.evil.example/ConsultaJurisprudencia'),
+    false
+  );
+  assert.match(config?.notes || '', /Turnstile|Cloudflare/i);
+});

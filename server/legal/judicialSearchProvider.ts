@@ -649,6 +649,13 @@ export class JudicialSearchService {
         notes: 'Consulta pública existe, mas desde 04/02/2026 há duas bases: eJURIS legado e eproc. eJURIS usa reCAPTCHA v3 no fluxo de pesquisa e eproc 2G redireciona para SSO; automação permanece fail-closed.',
       },
       {
+        courtCode: 'TJGO', courtName: 'TJGO - Jurisprudência Projudi', jurisdiction: 'GO',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://projudi.tjgo.jus.br/ConsultaJurisprudencia',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Portal Projudi oficial identificado. O POST de pesquisa e o AJAX de texto formatado exigem Turnstile/Cloudflare; JurisFlow permanece fail-closed e não contorna o desafio.',
+      },
+      {
         courtCode: 'TJPE', courtName: 'TJPE - Consulta Jurisprudência', jurisdiction: 'PE',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://consultajurisprudencia.app.tjpe.jus.br/',
