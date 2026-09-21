@@ -1,5 +1,7 @@
 import { LegalSourceRegistryItem } from './types.ts';
 
+const DATAJUD_CONFIGURED = Boolean(process.env.DATAJUD_API_KEY?.trim());
+
 /**
  * REGISTRO PERSISTENTE DE FONTES OFICIAIS DO PODER JUDICIÁRIO BRASILEIRO
  *
@@ -37,8 +39,10 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     sourceType: 'OFFICIAL_API',
     officialBaseUrl: 'https://api-publica.datajud.cnj.jus.br/',
     documentationUrl: 'https://datajud-wiki.cnj.jus.br/api-publica/',
-    connectorStatus: 'NOT_CONFIGURED',
-    coverageStatus: 'Metadados processuais (capa, classe, órgão julgador, movimentos e TPU)',
+    connectorStatus: DATAJUD_CONFIGURED ? 'READY' : 'NOT_CONFIGURED',
+    coverageStatus: DATAJUD_CONFIGURED
+      ? 'Metadados processuais reais do CNJ validados ao vivo em múltiplos tribunais; identidade, movimentos e hashes auditáveis.'
+      : 'Metadados processuais (capa, classe, órgão julgador, movimentos e TPU) - aguardando DATAJUD_API_KEY',
     verificationMethod: 'AUTOMATED_API',
     termsStatus: 'COMPLIANT_PUBLIC_ACCESS',
     documentsDiscovered: 0,
@@ -47,7 +51,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     documentsRejected: 0,
     enabled: true,
     requiresCredential: true,
-    credentialConfigured: false,
+    credentialConfigured: DATAJUD_CONFIGURED,
   },
   {
     sourceId: 'cnj-djen-public',

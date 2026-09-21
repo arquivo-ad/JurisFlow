@@ -14,8 +14,8 @@ import { isExactDataJudSearchUrl } from '../officialSources.ts';
  */
 
 // A chave pública do CNJ pode mudar. Ela deve ser configurada no ambiente e
-// nunca ficar embutida no código-fonte.
-const DEFAULT_DATAJUD_API_KEY = process.env.DATAJUD_API_KEY?.trim() || '';
+// nunca ficar embutida no código-fonte. A leitura ocorre na construção para
+// respeitar o bootstrap do .env e permitir testes com chave explicitamente vazia.
 const DATAJUD_BASE_URL = 'https://api-publica.datajud.cnj.jus.br';
 
 export class DataJudAdapter {
@@ -25,7 +25,7 @@ export class DataJudAdapter {
   private timeoutMs: number;
 
   constructor(apiKey?: string, baseUrl?: string, fetchImpl: typeof fetch = fetch, timeoutMs = 30_000) {
-    this.apiKey = apiKey || DEFAULT_DATAJUD_API_KEY;
+    this.apiKey = apiKey === undefined ? (process.env.DATAJUD_API_KEY?.trim() || '') : apiKey.trim();
     this.baseUrl = (baseUrl || DATAJUD_BASE_URL).replace(/\/+$/, '');
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;

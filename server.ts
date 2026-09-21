@@ -1,10 +1,10 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import net from 'net';
 import { createServer as createViteServer } from 'vite';
-import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 
 import {
@@ -149,8 +149,6 @@ import {
   LawyerDigitalCertificateInfo,
   JudicialProcessSearchResult,
 } from './src/types/index.ts';
-
-dotenv.config();
 
 // ==========================================
 // SYSTEM MODULES REGISTRY SEED
