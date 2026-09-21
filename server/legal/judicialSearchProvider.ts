@@ -18,6 +18,7 @@ import { DjenPublicationsAdapter } from './adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from './adapters/CourtFamilyProbeAdapter.ts';
 import { Trt15PrecedentsAdapter, type Trt15PrecedentType } from './adapters/Trt15PrecedentsAdapter.ts';
 import { FalcaoJurisprudenciaAdapter } from './adapters/FalcaoJurisprudenciaAdapter.ts';
+import { TjrsJurisprudenciaAdapter } from './adapters/TjrsJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -206,6 +207,7 @@ export class JudicialSearchService {
   private courtFamilyProbeAdapter: CourtFamilyProbeAdapter;
   private trt15PrecedentsAdapter: Trt15PrecedentsAdapter;
   private falcaoAdapter: FalcaoJurisprudenciaAdapter;
+  private tjrsAdapter: TjrsJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -221,6 +223,7 @@ export class JudicialSearchService {
     this.courtFamilyProbeAdapter = new CourtFamilyProbeAdapter();
     this.trt15PrecedentsAdapter = new Trt15PrecedentsAdapter();
     this.falcaoAdapter = new FalcaoJurisprudenciaAdapter();
+    this.tjrsAdapter = new TjrsJurisprudenciaAdapter();
   }
 
   /**
@@ -244,6 +247,7 @@ export class JudicialSearchService {
     const requestedTrtCodes = (params.courtCodes || []).filter((code) => /^TRT(?:[1-9]|1\d|2[0-4])$/.test(code));
     const requestsTrt2 = params.courtCodes?.includes('TRT2') === true;
     const requestsTjsp = params.courtCodes?.includes('TJSP') === true;
+    const requestsTjrs = params.courtCodes?.includes('TJRS') === true;
     const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
     const requestsTrf4 = params.courtCodes?.includes('TRF4') === true;
     const regionalSourcesConsulted: string[] = [];
@@ -256,6 +260,8 @@ export class JudicialSearchService {
     let trf3Diagnostic = undefined as Awaited<ReturnType<Trf3JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let trf4Diagnostic = undefined as Awaited<ReturnType<Trf4JurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let falcaoDiagnostic = undefined as Awaited<ReturnType<FalcaoJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tjrsDiagnostic = undefined as Awaited<ReturnType<TjrsJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let activeTjrsDecisions: CanonicalLegalDecision[] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -305,6 +311,13 @@ export class JudicialSearchService {
       regionalSourcesConsulted.push('tjsp-jurisprudencia');
     }
 
+    if (requestsTjrs) {
+      const tjrsResult = await this.tjrsAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      tjrsDiagnostic = tjrsResult.diagnostic;
+      regionalSourcesConsulted.push('tjrs-jurisprudencia');
+      activeTjrsDecisions = tjrsResult.decisions;
+    }
+
     if (requestsTrf3) {
       const trf3Result = await this.trf3Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
       trf3Diagnostic = trf3Result.diagnostic;
@@ -323,8 +336,17 @@ export class JudicialSearchService {
       }
     }
 
-    const searchEngine = activeTstDecisions
-      ? new LegalSearchEngine({ getDecisions: () => activeTstDecisions } as unknown as typeof legalStorage)
+    let transientDecisions: CanonicalLegalDecision[] | undefined = activeTstDecisions;
+    if (!transientDecisions && activeTjrsDecisions) {
+      const otherCourts = (params.courtCodes || []).filter((code) => code !== 'TJRS');
+      const persisted = otherCourts.length > 0
+        ? legalStorage.getDecisions({ tenantId, courtCodes: otherCourts, onlyVerified: params.onlyVerified })
+        : [];
+      transientDecisions = [...persisted, ...activeTjrsDecisions];
+    }
+
+    const searchEngine = transientDecisions
+      ? new LegalSearchEngine({ getDecisions: () => transientDecisions! } as unknown as typeof legalStorage)
       : new LegalSearchEngine(legalStorage);
 
     // Ajusta o LegalSearchQuery canônico
@@ -379,7 +401,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -530,6 +552,13 @@ export class JudicialSearchService {
         authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://esaj.tjsp.jus.br/cjsg/consultaCompleta.do',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Portal oficial identificado; pesquisa completa exige reCAPTCHA/CAPTCHA interativo e não é contornada pelo JurisFlow.',
+      },
+      {
+        courtCode: 'TJRS', courtName: 'TJRS - Pesquisa Oficial Solr', jurisdiction: 'RS',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www.tjrs.jus.br/buscas/jurisprudencia/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Pesquisa oficial automatizada com CNJ, relator, órgão julgador, datas, ementa e inteiro teor em Base64. Sem selo VERIFIED_OFFICIAL enquanto não houver URL individual oficial estável.',
       },
       {
         courtCode: 'TRF3', courtName: 'TRF3 - Pesquisa de Jurisprudência', jurisdiction: '3ª Região',

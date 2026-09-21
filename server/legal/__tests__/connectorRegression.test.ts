@@ -14,6 +14,7 @@ import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter
 import { Trf4JurisprudenciaAdapter } from '../adapters/Trf4JurisprudenciaAdapter.ts';
 import { Trt15PrecedentsAdapter, isExactTrt15PrecedentsListUrl } from '../adapters/Trt15PrecedentsAdapter.ts';
 import { FalcaoJurisprudenciaAdapter } from '../adapters/FalcaoJurisprudenciaAdapter.ts';
+import { TjrsJurisprudenciaAdapter, isExactTjrsAjaxUrl } from '../adapters/TjrsJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
 import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl } from '../officialSources.ts';
@@ -941,4 +942,90 @@ test('busca explícita em TRT regional usa Falcão sem ser substituída pelo TST
   assert.ok(result.sourcesConsulted.includes('falcao-jurisprudencia'));
   assert.equal(result.sourcesConsulted.includes('tst-jurisprudencia'), false);
   assert.equal(result.diagnostic?.adapter, 'falcao-jurisprudencia');
+});
+
+
+const tjrsMockDoc = {
+  tipo_documento: 'Acordao',
+  ementa_completa: ['DIREITO CIVIL. APELACAO. BENEFICIO PREVIDENCIARIO. EMENTA OFICIAL SUFICIENTE PARA O TESTE DE INTEGRACAO.'],
+  tipo_processo: 'Apelacao Civel',
+  documento_text: Buffer.from('<html><body>Inteiro teor oficial do acordao TJRS com fundamentacao suficiente para teste.</body></html>', 'latin1').toString('base64'),
+  data_publicacao: '2026-09-16T03:00:00Z',
+  data_julgamento: '2026-09-15T03:00:00Z',
+  nome_tribunal: 'Tribunal de Justica do RS',
+  numero_processo: '50025824020228210038',
+  cod_ementa: '12177372',
+  orgao_julgador: 'Decima Segunda Camara Civel',
+  ind_segredo_justica: 'N',
+  nome_classe_cnj: 'Apelacao',
+  nome_assunto_cnj: 'Beneficio previdenciario',
+  nome_relator: 'Relator Oficial',
+  relator_redator: ['Relator Oficial'],
+};
+
+function tjrsFetchMock(payloadOverride?: any): typeof fetch {
+  return (async () => {
+    const payload = payloadOverride ?? {
+      response: { numFound: 1, docs: [tjrsMockDoc] },
+      highlighting: {},
+    };
+    return new Response(Buffer.from(JSON.stringify(payload), 'latin1'), {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=iso-8859-1' },
+    });
+  }) as typeof fetch;
+}
+
+test('TJRS aceita somente o endpoint AJAX oficial exato', () => {
+  assert.equal(isExactTjrsAjaxUrl('https://www.tjrs.jus.br/buscas/jurisprudencia/ajax.php'), true);
+  assert.equal(isExactTjrsAjaxUrl('https://www.tjrs.jus.br.evil.example/buscas/jurisprudencia/ajax.php'), false);
+  assert.equal(isExactTjrsAjaxUrl('http://www.tjrs.jus.br/buscas/jurisprudencia/ajax.php'), false);
+});
+
+test('TJRS normaliza busca oficial mas preserva FOUND_UNVERIFIED sem documento individual', async () => {
+  const result = await new TjrsJurisprudenciaAdapter(tjrsFetchMock())
+    .searchOfficialJurisprudence('beneficio previdenciario', 1);
+
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJRS');
+  assert.equal(decision.normalizedCnjNumber, '5002582-40.2022.8.21.0038');
+  assert.equal(decision.alternativeNumber, '12177372');
+  assert.equal(decision.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.equal(decision.verificationBadge, undefined);
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+  assert.ok((decision.fullText || '').includes('Inteiro teor oficial'));
+});
+
+test('TJRS exclui segredo de justiça da normalização', async () => {
+  const secret = { ...tjrsMockDoc, ind_segredo_justica: 'S' };
+  const result = await new TjrsJurisprudenciaAdapter(tjrsFetchMock({
+    response: { numFound: 1, docs: [secret] },
+  })).searchOfficialJurisprudence('beneficio previdenciario', 1);
+
+  assert.equal(result.decisions.length, 0);
+});
+
+test('busca TJRS respeita onlyVerified e nunca promove resultado parcial', async () => {
+  const partial = await new TjrsJurisprudenciaAdapter(tjrsFetchMock())
+    .searchOfficialJurisprudence('beneficio previdenciario', 1);
+
+  const openService = new JudicialSearchService();
+  (openService as any).tjrsAdapter = { searchOfficialJurisprudence: async () => partial };
+  const openResult = await openService.searchJurisprudence({
+    query: 'beneficio previdenciario',
+    courtCodes: ['TJRS'],
+    onlyVerified: false,
+  });
+  assert.equal(openResult.results.some((item) => item.courtCode === 'TJRS'), true);
+
+  const verifiedService = new JudicialSearchService();
+  (verifiedService as any).tjrsAdapter = { searchOfficialJurisprudence: async () => partial };
+  const verifiedResult = await verifiedService.searchJurisprudence({
+    query: 'beneficio previdenciario',
+    courtCodes: ['TJRS'],
+    onlyVerified: true,
+  });
+  assert.equal(verifiedResult.results.some((item) => item.courtCode === 'TJRS'), false);
+  assert.equal(verifiedResult.diagnostic?.adapter, 'tjrs-jurisprudencia');
 });
