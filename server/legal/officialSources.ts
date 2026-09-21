@@ -13,6 +13,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJPE: new Set(['consultajurisprudencia.app.tjpe.jus.br']),
   TJAL: new Set(['www2.tjal.jus.br']),
   TJMS: new Set(['esaj.tjms.jus.br']),
+  TJPA: new Set(['jurisprudencia.tjpa.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
   TJAC: new Set(['esaj.tjac.jus.br']),
@@ -479,6 +480,44 @@ export function isExactTjpiDetailUrl(value: string, expectedId?: string): boolea
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjpi.jus.br') return false;
     const match = url.pathname.match(/^\/jurisprudences\/(\d+)\/public$/);
+    if (!match || url.search || url.hash) return false;
+    return !expectedId || match[1] === expectedId;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjpaSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'jurisprudencia.tjpa.jus.br'
+      && url.pathname === '/bff/api/decisoes/buscar'
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjpaDetailUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'jurisprudencia.tjpa.jus.br'
+      && url.pathname === '/bff/api/decisoes/buscar-por-numero-documento'
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjpaPublicDocumentUrl(value: string, expectedId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjpa.jus.br') return false;
+    const match = url.pathname.match(/^\/documento\/(\d+)$/);
     if (!match || url.search || url.hash) return false;
     return !expectedId || match[1] === expectedId;
   } catch {

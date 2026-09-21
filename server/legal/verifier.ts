@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl, isExactTjpaPublicDocumentUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -110,6 +110,11 @@ export class PrecedentVerifier {
     if (decision.sourceId === 'tjpi-jurisprudencia') {
       if (!isExactTjpiDetailUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJPI') {
         issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJPI não aponta para página individual oficial do JusPI.');
+      }
+    }
+    if (decision.sourceId === 'tjpa-jurisprudencia') {
+      if (!isExactTjpaPublicDocumentUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJPA') {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJPA não aponta para página pública individual oficial do documento.');
       }
     }
     if (decision.sourceId === 'falcao-jurisprudencia' && (!isExactFalcaoDocumentUrl(officialUrl, decision.courtCode) || !/^TRT(?:[1-9]|1\d|2[0-4])$/.test(decision.courtCode))) {

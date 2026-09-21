@@ -22,9 +22,10 @@ import { TjceJurisprudenciaAdapter } from '../adapters/TjceJurisprudenciaAdapter
 import { TjpeJurisprudenciaAdapter } from '../adapters/TjpeJurisprudenciaAdapter.ts';
 import { EsajJurisprudenciaAdapter } from '../adapters/EsajJurisprudenciaAdapter.ts';
 import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter.ts';
+import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1659,4 +1660,83 @@ test('busca explícita no TJPI admite apenas decisão verificada', async () => {
   assert.equal(result.results.some((item) => item.courtCode === 'TJPI'), true);
   assert.ok(result.sourcesConsulted.includes('tjpi-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjpi-jurisprudencia');
+});
+
+const tjpaRecord = {
+  id: 36027620,
+  numeroprocesso: '0800462-53.2022.8.14.0044',
+  tipo: 'Acórdão',
+  origem: 'Tribunal de Justiça do Estado do Pará',
+  datapublicacao: '2026-05-07',
+  datajulgamento: '2026-04-23',
+  datadocumento: '2026-05-06',
+  pessoas: ['ROSILEIDE MARIA DA COSTA CUNHA'],
+  orgaojulgadorcolegiado: { nome: '3ª Turma de Direito Público' },
+  classe: { nome: 'APELAÇÃO CÍVEL', codigo: '198' },
+  textoementa: '<p>EMENTA OFICIAL TJPA SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA VALIDAÇÃO.</p>',
+  textooriginal: '<p>Inteiro teor oficial do acórdão TJPA.</p>'.repeat(80),
+  textopuro: 'Inteiro teor oficial do acórdão TJPA. '.repeat(80),
+};
+
+function tjpaFetchMock(mode: 'ok' | 'mismatch' = 'ok'): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith('/bff/api/decisoes/buscar')) {
+      return new Response(JSON.stringify({
+        message: 'Sucesso',
+        data: { content: [tjpaRecord], totalElements: 1, totalAcordaos: 1, totalDecisoesMonocraticas: 0 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.endsWith('/bff/api/decisoes/buscar-por-numero-documento')) {
+      const detail = mode === 'mismatch'
+        ? { ...tjpaRecord, numeroprocesso: '0000000-00.2026.8.14.0000' }
+        : tjpaRecord;
+      return new Response(JSON.stringify({
+        message: 'Sucesso',
+        data: { content: [detail], totalElements: 1 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJPA aceita somente endpoints e página pública oficiais exatos', () => {
+  assert.equal(isExactTjpaSearchUrl('https://jurisprudencia.tjpa.jus.br/bff/api/decisoes/buscar'), true);
+  assert.equal(isExactTjpaDetailUrl('https://jurisprudencia.tjpa.jus.br/bff/api/decisoes/buscar-por-numero-documento'), true);
+  assert.equal(isExactTjpaPublicDocumentUrl('https://jurisprudencia.tjpa.jus.br/documento/36027620', '36027620'), true);
+  assert.equal(isExactTjpaPublicDocumentUrl('https://jurisprudencia.tjpa.jus.br.evil.example/documento/36027620'), false);
+});
+
+test('TJPA verifica somente confirmação individual única pelo mesmo id e CNJ', async () => {
+  const result = await new TjpaJurisprudenciaAdapter(tjpaFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJPA');
+  assert.equal(decision.normalizedCnjNumber, '0800462-53.2022.8.14.0044');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJPA - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJPA rejeita detalhe individual divergente da busca', async () => {
+  const result = await new TjpaJurisprudenciaAdapter(tjpaFetchMock('mismatch'))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('divergente')));
+});
+
+test('busca explícita no TJPA admite apenas decisão oficial verificada', async () => {
+  const official = await new TjpaJurisprudenciaAdapter(tjpaFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjpaAdapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJPA'],
+    onlyVerified: true,
+  });
+  assert.equal(result.results.some((item) => item.courtCode === 'TJPA'), true);
+  assert.ok(result.sourcesConsulted.includes('tjpa-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjpa-jurisprudencia');
 });

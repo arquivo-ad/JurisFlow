@@ -26,6 +26,7 @@ import { TjceJurisprudenciaAdapter } from './adapters/TjceJurisprudenciaAdapter.
 import { TjpeJurisprudenciaAdapter } from './adapters/TjpeJurisprudenciaAdapter.ts';
 import { EsajJurisprudenciaAdapter } from './adapters/EsajJurisprudenciaAdapter.ts';
 import { TjpiJurisprudenciaAdapter } from './adapters/TjpiJurisprudenciaAdapter.ts';
+import { TjpaJurisprudenciaAdapter } from './adapters/TjpaJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -222,6 +223,7 @@ export class JudicialSearchService {
   private tjpeAdapter: TjpeJurisprudenciaAdapter;
   private esajAdapters: Record<'TJAC' | 'TJAL' | 'TJAM' | 'TJMS', EsajJurisprudenciaAdapter>;
   private tjpiAdapter: TjpiJurisprudenciaAdapter;
+  private tjpaAdapter: TjpaJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -250,6 +252,7 @@ export class JudicialSearchService {
       TJMS: new EsajJurisprudenciaAdapter('TJMS'),
     };
     this.tjpiAdapter = new TjpiJurisprudenciaAdapter();
+    this.tjpaAdapter = new TjpaJurisprudenciaAdapter();
   }
 
   /**
@@ -280,6 +283,7 @@ export class JudicialSearchService {
     const requestsTjce = params.courtCodes?.includes('TJCE') === true;
     const requestsTjpe = params.courtCodes?.includes('TJPE') === true;
     const requestsTjpi = params.courtCodes?.includes('TJPI') === true;
+    const requestsTjpa = params.courtCodes?.includes('TJPA') === true;
     const requestedEsajCodes = (params.courtCodes || []).filter(
       (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
     );
@@ -305,6 +309,7 @@ export class JudicialSearchService {
     let activeTjpeDecisions: CanonicalLegalDecision[] | undefined;
     let esajDiagnostic = undefined as Awaited<ReturnType<EsajJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjpiDiagnostic = undefined as Awaited<ReturnType<TjpiJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tjpaDiagnostic = undefined as Awaited<ReturnType<TjpaJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
@@ -403,6 +408,15 @@ export class JudicialSearchService {
       tjpeDiagnostic = tjpeResult.diagnostic;
       regionalSourcesConsulted.push('tjpe-jurisprudencia');
       activeTjpeDecisions = tjpeResult.decisions;
+    }
+
+    if (requestsTjpa) {
+      const tjpaResult = await this.tjpaAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      tjpaDiagnostic = tjpaResult.diagnostic;
+      regionalSourcesConsulted.push('tjpa-jurisprudencia');
+      for (const decision of tjpaResult.decisions) {
+        if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
+      }
     }
 
     if (requestsTjpi) {
@@ -519,7 +533,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -691,6 +705,13 @@ export class JudicialSearchService {
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Consulta pública existe, mas desde 04/02/2026 há duas bases: eJURIS legado e eproc. eJURIS usa reCAPTCHA v3 no fluxo de pesquisa e eproc 2G redireciona para SSO; automação permanece fail-closed.',
+      },
+      {
+        courtCode: 'TJPA', courtName: 'TJPA - Banco de Jurisprudência', jurisdiction: 'PA',
+        jurisprudenceStatus: 'DISPONIVEL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisprudencia.tjpa.jus.br/bff/api/decisoes/buscar',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
+        notes: 'BFF público oficial com busca estruturada, confirmação individual por id, página pública /documento/{id} e SHA-256.',
       },
       {
         courtCode: 'TJPI', courtName: 'TJPI - JusPI', jurisdiction: 'PI',
