@@ -16,9 +16,10 @@ import { Trt15PrecedentsAdapter, isExactTrt15PrecedentsListUrl } from '../adapte
 import { FalcaoJurisprudenciaAdapter } from '../adapters/FalcaoJurisprudenciaAdapter.ts';
 import { TjrsJurisprudenciaAdapter, isExactTjrsAjaxUrl } from '../adapters/TjrsJurisprudenciaAdapter.ts';
 import { TjdftJurisprudenciaAdapter } from '../adapters/TjdftJurisprudenciaAdapter.ts';
+import { TjscJurisprudenciaAdapter } from '../adapters/TjscJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1128,4 +1129,61 @@ test('busca explícita no TJDFT admite somente decisão oficial verificada no ra
   assert.equal(result.results.some((item) => item.courtCode === 'TJDFT'), true);
   assert.ok(result.sourcesConsulted.includes('tjdft-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjdft-jurisprudencia');
+});
+
+const tjscResultHtml =
+  '<html><body>' +
+  '<a href="javascript:void(0)" class="text-dark inteiroTeor" ' +
+  'data-link="externo_controlador.php?acao=jurisprudencia@jurisprudencia/download_inteiro_teor&id_jurisprudencia=321789736688770221598299935477&termosPesquisados=ZGFub3xtb3JhbA=="></a>' +
+  '<div class="card-body">' +
+  '<div class="resValueTipoJurisprudencia">Acórdão</div>' +
+  '<a class="numero-processo">5052506-02.2023.8.24.0038</a><span>AC - Apelação Cível</span>' +
+  '<div class="resLabel">ÓRGÃO JULGADOR</div><div class="resValue">1ª Câmara de Direito Civil</div>' +
+  '<div class="resLabel">DATA DO JULGAMENTO</div><div class="resValue">18/09/2026</div>' +
+  '<div class="resLabel">DATA DA PUBLICAÇÃO</div><div class="resValue">18/09/2026</div>' +
+  '<div class="resLabel">RELATOR</div><div class="resValue completo">VITORALDO BRIDI</div>' +
+  '<div class="resLabel">DECISÃO</div><div class="resValue completo">Embargos rejeitados por unanimidade.</div>' +
+  '<div class="resLabel">EMENTA</div><div class="resValue completo">DIREITO CIVIL. DANO MORAL. APELAÇÃO. EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO DETERMINÍSTICA.</div>' +
+  '</div></body></html>';
+
+const tjscDocumentHtml = '<html><body><h1>Documento oficial TJSC</h1><p>'
+  + 'Inteiro teor oficial do acórdão do TJSC. '.repeat(80)
+  + '</p></body></html>';
+
+function tjscFetchMock(): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes('www.tjsc.jus.br/web/jurisprudencia')) return latin1Response('<html>Portal TJSC</html>');
+    if (url.includes('listar_resultados')) return latin1Response(tjscResultHtml);
+    if (url.includes('id_jurisprudencia=')) return latin1Response(tjscDocumentHtml);
+    return latin1Response('<html>not found</html>', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJSC aceita somente endpoints oficiais exatos do eproc', () => {
+  assert.equal(isExactTjscSearchUrl('https://eprocwebcon.tjsc.jus.br/consulta1g/externo_controlador.php?acao=jurisprudencia@jurisprudencia/listar_resultados'), true);
+  assert.equal(isExactTjscDocumentUrl('https://eprocwebcon.tjsc.jus.br/consulta1g/externo_controlador.php?acao=jurisprudencia@jurisprudencia/download_inteiro_teor&id_jurisprudencia=321789736688770221598299935477'), true);
+  assert.equal(isExactTjscDocumentUrl('https://eprocwebcon.tjsc.jus.br.evil.example/consulta1g/externo_controlador.php?acao=jurisprudencia@jurisprudencia/download_inteiro_teor&id_jurisprudencia=321789736688770221598299935477'), false);
+});
+
+test('TJSC verifica acórdão somente após inteiro teor individual oficial', async () => {
+  const result = await new TjscJurisprudenciaAdapter(tjscFetchMock()).searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJSC');
+  assert.equal(decision.normalizedCnjNumber, '5052506-02.2023.8.24.0038');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJSC - VERIFICADO]');
+  assert.equal(decision.officialUrl.includes('termosPesquisados'), false);
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('busca explícita no TJSC admite acórdão verificado no ranking', async () => {
+  const official = await new TjscJurisprudenciaAdapter(tjscFetchMock()).searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjscAdapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({ query: 'dano moral', courtCodes: ['TJSC'], onlyVerified: true });
+  assert.equal(result.results.some((item) => item.courtCode === 'TJSC'), true);
+  assert.ok(result.sourcesConsulted.includes('tjsc-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjsc-jurisprudencia');
 });
