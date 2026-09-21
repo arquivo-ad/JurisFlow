@@ -15,9 +15,10 @@ import { Trf4JurisprudenciaAdapter } from '../adapters/Trf4JurisprudenciaAdapter
 import { Trt15PrecedentsAdapter, isExactTrt15PrecedentsListUrl } from '../adapters/Trt15PrecedentsAdapter.ts';
 import { FalcaoJurisprudenciaAdapter } from '../adapters/FalcaoJurisprudenciaAdapter.ts';
 import { TjrsJurisprudenciaAdapter, isExactTjrsAjaxUrl } from '../adapters/TjrsJurisprudenciaAdapter.ts';
+import { TjdftJurisprudenciaAdapter } from '../adapters/TjdftJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1028,4 +1029,103 @@ test('busca TJRS respeita onlyVerified e nunca promove resultado parcial', async
   });
   assert.equal(verifiedResult.results.some((item) => item.courtCode === 'TJRS'), false);
   assert.equal(verifiedResult.diagnostic?.adapter, 'tjrs-jurisprudencia');
+});
+
+
+const tjdftRecord = {
+  sequencial: 1,
+  base: 'acordaos',
+  subbase: 'acordaos',
+  uuid: '519feb95-b08f-456e-a5e3-07e4132b9a3a',
+  identificador: '2171324',
+  dataJulgamento: '2026-09-10T03:00:00.000Z',
+  dataPublicacao: '2026-09-21T02:47:16.000Z',
+  decisao: 'CONHECER E NEGAR PROVIMENTO. UNANIME.',
+  ementa: 'DIREITO CIVIL. RESPONSABILIDADE CIVIL. DANO MORAL. ACORDAO OFICIAL COM EMENTA SUFICIENTE PARA VALIDACAO DETERMINISTICA.',
+  processo: '0706024-88.2024.8.07.0002',
+  nomeRelator: 'LUCIMEIRE MARIA DA SILVA',
+  segredoJustica: false,
+  descricaoOrgaoJulgador: '5ª TURMA CÍVEL',
+  versao: '01',
+  possuiInteiroTeor: true,
+};
+
+function tjdftFetchMock(mode: 'ok' | 'duplicate' | 'mismatch' = 'ok'): typeof fetch {
+  return (async (_input: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body || '{}'));
+    const uuidFilter = body?.termosAcessorios?.find((item: any) => item.campo === 'uuid');
+    if (uuidFilter) {
+      const record = mode === 'mismatch'
+        ? { ...tjdftRecord, uuid: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }
+        : tjdftRecord;
+      const records = mode === 'duplicate' ? [record, record] : [record];
+      const hits = mode === 'duplicate' ? 2 : 1;
+      return new Response(JSON.stringify({
+        hits: { value: hits },
+        registros: records,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({
+      hits: { value: 1 },
+      registros: [tjdftRecord],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+test('TJDFT aceita somente o endpoint oficial exato da API pública', () => {
+  assert.equal(isExactTjdftSearchUrl('https://jurisdf.tjdft.jus.br/api/v1/pesquisa'), true);
+  assert.equal(isExactTjdftSearchUrl('https://jurisdf.tjdft.jus.br.evil.example/api/v1/pesquisa'), false);
+  assert.equal(isExactTjdftSearchUrl('http://jurisdf.tjdft.jus.br/api/v1/pesquisa'), false);
+});
+
+test('TJDFT verifica decisão somente após confirmação individual única por UUID', async () => {
+  const result = await new TjdftJurisprudenciaAdapter(tjdftFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJDFT');
+  assert.equal(decision.normalizedCnjNumber, '0706024-88.2024.8.07.0002');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJDFT - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+  assert.equal(decision.rawPayloadPreserved?.verificationEvidence?.individualRequest?.hits, 1);
+});
+
+test('TJDFT rejeita confirmação UUID não única ou divergente', async () => {
+  const duplicate = await new TjdftJurisprudenciaAdapter(tjdftFetchMock('duplicate'))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(duplicate.decisions.length, 0);
+  assert.ok(duplicate.diagnostic.rejectionReasons.some((reason) => reason.includes('divergente')));
+
+  const mismatch = await new TjdftJurisprudenciaAdapter(tjdftFetchMock('mismatch'))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(mismatch.decisions.length, 0);
+});
+
+test('busca explícita no TJDFT admite somente decisão oficial verificada no ranking', async () => {
+  const official = await new TjdftJurisprudenciaAdapter(tjdftFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(official.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
+
+  const service = new JudicialSearchService();
+  (service as any).tjdftAdapter = {
+    searchOfficialJurisprudence: async () => official,
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJDFT'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TJDFT'), true);
+  assert.ok(result.sourcesConsulted.includes('tjdft-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjdft-jurisprudencia');
 });

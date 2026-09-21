@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -92,6 +92,18 @@ export class PrecedentVerifier {
     }
     if (decision.sourceId === 'falcao-jurisprudencia' && (!isExactFalcaoDocumentUrl(officialUrl, decision.courtCode) || !/^TRT(?:[1-9]|1\d|2[0-4])$/.test(decision.courtCode))) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro Falcão não aponta para acórdão individual oficial do TRT informado.');
+    }
+    if (decision.sourceId === 'tjdft-jurisprudencia') {
+      const tjdftEvidence = (decision.rawPayloadPreserved as any)?.verificationEvidence;
+      const uuid = (decision.rawPayloadPreserved as any)?.uuid;
+      if (
+        decision.courtCode !== 'TJDFT'
+        || !isExactTjdftSearchUrl(officialUrl)
+        || tjdftEvidence?.individualRequest?.uuid !== uuid
+        || tjdftEvidence?.individualRequest?.hits !== 1
+      ) {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJDFT não possui confirmação individual exata por UUID na API oficial.');
+      }
     }
     if (decision.sourceId === 'tst-normativos' && (!isExactTstNormativeCollectionUrl(officialUrl) || decision.courtCode !== 'TST')) {
       issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: verbete normativo TST não aponta para a coleção oficial permitida.');

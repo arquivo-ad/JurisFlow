@@ -301,23 +301,39 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: `${tj.name} (${tj.code})`,
     courtCode: tj.code,
     jurisdiction: tj.code.replace('TJ', ''),
-    sourceType: tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' ? 'OFFICIAL_SEARCH' as const : 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: tj.code === 'TJPR' ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp' : tj.url,
-    documentationUrl: tj.code === 'TJPR' ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp' : tj.url,
+    sourceType: tj.code === 'TJDFT'
+      ? 'OFFICIAL_API' as const
+      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS'
+        ? 'OFFICIAL_SEARCH' as const
+        : 'MANUAL_VERIFICATION_ONLY' as const,
+    officialBaseUrl: tj.code === 'TJPR'
+      ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
+      : tj.code === 'TJDFT'
+        ? 'https://jurisdf.tjdft.jus.br/api/v1/pesquisa'
+        : tj.url,
+    documentationUrl: tj.code === 'TJPR'
+      ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
+      : tj.code === 'TJDFT'
+        ? 'https://www.tjdft.jus.br/transparencia/tecnologia-da-informacao-e-comunicacao/dados-abertos/webservice-ou-api'
+        : tj.url,
     connectorStatus: tj.code === 'TJSP'
       ? 'DEGRADED' as const
-      : tj.code === 'TJPR' || tj.code === 'TJRS'
-        ? 'PARTIAL' as const
-        : 'MANUAL_ONLY' as const,
+      : tj.code === 'TJDFT'
+        ? 'READY' as const
+        : tj.code === 'TJPR' || tj.code === 'TJRS'
+          ? 'PARTIAL' as const
+          : 'MANUAL_ONLY' as const,
     coverageStatus: tj.code === 'TJSP'
       ? 'Portal e-SAJ oficial identificado; pesquisa jurisprudencial exige reCAPTCHA/CAPTCHA interativo e permanece fail-closed'
       : tj.code === 'TJPR'
         ? 'Família Projudi identificada; consulta processual e consulta pública de precedentes exigem reCAPTCHA no submit. JurisFlow permanece fail-closed e não contorna o desafio interativo.'
         : tj.code === 'TJRS'
           ? 'Pesquisa oficial Solr automatizada com metadados, ementa e inteiro teor em Base64. Registros permanecem FOUND_UNVERIFIED por ausência de URL individual oficial estável.'
-          : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
-    verificationMethod: tj.code === 'TJRS' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: tj.code === 'TJRS' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
+          : tj.code === 'TJDFT'
+            ? 'API pública oficial documentada; busca estruturada e confirmação individual por UUID com SHA-256.'
+            : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
+    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJDFT' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
+    termsStatus: tj.code === 'TJRS' || tj.code === 'TJDFT' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,

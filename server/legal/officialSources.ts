@@ -6,6 +6,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJSP: new Set(['esaj.tjsp.jus.br']),
   TRF3: new Set(['web.trf3.jus.br']),
   TRF4: new Set(['jurisprudencia.trf4.jus.br']),
+  TJDFT: new Set(['jurisdf.tjdft.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -268,6 +269,19 @@ export function isExactFalcaoDocumentUrl(value: string, expectedCourt?: string, 
       && url.searchParams.has('longitude')
       && (!expectedCourt || court === expectedCourt)
       && (!expectedId || id === expectedId);
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjdftSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'jurisdf.tjdft.jus.br'
+      && url.pathname === '/api/v1/pesquisa'
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }
