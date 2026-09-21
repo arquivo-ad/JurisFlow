@@ -1451,9 +1451,11 @@ export interface DjenPublicationSearchResponse {
 
 export interface LawyerDigitalCertificateInfo {
   id: string;
+  type: 'A1' | 'A3';
   subjectName: string;
   cpf?: string;
   oabNumber?: string;
+  oabRegistry?: string;
   issuer: string;
   validFrom: string;
   validTo: string;
@@ -1464,6 +1466,8 @@ export interface LawyerDigitalCertificateInfo {
   isHardwareToken: boolean;
   compatibleCourts: string[];
   uploadedAt: string;
+  source?: 'LOCAL_CERTIFICATE_BRIDGE';
+  bridgeVersion?: string;
 }
 
 export interface JudicialSearchHistoryItem {

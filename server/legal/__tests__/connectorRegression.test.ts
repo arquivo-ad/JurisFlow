@@ -664,3 +664,30 @@ test('DJEN trata HTTP 429 como rate limit sem fabricar resultados', async () => 
   assert.equal(result.diagnostic.httpStatus, 429);
   assert.equal(result.rateLimit?.remaining, 0);
 });
+
+
+test('ponte local de certificado escuta apenas em loopback e não desativa isolamento', () => {
+  const bridge = fs.readFileSync(new URL('../../../tools/certificate-bridge/server.mjs', import.meta.url), 'utf8');
+  assert.match(bridge, /const HOST = '127\.0\.0\.1'/);
+  assert.doesNotMatch(bridge, /listen\([^)]*0\.0\.0\.0/);
+  assert.match(bridge, /JURISFLOW_ALLOWED_ORIGINS/);
+  assert.match(bridge, /sessions = new Map/);
+});
+
+test('ponte A1 envia senha ao OpenSSL por stdin e não por argumento pass:', () => {
+  const bridge = fs.readFileSync(new URL('../../../tools/certificate-bridge/server.mjs', import.meta.url), 'utf8');
+  assert.match(bridge, /'-passin', 'stdin'/);
+  assert.match(bridge, /child\.stdin\.end/);
+  assert.doesNotMatch(bridge, /'-passin',\s*['"]pass:/);
+  assert.match(bridge, /mode: 0o600/);
+  assert.match(bridge, /fs\.rm\(tempDir/);
+});
+
+test('frontend do certificado conversa diretamente com localhost e não envia PFX ao backend', () => {
+  const client = fs.readFileSync(new URL('../../../src/services/certificateBridge.ts', import.meta.url), 'utf8');
+  const modal = fs.readFileSync(new URL('../../../src/components/legal-search/DigitalCertificateModal.tsx', import.meta.url), 'utf8');
+  assert.match(client, /http:\/\/127\.0\.0\.1:43119/);
+  assert.match(client, /\/v1\/certificates\/a1\/inspect/);
+  assert.doesNotMatch(modal, /api\.inspectDigitalCertificate/);
+  assert.match(modal, /inspectA1CertificateLocally/);
+});
