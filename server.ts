@@ -5451,6 +5451,73 @@ Responda em JSON:
     }
   });
 
+
+  // Consulta Pública do Diário de Justiça Eletrônico Nacional (DJEN)
+  app.post('/api/judicial/search-djen', async (req: Request, res: Response) => {
+    const startedAt = Date.now();
+    try {
+      const tenantId = (req as any).tenantId;
+      const userId = (req as any).userId;
+      const userName = resolveUserName(tenantId, userId, req.body?.userName);
+      const params = req.body || {};
+
+      const result = await judicialSearchService.searchDjenPublications(params);
+
+      const queryTerm =
+        params.numeroProcesso
+        || (params.numeroOab ? `OAB ${params.ufOab || ''} ${params.numeroOab}`.trim() : undefined)
+        || params.nomeAdvogado
+        || params.nomeParte
+        || params.siglaTribunal
+        || 'DJEN';
+
+      const historyItem: JudicialSearchHistoryItem = {
+        id: `jsh-${Date.now()}`,
+        tenantId: tenantId || 't-default',
+        userId: userId || 'u-default',
+        userName,
+        searchType: 'DJEN',
+        query: queryTerm,
+        filters: {
+          numeroOab: params.numeroOab,
+          ufOab: params.ufOab,
+          nomeAdvogado: params.nomeAdvogado,
+          nomeParte: params.nomeParte,
+          numeroProcesso: params.numeroProcesso,
+          dataDisponibilizacaoInicio: params.dataDisponibilizacaoInicio,
+          dataDisponibilizacaoFim: params.dataDisponibilizacaoFim,
+          siglaTribunal: params.siglaTribunal,
+          meio: params.meio || 'D',
+          pagina: params.pagina || 1,
+          itensPorPagina: 5,
+        },
+        courtCode: params.siglaTribunal,
+        resultsCount: result.items.length,
+        executionTimeMs: Date.now() - startedAt,
+        status: result.items.length > 0 ? 'SUCCESS' : 'NO_RESULTS',
+        timestamp: new Date().toISOString(),
+      };
+      db.judicialSearchHistory.unshift(historyItem);
+      if (db.judicialSearchHistory.length > 200) {
+        db.judicialSearchHistory = db.judicialSearchHistory.slice(0, 200);
+      }
+      saveLocalDb(db);
+
+      const statusCode = result.diagnostic.lifecycleState === 'RATE_LIMITED'
+        ? 429
+        : result.diagnostic.lifecycleState === 'SOURCE_UNAVAILABLE'
+          ? 503
+          : 200;
+      res.status(statusCode).json(result);
+    } catch (err: any) {
+      console.error('Erro na consulta pública DJEN:', err);
+      res.status(500).json({
+        error: 'Falha ao processar consulta pública DJEN',
+        details: err?.message || String(err),
+      });
+    }
+  });
+
   // Consulta Processual Unificada (CNJ, OAB ou Nome da Parte)
   app.post('/api/judicial/search-process', async (req: Request, res: Response) => {
     const startedAt = Date.now();
@@ -5692,7 +5759,7 @@ Responda em JSON:
     res.status(501).json({
       received: false,
       code: 'DJEN_AUTHENTICATED_WEBHOOK_NOT_IMPLEMENTED',
-      error: 'DJEN indisponível: recepção autenticada e homologada ainda não foi implementada; nenhum evento foi persistido.',
+      error: 'Webhook/push autenticado do DJEN ainda não foi implementado nem homologado; a consulta pública sob demanda permanece disponível e nenhum evento inbound foi persistido.',
     });
   });
 

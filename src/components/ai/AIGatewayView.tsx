@@ -822,7 +822,7 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               {(legalGrounding?.syncConnectors || []).length === 0 && (
                 <div className="sm:col-span-2 lg:col-span-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                  Nenhum conector de sincronização integral está habilitado. As pesquisas sob demanda exibem diagnóstico por fonte; BNP/Pangea e DJEN permanecem não implementados.
+                  Nenhuma sincronização integral em lote está habilitada. As pesquisas sob demanda exibem diagnóstico por fonte; o DJEN possui consulta pública oficial sob demanda e o BNP/Pangea permanece não implementado.
                 </div>
               )}
               {(legalGrounding?.syncConnectors || []).map((connector) => (
@@ -915,7 +915,7 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
                     Configuração do Inbound Webhook
                   </h4>
                   <p className="text-[11px] text-indigo-900/80 mt-1 leading-relaxed">
-                    Recepção autenticada do DJEN/Comunica PJe ainda não foi implementada nem homologada.
+                    A consulta pública do DJEN está disponível. A recepção autenticada/push para tribunais continua não implementada nem homologada.
                   </p>
                   <div className="mt-2 p-2 rounded bg-white border border-indigo-200 font-mono text-[10px] text-slate-800 break-all select-all">
                     POST /api/webhooks/djen-intimacoes

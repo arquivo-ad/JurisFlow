@@ -4,6 +4,8 @@ import {
   JudicialProcessDocumentItem,
   JurisprudenceSearchParams,
   CourtAvailabilityMatrixItem,
+  DjenPublicationSearchParams,
+  DjenPublicationSearchResponse,
 } from '../../src/types/index.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
 import { TstJurisprudenciaAdapter } from './adapters/TstJurisprudenciaAdapter.ts';
@@ -11,6 +13,7 @@ import { TstNormativeCollectionAdapter, TstNormativeType } from './adapters/TstN
 import { Trt2JurisprudenciaAdapter } from './adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from './adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from './adapters/Trf3JurisprudenciaAdapter.ts';
+import { DjenPublicationsAdapter } from './adapters/DjenPublicationsAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -194,6 +197,7 @@ export class JudicialSearchService {
   private trt2Adapter: Trt2JurisprudenciaAdapter;
   private tjspAdapter: TjspJurisprudenciaAdapter;
   private trf3Adapter: Trf3JurisprudenciaAdapter;
+  private djenAdapter: DjenPublicationsAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -204,6 +208,7 @@ export class JudicialSearchService {
     this.trt2Adapter = new Trt2JurisprudenciaAdapter();
     this.tjspAdapter = new TjspJurisprudenciaAdapter();
     this.trf3Adapter = new Trf3JurisprudenciaAdapter();
+    this.djenAdapter = new DjenPublicationsAdapter();
   }
 
   /**
@@ -340,6 +345,10 @@ export class JudicialSearchService {
 
     this.setCache(cacheKey, payload);
     return payload;
+  }
+
+  public async searchDjenPublications(params: DjenPublicationSearchParams): Promise<DjenPublicationSearchResponse> {
+    return this.djenAdapter.searchPublications(params);
   }
 
   /**

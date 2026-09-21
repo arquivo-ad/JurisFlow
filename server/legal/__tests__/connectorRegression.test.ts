@@ -11,7 +11,8 @@ import { DataJudAdapter } from '../adapters/DataJudAdapter.ts';
 import { Trt2JurisprudenciaAdapter } from '../adapters/Trt2JurisprudenciaAdapter.ts';
 import { TjspJurisprudenciaAdapter } from '../adapters/TjspJurisprudenciaAdapter.ts';
 import { Trf3JurisprudenciaAdapter } from '../adapters/Trf3JurisprudenciaAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl } from '../officialSources.ts';
+import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 
@@ -558,4 +559,108 @@ test('Precedente Normativo TST é reconhecido por identificador exato', async ()
   assert.equal(result.decisions.length, 1);
   assert.equal(result.decisions[0]?.verificationStatus, 'VERIFIED_OFFICIAL');
   assert.equal(result.decisions[0]?.documentType, 'PRECEDENTE_NORMATIVO');
+});
+
+
+function djenFetchMock(options?: { certificateStatus?: number; searchStatus?: number }): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes('/certidao')) {
+      const status = options?.certificateStatus ?? 200;
+      const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(2048, 65)]);
+      return new Response(status === 200 ? pdf : Buffer.from('erro'), {
+        status,
+        headers: { 'Content-Type': status === 200 ? 'application/pdf' : 'text/plain' },
+      });
+    }
+
+    const status = options?.searchStatus ?? 200;
+    if (status === 429) {
+      return new Response(JSON.stringify({ status: 'error', message: 'rate limit' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'x-ratelimit-limit': '20', 'x-ratelimit-remaining': '0' },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'ok',
+      count: 1,
+      items: [{
+        id: 648668729,
+        data_disponibilizacao: '2026-09-18',
+        siglaTribunal: 'TJMG',
+        tipoComunicacao: 'Intimação',
+        nomeOrgao: 'TJMG - 6ª CÂMARA CÍVEL',
+        texto: 'Comunicação processual oficial com conteúdo suficiente para validação do registro.',
+        numero_processo: '50144805720218130701',
+        meio: 'D',
+        link: 'https://www4.tjmg.jus.br/processo/50144805720218130701',
+        tipoDocumento: 'Apelação',
+        nomeClasse: 'APELAÇÃO CÍVEL',
+        codigoClasse: '198',
+        numeroComunicacao: 1,
+        ativo: true,
+        hash: 'vKAPnkeQmZdAIPhlTj8exzYd5o94bD',
+        datadisponibilizacao: '18/09/2026',
+        meiocompleto: 'Diário de Justiça Eletrônico Nacional',
+        numeroprocessocommascara: '5014480-57.2021.8.13.0701',
+        destinatarios: [{ nome: 'PARTE TESTE', polo: 'P' }],
+        destinatarioadvogados: [{
+          advogado: { nome: 'ADVOGADO TESTE', numero_oab: '123456', uf_oab: 'MG' },
+        }],
+      }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'x-ratelimit-limit': '20', 'x-ratelimit-remaining': '19' },
+    });
+  }) as typeof fetch;
+}
+
+test('DJEN aceita somente URLs públicas oficiais exatas', () => {
+  const searchUrl = DjenPublicationsAdapter.buildSearchUrl({
+    numeroProcesso: '5014480-57.2021.8.13.0701',
+    pagina: 1,
+    itensPorPagina: 5,
+  });
+  assert.equal(isExactDjenSearchUrl(searchUrl), true);
+  assert.equal(isExactDjenSearchUrl('https://comunicaapi.pje.jus.br.evil.example/api/v1/comunicacao?itensPorPagina=5'), false);
+  assert.equal(
+    isExactDjenCertificateUrl(
+      'https://comunicaapi.pje.jus.br/api/v1/comunicacao/vKAPnkeQmZdAIPhlTj8exzYd5o94bD/certidao',
+      'vKAPnkeQmZdAIPhlTj8exzYd5o94bD'
+    ),
+    true
+  );
+});
+
+test('DJEN confirma comunicação por certidão PDF individual e SHA-256', async () => {
+  const result = await new DjenPublicationsAdapter(djenFetchMock()).searchPublications({
+    numeroProcesso: '5014480-57.2021.8.13.0701',
+  });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.evidenceState, 'VERIFIED_OFFICIAL');
+  assert.match(result.items[0]?.certificateSha256 || '', /^[a-f0-9]{64}$/);
+  assert.equal(result.items[0]?.courtCode, 'TJMG');
+  assert.equal(result.items[0]?.lawyers[0]?.numeroOab, '123456');
+  assert.equal(result.diagnostic.recordsVerified, 1);
+  assert.equal(result.rateLimit?.remaining, 19);
+});
+
+test('DJEN mantém resultado pendente quando a certidão individual falha', async () => {
+  const result = await new DjenPublicationsAdapter(djenFetchMock({ certificateStatus: 503 }))
+    .searchPublications({ siglaTribunal: 'TJMG' });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.evidenceState, 'FOUND_PENDING_REVIEW');
+  assert.equal(result.items[0]?.certificateSha256, undefined);
+  assert.equal(result.diagnostic.recordsVerified, 0);
+});
+
+test('DJEN trata HTTP 429 como rate limit sem fabricar resultados', async () => {
+  const result = await new DjenPublicationsAdapter(djenFetchMock({ searchStatus: 429 }))
+    .searchPublications({ siglaTribunal: 'TJMG' });
+  assert.equal(result.items.length, 0);
+  assert.equal(result.diagnostic.lifecycleState, 'RATE_LIMITED');
+  assert.equal(result.diagnostic.httpStatus, 429);
+  assert.equal(result.rateLimit?.remaining, 0);
 });

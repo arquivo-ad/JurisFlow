@@ -145,3 +145,44 @@ export function isExactTstNormativeCollectionUrl(value: string): boolean {
     return false;
   }
 }
+
+
+const DJEN_ALLOWED_QUERY_PARAMS = new Set([
+  'numeroOab',
+  'ufOab',
+  'nomeAdvogado',
+  'nomeParte',
+  'numeroProcesso',
+  'dataDisponibilizacaoInicio',
+  'dataDisponibilizacaoFim',
+  'siglaTribunal',
+  'numeroComunicacao',
+  'pagina',
+  'itensPorPagina',
+  'orgaoId',
+  'meio',
+]);
+
+export function isExactDjenSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'comunicaapi.pje.jus.br'
+      && url.pathname === '/api/v1/comunicacao'
+      && [...url.searchParams.keys()].every((key) => DJEN_ALLOWED_QUERY_PARAMS.has(key));
+  } catch {
+    return false;
+  }
+}
+
+export function isExactDjenCertificateUrl(value: string, expectedHash?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'comunicaapi.pje.jus.br' || url.search) return false;
+    const match = url.pathname.match(/^\/api\/v1\/comunicacao\/([A-Za-z0-9_-]+)\/certidao$/);
+    if (!match) return false;
+    return expectedHash ? match[1] === expectedHash : true;
+  } catch {
+    return false;
+  }
+}

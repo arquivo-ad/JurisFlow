@@ -1363,6 +1363,92 @@ export interface JurisprudenceSearchParams {
   pageSize?: number;
 }
 
+
+
+export interface DjenPublicationSearchParams {
+  numeroOab?: string;
+  ufOab?: string;
+  nomeAdvogado?: string;
+  nomeParte?: string;
+  numeroProcesso?: string;
+  dataDisponibilizacaoInicio?: string;
+  dataDisponibilizacaoFim?: string;
+  siglaTribunal?: string;
+  numeroComunicacao?: number;
+  orgaoId?: number;
+  meio?: 'D' | 'E';
+  pagina?: number;
+  itensPorPagina?: 5;
+}
+
+export interface DjenPublicationRecipient {
+  nome: string;
+  polo?: 'A' | 'P' | 'T' | 'D' | string;
+}
+
+export interface DjenPublicationLawyer {
+  nome: string;
+  numeroOab: string;
+  ufOab: string;
+}
+
+export interface DjenPublicationResult {
+  id: number;
+  numeroComunicacao?: number;
+  hash: string;
+  courtCode: string;
+  courtOrgan: string;
+  communicationType: string;
+  documentType?: string;
+  processClass?: string;
+  classCode?: string;
+  processNumber: string;
+  normalizedCnjNumber?: string;
+  availabilityDate: string;
+  publicationMedium: 'D' | 'E' | string;
+  publicationMediumLabel?: string;
+  text: string;
+  fullTextUrl?: string;
+  recipients: DjenPublicationRecipient[];
+  lawyers: DjenPublicationLawyer[];
+  active: boolean;
+  cancellationReason?: string;
+  cancellationDate?: string;
+  officialQueryUrl: string;
+  officialCertificateUrl: string;
+  querySha256: string;
+  recordSha256: string;
+  certificateSha256?: string;
+  certificateBytes?: number;
+  verifiedAt?: string;
+  evidenceState: 'VERIFIED_OFFICIAL' | 'FOUND_PENDING_REVIEW' | 'NOT_VERIFIED_PROHIBITED';
+  evidenceId?: string;
+}
+
+export interface DjenPublicationSearchResponse {
+  query: DjenPublicationSearchParams;
+  count: number;
+  items: DjenPublicationResult[];
+  source: 'CNJ_DJEN_PUBLIC_API';
+  sourceUrl: string;
+  executionTimeMs: number;
+  timestamp: string;
+  rateLimit?: {
+    limit?: number;
+    remaining?: number;
+  };
+  diagnostic: {
+    lifecycleState: 'SEARCH_SUCCESS' | 'EMPTY_VALID_DATASET' | 'SOURCE_UNAVAILABLE' | 'RATE_LIMITED' | 'PARSER_ERROR';
+    connectorStatus: 'HEALTHY' | 'DEGRADED' | 'FAILED';
+    httpStatus: number;
+    stateDescription: string;
+    recordsReceived: number;
+    recordsVerified: number;
+    recordsRejected: number;
+    rejectionReasons: string[];
+  };
+}
+
 export interface LawyerDigitalCertificateInfo {
   id: string;
   subjectName: string;
@@ -1385,7 +1471,7 @@ export interface JudicialSearchHistoryItem {
   tenantId: string;
   userId: string;
   userName: string;
-  searchType: 'JURISPRUDENCE' | 'PROCESS';
+  searchType: 'JURISPRUDENCE' | 'PROCESS' | 'DJEN';
   query: string;
   filters: Record<string, any>;
   courtCode?: string;
