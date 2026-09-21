@@ -24,6 +24,7 @@ import { TjscJurisprudenciaAdapter } from './adapters/TjscJurisprudenciaAdapter.
 import { TjbaJurisprudenciaAdapter } from './adapters/TjbaJurisprudenciaAdapter.ts';
 import { TjceJurisprudenciaAdapter } from './adapters/TjceJurisprudenciaAdapter.ts';
 import { TjpeJurisprudenciaAdapter } from './adapters/TjpeJurisprudenciaAdapter.ts';
+import { EsajJurisprudenciaAdapter } from './adapters/EsajJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -218,6 +219,7 @@ export class JudicialSearchService {
   private tjbaAdapter: TjbaJurisprudenciaAdapter;
   private tjceAdapter: TjceJurisprudenciaAdapter;
   private tjpeAdapter: TjpeJurisprudenciaAdapter;
+  private esajAdapters: Record<'TJAC' | 'TJAL' | 'TJAM' | 'TJMS', EsajJurisprudenciaAdapter>;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -239,6 +241,12 @@ export class JudicialSearchService {
     this.tjbaAdapter = new TjbaJurisprudenciaAdapter();
     this.tjceAdapter = new TjceJurisprudenciaAdapter();
     this.tjpeAdapter = new TjpeJurisprudenciaAdapter();
+    this.esajAdapters = {
+      TJAC: new EsajJurisprudenciaAdapter('TJAC'),
+      TJAL: new EsajJurisprudenciaAdapter('TJAL'),
+      TJAM: new EsajJurisprudenciaAdapter('TJAM'),
+      TJMS: new EsajJurisprudenciaAdapter('TJMS'),
+    };
   }
 
   /**
@@ -268,6 +276,9 @@ export class JudicialSearchService {
     const requestsTjba = params.courtCodes?.includes('TJBA') === true;
     const requestsTjce = params.courtCodes?.includes('TJCE') === true;
     const requestsTjpe = params.courtCodes?.includes('TJPE') === true;
+    const requestedEsajCodes = (params.courtCodes || []).filter(
+      (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
+    );
     const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
     const requestsTrf4 = params.courtCodes?.includes('TRF4') === true;
     const regionalSourcesConsulted: string[] = [];
@@ -288,6 +299,8 @@ export class JudicialSearchService {
     let tjceDiagnostic = undefined as Awaited<ReturnType<TjceJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjpeDiagnostic = undefined as Awaited<ReturnType<TjpeJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let activeTjpeDecisions: CanonicalLegalDecision[] | undefined;
+    let esajDiagnostic = undefined as Awaited<ReturnType<EsajJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -387,6 +400,22 @@ export class JudicialSearchService {
       activeTjpeDecisions = tjpeResult.decisions;
     }
 
+    for (const courtCode of requestedEsajCodes) {
+      const esajResult = await this.esajAdapters[courtCode].searchOfficialJurisprudence(
+        params.query || params.caseNumber || '',
+        10
+      );
+      esajDiagnostic = esajDiagnostic ?? esajResult.diagnostic;
+      regionalSourcesConsulted.push(`${courtCode.toLowerCase()}-esaj-jurisprudencia`);
+      for (const decision of esajResult.decisions) {
+        if (decision.verificationStatus === 'VERIFIED_OFFICIAL') {
+          legalStorage.upsertDecision(decision);
+        } else {
+          activeEsajPartialDecisions.push(decision);
+        }
+      }
+    }
+
     if (requestsTrf3) {
       const trf3Result = await this.trf3Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
       trf3Diagnostic = trf3Result.diagnostic;
@@ -406,8 +435,8 @@ export class JudicialSearchService {
     }
 
     let transientDecisions: CanonicalLegalDecision[] | undefined = activeTstDecisions;
-    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions)) {
-      const partialCourts = new Set(['TJRS', 'TJPE']);
+    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions || activeEsajPartialDecisions.length > 0)) {
+      const partialCourts = new Set(['TJRS', 'TJPE', 'TJAC', 'TJAL', 'TJAM']);
       const otherCourts = (params.courtCodes || []).filter((code) => !partialCourts.has(code));
       const persisted = otherCourts.length > 0
         ? legalStorage.getDecisions({ tenantId, courtCodes: otherCourts, onlyVerified: params.onlyVerified })
@@ -416,6 +445,7 @@ export class JudicialSearchService {
         ...persisted,
         ...(activeTjrsDecisions || []),
         ...(activeTjpeDecisions || []),
+        ...activeEsajPartialDecisions,
       ];
     }
 
@@ -475,7 +505,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -647,6 +677,34 @@ export class JudicialSearchService {
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Consulta pública existe, mas desde 04/02/2026 há duas bases: eJURIS legado e eproc. eJURIS usa reCAPTCHA v3 no fluxo de pesquisa e eproc 2G redireciona para SSO; automação permanece fail-closed.',
+      },
+      {
+        courtCode: 'TJMS', courtName: 'TJMS - e-SAJ/CJSG', jurisdiction: 'MS',
+        jurisprudenceStatus: 'DISPONIVEL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://esaj.tjms.jus.br/cjsg/consultaCompleta.do',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
+        notes: 'Pesquisa e-SAJ automatizada com PDF individual via getArquivo.do, SHA-256 e verificação determinística.',
+      },
+      {
+        courtCode: 'TJAC', courtName: 'TJAC - e-SAJ/CJSG', jurisdiction: 'AC',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://esaj.tjac.jus.br/cjsg/consultaCompleta.do',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Pesquisa pública automatizada com ementa completa; inteiro teor exige reCAPTCHA e permanece FOUND_UNVERIFIED.',
+      },
+      {
+        courtCode: 'TJAL', courtName: 'TJAL - e-SAJ/CJSG', jurisdiction: 'AL',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www2.tjal.jus.br/cjsg/consultaCompleta.do',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Pesquisa pública automatizada com ementa completa; inteiro teor exige reCAPTCHA e permanece FOUND_UNVERIFIED.',
+      },
+      {
+        courtCode: 'TJAM', courtName: 'TJAM - e-SAJ/CJSG', jurisdiction: 'AM',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://consultasaj.tjam.jus.br/cjsg/consultaCompleta.do',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Pesquisa pública automatizada com ementa completa; inteiro teor exige reCAPTCHA e permanece FOUND_UNVERIFIED.',
       },
       {
         courtCode: 'TJGO', courtName: 'TJGO - Jurisprudência Projudi', jurisdiction: 'GO',

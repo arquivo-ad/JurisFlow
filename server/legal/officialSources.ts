@@ -11,6 +11,10 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJBA: new Set(['jurisprudenciaws.tjba.jus.br']),
   TJCE: new Set(['gateway.tjce.jus.br']),
   TJPE: new Set(['consultajurisprudencia.app.tjpe.jus.br']),
+  TJAL: new Set(['www2.tjal.jus.br']),
+  TJMS: new Set(['esaj.tjms.jus.br']),
+  TJAM: new Set(['consultasaj.tjam.jus.br']),
+  TJAC: new Set(['esaj.tjac.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -416,6 +420,41 @@ export function isExactTjpeCandidatePdfUrl(value: string, expectedProcessId?: st
     const match = url.pathname.match(/^\/api\/v1\/processo\/(\d+)\/inteiro-teor$/);
     if (!match || url.search || url.hash) return false;
     return !expectedProcessId || match[1] === expectedProcessId;
+  } catch {
+    return false;
+  }
+}
+
+const ESAJ_HOST_BY_COURT: Record<string, string> = {
+  TJAC: 'esaj.tjac.jus.br',
+  TJAL: 'www2.tjal.jus.br',
+  TJAM: 'consultasaj.tjam.jus.br',
+  TJMS: 'esaj.tjms.jus.br',
+};
+
+export function isExactEsajSearchUrl(value: string, courtCode: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = ESAJ_HOST_BY_COURT[courtCode];
+    if (!host || url.protocol !== 'https:' || url.hostname !== host) return false;
+    return url.pathname === '/cjsg/resultadoCompleta.do'
+      || /^\/cjsg\/resultadoCompleta\.do;jsessionid=[A-Za-z0-9._-]+$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function isExactEsajDocumentUrl(value: string, courtCode: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = ESAJ_HOST_BY_COURT[courtCode];
+    if (!host || url.protocol !== 'https:' || url.hostname !== host || url.pathname !== '/cjsg/getArquivo.do') return false;
+    const cdAcordao = url.searchParams.get('cdAcordao') || '';
+    const cdForo = url.searchParams.get('cdForo') || '';
+    const allowed = new Set(['cdAcordao', 'cdForo']);
+    return /^\d+$/.test(cdAcordao)
+      && /^\d+$/.test(cdForo)
+      && [...url.searchParams.keys()].every((key) => allowed.has(key));
   } catch {
     return false;
   }

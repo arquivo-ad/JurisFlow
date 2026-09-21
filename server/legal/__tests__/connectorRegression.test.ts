@@ -20,9 +20,10 @@ import { TjscJurisprudenciaAdapter } from '../adapters/TjscJurisprudenciaAdapter
 import { TjbaJurisprudenciaAdapter } from '../adapters/TjbaJurisprudenciaAdapter.ts';
 import { TjceJurisprudenciaAdapter } from '../adapters/TjceJurisprudenciaAdapter.ts';
 import { TjpeJurisprudenciaAdapter } from '../adapters/TjpeJurisprudenciaAdapter.ts';
+import { EsajJurisprudenciaAdapter } from '../adapters/EsajJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1467,4 +1468,116 @@ test('TJGO permanece Projudi interativo e fail-closed', () => {
     false
   );
   assert.match(config?.notes || '', /Turnstile|Cloudflare/i);
+});
+
+const esajSearchHtml = [
+  '<html><body>',
+  '<a class="downloadEmenta" cdAcordao="123456" cdForo="0">0800556-95.2024.8.12.0008</a>',
+  '<strong>Classe/Assunto:</strong> Agravo Interno Cível / Dano Moral',
+  '<strong>Relator(a):</strong> Vice-Presidente',
+  '<strong>Órgão julgador:</strong> Vice-Presidência',
+  '<strong>Data do julgamento:</strong> 18/09/2026',
+  '<strong>Data de registro:</strong> 19/09/2026',
+  '<div id="textAreaDados_123456" class="mensagemSemFormatacao">',
+  'DIREITO CIVIL. DANO MORAL. AGRAVO INTERNO. ',
+  'EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO DETERMINÍSTICA. '.repeat(8),
+  '</div>',
+  'Acórdãos(1)',
+  '</body></html>',
+].join('');
+
+const esajInitialHtml =
+  '<html><body><form action="/cjsg/resultadoCompleta.do">'
+  + '<input type="hidden" name="dummy" value="1">'
+  + '</form></body></html>';
+
+function esajFetchMock(withPdf: boolean): typeof fetch {
+  let call = 0;
+  return (async () => {
+    call += 1;
+    if (call === 1) {
+      return new Response(esajInitialHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html', 'Set-Cookie': 'JSESSIONID=abc; Path=/' },
+      });
+    }
+    if (call === 2) {
+      return new Response(esajSearchHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+    if (withPdf) {
+      const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(1800, 66)]);
+      return new Response(pdf, {
+        status: 200,
+        headers: { 'Content-Type': 'application/pdf' },
+      });
+    }
+    return new Response('<html>recaptcha</html>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html' },
+    });
+  }) as typeof fetch;
+}
+
+test('e-SAJ aceita somente hosts e rotas oficiais parametrizadas', () => {
+  assert.equal(
+    isExactEsajSearchUrl('https://esaj.tjms.jus.br/cjsg/resultadoCompleta.do', 'TJMS'),
+    true
+  );
+  assert.equal(
+    isExactEsajDocumentUrl('https://esaj.tjms.jus.br/cjsg/getArquivo.do?cdAcordao=123456&cdForo=0', 'TJMS'),
+    true
+  );
+  assert.equal(
+    isExactEsajDocumentUrl('https://esaj.tjms.jus.br.evil.example/cjsg/getArquivo.do?cdAcordao=123456&cdForo=0', 'TJMS'),
+    false
+  );
+});
+
+test('TJMS e-SAJ verifica apenas com PDF individual oficial', async () => {
+  const result = await new EsajJurisprudenciaAdapter('TJMS', esajFetchMock(true))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJMS');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJMS - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJAC e-SAJ permanece parcial sem inteiro teor individual', async () => {
+  const result = await new EsajJurisprudenciaAdapter('TJAC', esajFetchMock(false))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJAC');
+  assert.equal(decision.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.equal(decision.verificationBadge, undefined);
+  assert.ok(decision.rejectionReasons?.some((reason) => reason.includes('INTEIRO_TEOR_INTERATIVO')));
+});
+
+test('busca e-SAJ parcial respeita onlyVerified', async () => {
+  const partial = await new EsajJurisprudenciaAdapter('TJAC', esajFetchMock(false))
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  const service = new JudicialSearchService();
+  (service as any).esajAdapters.TJAC = {
+    searchOfficialJurisprudence: async () => partial,
+  };
+
+  const open = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJAC'],
+    onlyVerified: false,
+  });
+  assert.equal(open.results.some((item) => item.courtCode === 'TJAC'), true);
+
+  const verified = await service.searchJurisprudence({
+    query: 'dano moral verificado',
+    courtCodes: ['TJAC'],
+    onlyVerified: true,
+  });
+  assert.equal(verified.results.some((item) => item.courtCode === 'TJAC'), false);
 });
