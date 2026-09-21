@@ -18,9 +18,10 @@ import { TjrsJurisprudenciaAdapter, isExactTjrsAjaxUrl } from '../adapters/TjrsJ
 import { TjdftJurisprudenciaAdapter } from '../adapters/TjdftJurisprudenciaAdapter.ts';
 import { TjscJurisprudenciaAdapter } from '../adapters/TjscJurisprudenciaAdapter.ts';
 import { TjbaJurisprudenciaAdapter } from '../adapters/TjbaJurisprudenciaAdapter.ts';
+import { TjceJurisprudenciaAdapter } from '../adapters/TjceJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1270,4 +1271,98 @@ test('busca explícita no TJBA admite acórdão verificado no ranking', async ()
   assert.equal(result.results.some((item) => item.courtCode === 'TJBA'), true);
   assert.ok(result.sourcesConsulted.includes('tjba-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjba-jurisprudencia');
+});
+
+const tjceRecord = {
+  id: '30006187120258060066_33703967',
+  idDocumento: 33703967,
+  nomeDocumento: 'ACÓRDÃO',
+  numeroProcesso: '30006187120258060066',
+  classe: 'APELAÇÃO CÍVEL',
+  orgaoJulgador: '6ª Câmara de Direito Privado',
+  magistrado: 'JOSE TARCILIO SOUZA DA SILVA',
+  dataJulgamento: [2026, 2, 11],
+  ementa: 'DIREITO CIVIL. DANO MORAL. APELAÇÃO. EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO DETERMINÍSTICA.',
+  conteudo: 'Conteúdo integral oficial suficiente para validação do precedente.',
+  origem: 'PJE',
+};
+
+const tjcePdf = Buffer.concat([
+  Buffer.from('%PDF-1.7\n'),
+  Buffer.alloc(1800, 65),
+]).toString('base64');
+
+function tjceFetchMock(mode: 'ok' | 'bad-pdf' | 'mismatch' = 'ok'): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes('?page=')) {
+      return new Response(JSON.stringify({
+        pagina: { content: [tjceRecord], totalElements: 1 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    const detail = mode === 'mismatch'
+      ? { ...tjceRecord, idDocumento: 99999999, pdfAutenticadoBase64: tjcePdf }
+      : {
+          ...tjceRecord,
+          pdfAutenticadoBase64: mode === 'bad-pdf'
+            ? Buffer.from('not-a-pdf').toString('base64')
+            : tjcePdf,
+        };
+    return new Response(JSON.stringify(detail), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+test('TJCE aceita somente endpoints oficiais exatos do SJURIS', () => {
+  const search = 'https://gateway.tjce.jus.br/sjuris/api/v1/jurisprudencia/?page=0&size=1';
+  const doc = 'https://gateway.tjce.jus.br/sjuris/api/v1/jurisprudencia/30006187120258060066_33703967/AC%C3%93RD%C3%83O/2%C2%BA%20GRAU';
+  assert.equal(isExactTjceSearchUrl(search), true);
+  assert.equal(isExactTjceDocumentUrl(doc, tjceRecord.id), true);
+  assert.equal(isExactTjceDocumentUrl(doc.replace('tjce.jus.br', 'tjce.jus.br.evil.example')), false);
+});
+
+test('TJCE verifica acórdão somente após PDF autenticado individual', async () => {
+  const result = await new TjceJurisprudenciaAdapter(tjceFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJCE');
+  assert.equal(decision.normalizedCnjNumber, '3000618-71.2025.8.06.0066');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJCE - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJCE rejeita PDF inválido ou identidade individual divergente', async () => {
+  const badPdf = await new TjceJurisprudenciaAdapter(tjceFetchMock('bad-pdf'))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(badPdf.decisions.length, 0);
+  assert.ok(badPdf.diagnostic.rejectionReasons.some((reason) => reason.includes('PDF autenticado')));
+
+  const mismatch = await new TjceJurisprudenciaAdapter(tjceFetchMock('mismatch'))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(mismatch.decisions.length, 0);
+  assert.ok(mismatch.diagnostic.rejectionReasons.some((reason) => reason.includes('divergente')));
+});
+
+test('busca explícita no TJCE admite somente acórdão verificado no ranking', async () => {
+  const official = await new TjceJurisprudenciaAdapter(tjceFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  const service = new JudicialSearchService();
+  (service as any).tjceAdapter = {
+    searchOfficialJurisprudence: async () => official,
+  };
+
+  const result = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJCE'],
+    onlyVerified: true,
+  });
+
+  assert.equal(result.results.some((item) => item.courtCode === 'TJCE'), true);
+  assert.ok(result.sourcesConsulted.includes('tjce-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjce-jurisprudencia');
 });

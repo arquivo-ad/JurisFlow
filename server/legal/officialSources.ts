@@ -9,6 +9,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJDFT: new Set(['jurisdf.tjdft.jus.br']),
   TJSC: new Set(['eprocwebcon.tjsc.jus.br']),
   TJBA: new Set(['jurisprudenciaws.tjba.jus.br']),
+  TJCE: new Set(['gateway.tjce.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -340,6 +341,37 @@ export function isExactTjbaDocumentUrl(value: string, expectedHash?: string): bo
     const match = url.pathname.match(/^\/inteiroTeor\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i);
     if (!match || url.search || url.hash) return false;
     return !expectedHash || match[1].toLowerCase() === expectedHash.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjceSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'gateway.tjce.jus.br'
+      || url.pathname !== '/sjuris/api/v1/jurisprudencia/'
+    ) return false;
+    const allowed = new Set(['page', 'size']);
+    if (![...url.searchParams.keys()].every((key) => allowed.has(key))) return false;
+    return /^\d+$/.test(url.searchParams.get('page') || '')
+      && /^(?:[1-9]|10)$/.test(url.searchParams.get('size') || '');
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjceDocumentUrl(value: string, expectedId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'gateway.tjce.jus.br') return false;
+    const match = decodeURIComponent(url.pathname).match(
+      /^\/sjuris\/api\/v1\/jurisprudencia\/(\d{20}_\d+)\/ACÓRDÃO\/2º GRAU$/
+    );
+    if (!match || url.search || url.hash) return false;
+    return !expectedId || match[1] === expectedId;
   } catch {
     return false;
   }
