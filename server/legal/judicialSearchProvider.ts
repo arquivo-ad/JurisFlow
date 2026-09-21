@@ -589,6 +589,13 @@ export class JudicialSearchService {
         notes: 'Pesquisa oficial automatizada com CNJ, relator, órgão julgador, datas, ementa e inteiro teor em Base64. Sem selo VERIFIED_OFFICIAL enquanto não houver URL individual oficial estável.',
       },
       {
+        courtCode: 'TJMG', courtName: 'TJMG - Jurisprudência legado / eproc', jurisdiction: 'MG',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www5.tjmg.jus.br/jurisprudencia/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Busca legada exige CAPTCHA; o novo eproc reconhece a ação de jurisprudência, mas atualmente retorna falha de processamento sem formulário público. Automação permanece fail-closed.',
+      },
+      {
         courtCode: 'TJRJ', courtName: 'TJRJ - eJURIS / eproc', jurisdiction: 'RJ',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx',
