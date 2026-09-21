@@ -10,6 +10,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJSC: new Set(['eprocwebcon.tjsc.jus.br']),
   TJBA: new Set(['jurisprudenciaws.tjba.jus.br']),
   TJCE: new Set(['gateway.tjce.jus.br']),
+  TJPE: new Set(['consultajurisprudencia.app.tjpe.jus.br']),
   CNJ: new Set(['api-publica.datajud.cnj.jus.br', 'comunicaapi.pje.jus.br']),
 };
 
@@ -372,6 +373,49 @@ export function isExactTjceDocumentUrl(value: string, expectedId?: string): bool
     );
     if (!match || url.search || url.hash) return false;
     return !expectedId || match[1] === expectedId;
+  } catch {
+    return false;
+  }
+}
+
+const TJPE_ALLOWED_SEARCH_PARAMS = new Set([
+  'page', 'size', 'sort',
+  'pesquisaLivre.contains',
+  'npuSemFormatacao.equals',
+  'numAntigo.equals',
+  'dataJulgamento.greaterThanOrEqual',
+  'dataJulgamento.lessThanOrEqual',
+  'relator.in',
+  'assuntoCNJ.in',
+  'classeCNJ.in',
+  'orgaoJulgador.in',
+  'competencia.in',
+  'origem.in',
+  'tipoSentenca.in',
+  'empty',
+]);
+
+export function isExactTjpeSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'consultajurisprudencia.app.tjpe.jus.br'
+      || url.pathname !== '/api/v1/jurisprudencias'
+    ) return false;
+    return [...url.searchParams.keys()].every((key) => TJPE_ALLOWED_SEARCH_PARAMS.has(key));
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjpeCandidatePdfUrl(value: string, expectedProcessId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'consultajurisprudencia.app.tjpe.jus.br') return false;
+    const match = url.pathname.match(/^\/api\/v1\/processo\/(\d+)\/inteiro-teor$/);
+    if (!match || url.search || url.hash) return false;
+    return !expectedProcessId || match[1] === expectedProcessId;
   } catch {
     return false;
   }

@@ -23,6 +23,7 @@ import { TjdftJurisprudenciaAdapter } from './adapters/TjdftJurisprudenciaAdapte
 import { TjscJurisprudenciaAdapter } from './adapters/TjscJurisprudenciaAdapter.ts';
 import { TjbaJurisprudenciaAdapter } from './adapters/TjbaJurisprudenciaAdapter.ts';
 import { TjceJurisprudenciaAdapter } from './adapters/TjceJurisprudenciaAdapter.ts';
+import { TjpeJurisprudenciaAdapter } from './adapters/TjpeJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -216,6 +217,7 @@ export class JudicialSearchService {
   private tjscAdapter: TjscJurisprudenciaAdapter;
   private tjbaAdapter: TjbaJurisprudenciaAdapter;
   private tjceAdapter: TjceJurisprudenciaAdapter;
+  private tjpeAdapter: TjpeJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -236,6 +238,7 @@ export class JudicialSearchService {
     this.tjscAdapter = new TjscJurisprudenciaAdapter();
     this.tjbaAdapter = new TjbaJurisprudenciaAdapter();
     this.tjceAdapter = new TjceJurisprudenciaAdapter();
+    this.tjpeAdapter = new TjpeJurisprudenciaAdapter();
   }
 
   /**
@@ -264,6 +267,7 @@ export class JudicialSearchService {
     const requestsTjsc = params.courtCodes?.includes('TJSC') === true;
     const requestsTjba = params.courtCodes?.includes('TJBA') === true;
     const requestsTjce = params.courtCodes?.includes('TJCE') === true;
+    const requestsTjpe = params.courtCodes?.includes('TJPE') === true;
     const requestsTrf3 = params.courtCodes?.includes('TRF3') === true;
     const requestsTrf4 = params.courtCodes?.includes('TRF4') === true;
     const regionalSourcesConsulted: string[] = [];
@@ -282,6 +286,8 @@ export class JudicialSearchService {
     let tjscDiagnostic = undefined as Awaited<ReturnType<TjscJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjbaDiagnostic = undefined as Awaited<ReturnType<TjbaJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjceDiagnostic = undefined as Awaited<ReturnType<TjceJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tjpeDiagnostic = undefined as Awaited<ReturnType<TjpeJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let activeTjpeDecisions: CanonicalLegalDecision[] | undefined;
 
     if (requestsTst) {
       const officialResult = await this.tstAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 20);
@@ -374,6 +380,13 @@ export class JudicialSearchService {
       }
     }
 
+    if (requestsTjpe) {
+      const tjpeResult = await this.tjpeAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      tjpeDiagnostic = tjpeResult.diagnostic;
+      regionalSourcesConsulted.push('tjpe-jurisprudencia');
+      activeTjpeDecisions = tjpeResult.decisions;
+    }
+
     if (requestsTrf3) {
       const trf3Result = await this.trf3Adapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
       trf3Diagnostic = trf3Result.diagnostic;
@@ -393,12 +406,17 @@ export class JudicialSearchService {
     }
 
     let transientDecisions: CanonicalLegalDecision[] | undefined = activeTstDecisions;
-    if (!transientDecisions && activeTjrsDecisions) {
-      const otherCourts = (params.courtCodes || []).filter((code) => code !== 'TJRS');
+    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions)) {
+      const partialCourts = new Set(['TJRS', 'TJPE']);
+      const otherCourts = (params.courtCodes || []).filter((code) => !partialCourts.has(code));
       const persisted = otherCourts.length > 0
         ? legalStorage.getDecisions({ tenantId, courtCodes: otherCourts, onlyVerified: params.onlyVerified })
         : [];
-      transientDecisions = [...persisted, ...activeTjrsDecisions];
+      transientDecisions = [
+        ...persisted,
+        ...(activeTjrsDecisions || []),
+        ...(activeTjpeDecisions || []),
+      ];
     }
 
     const searchEngine = transientDecisions
@@ -457,7 +475,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -629,6 +647,13 @@ export class JudicialSearchService {
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Consulta pública existe, mas desde 04/02/2026 há duas bases: eJURIS legado e eproc. eJURIS usa reCAPTCHA v3 no fluxo de pesquisa e eproc 2G redireciona para SSO; automação permanece fail-closed.',
+      },
+      {
+        courtCode: 'TJPE', courtName: 'TJPE - Consulta Jurisprudência', jurisdiction: 'PE',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://consultajurisprudencia.app.tjpe.jus.br/',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'Busca REST oficial automatizada com texto integral. Inteiro teor por codigoProcesso apresentou PDFs de processos divergentes; resultados permanecem FOUND_UNVERIFIED e fail-closed.',
       },
       {
         courtCode: 'TJCE', courtName: 'TJCE - SJURIS/PJe', jurisdiction: 'CE',

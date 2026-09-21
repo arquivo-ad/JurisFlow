@@ -19,9 +19,10 @@ import { TjdftJurisprudenciaAdapter } from '../adapters/TjdftJurisprudenciaAdapt
 import { TjscJurisprudenciaAdapter } from '../adapters/TjscJurisprudenciaAdapter.ts';
 import { TjbaJurisprudenciaAdapter } from '../adapters/TjbaJurisprudenciaAdapter.ts';
 import { TjceJurisprudenciaAdapter } from '../adapters/TjceJurisprudenciaAdapter.ts';
+import { TjpeJurisprudenciaAdapter } from '../adapters/TjpeJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1365,4 +1366,88 @@ test('busca explícita no TJCE admite somente acórdão verificado no ranking', 
   assert.equal(result.results.some((item) => item.courtCode === 'TJCE'), true);
   assert.ok(result.sourcesConsulted.includes('tjce-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjce-jurisprudencia');
+});
+
+const tjpeRecord = {
+  chave: '2604463',
+  codigoProcesso: '604463',
+  npu: '0000244-51.2022.8.17.8232',
+  npuSemFormatacao: '00002445120228178232',
+  relator: 'ABELARDO TADEU DA SILVA SANTOS',
+  nomeOrgaoJulgador: '1º Gabinete da 1ª Turma Recursal do I Colégio Recursal da Capital',
+  descrClasseCNJ: 'Recurso Inominado Cível',
+  dataJulgamento: '2026-09-12T17:42:19.323-03:00',
+  dataPublicacao: '2026-09-12T17:42:18.968-03:00',
+  textoEmenta: null,
+  textoAcordao: 'EMENTA: DIREITO DO CONSUMIDOR. DANO MORAL. RECURSO INOMINADO. '
+    + 'Texto oficial suficiente para normalização determinística.\nACÓRDÃO\n'
+    + 'Vistos e discutidos os autos, acordam os julgadores em manter a decisão. '.repeat(10),
+  textoDecisao: null,
+  tipoSentenca: 'A',
+  origem: 'ELETRONICO',
+  assuntoCNJ: '10437',
+  descrAssuntoCNJ: 'Direito de Imagem',
+};
+
+function tjpeFetchMock(): typeof fetch {
+  return (async () => new Response(JSON.stringify([tjpeRecord]), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Total-Count': '1',
+    },
+  })) as typeof fetch;
+}
+
+test('transporte TJPE mantém TLS verificado e usa intermediária Amazon oficial', () => {
+  const transport = fs.readFileSync(new URL('../tjpeSecureFetch.ts', import.meta.url), 'utf8');
+  assert.match(transport, /rejectUnauthorized:\s*true/);
+  assert.doesNotMatch(transport, /rejectUnauthorized:\s*false/);
+  assert.doesNotMatch(transport, /NODE_TLS_REJECT_UNAUTHORIZED/);
+  assert.match(transport, /Amazon RSA 2048 M01/);
+});
+
+test('TJPE aceita somente busca e candidato de PDF oficiais exatos', () => {
+  const search = 'https://consultajurisprudencia.app.tjpe.jus.br/api/v1/jurisprudencias?page=0&size=5&pesquisaLivre.contains=dano+moral&tipoSentenca.in=A';
+  const pdf = 'https://consultajurisprudencia.app.tjpe.jus.br/api/v1/processo/604463/inteiro-teor';
+  assert.equal(isExactTjpeSearchUrl(search), true);
+  assert.equal(isExactTjpeCandidatePdfUrl(pdf, '604463'), true);
+  assert.equal(isExactTjpeCandidatePdfUrl(pdf.replace('tjpe.jus.br', 'tjpe.jus.br.evil.example')), false);
+});
+
+test('TJPE normaliza busca oficial sem promover resultado para VERIFIED_OFFICIAL', async () => {
+  const result = await new TjpeJurisprudenciaAdapter(tjpeFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJPE');
+  assert.equal(decision.normalizedCnjNumber, '0000244-51.2022.8.17.8232');
+  assert.equal(decision.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.equal(decision.verificationBadge, undefined);
+  assert.ok(decision.rejectionReasons?.some((reason) => reason.includes('INTEIRO_TEOR_DIVERGENTE')));
+});
+
+test('busca TJPE respeita onlyVerified e nunca promove fonte parcial', async () => {
+  const official = await new TjpeJurisprudenciaAdapter(tjpeFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+
+  const service = new JudicialSearchService();
+  (service as any).tjpeAdapter = {
+    searchOfficialJurisprudence: async () => official,
+  };
+
+  const open = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJPE'],
+    onlyVerified: false,
+  });
+  assert.equal(open.results.some((item) => item.courtCode === 'TJPE'), true);
+  assert.ok(open.sourcesConsulted.includes('tjpe-jurisprudencia'));
+
+  const verified = await service.searchJurisprudence({
+    query: 'dano moral verificado',
+    courtCodes: ['TJPE'],
+    onlyVerified: true,
+  });
+  assert.equal(verified.results.some((item) => item.courtCode === 'TJPE'), false);
 });
