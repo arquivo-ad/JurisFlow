@@ -234,7 +234,7 @@ export class LegalSyncCoordinator {
     return {
       jobs: [job1, job2],
       summary: allSucceeded
-        ? `Sincronização concluída: ${totalNew} novos documentos persistidos, ${totalUnchanged} inalterados (idempotência confirmada via SHA-256).`
+        ? `Sincronização das fontes selecionadas confirmada: ${totalNew} novos documentos persistidos, ${totalUnchanged} inalterados (idempotência confirmada via SHA-256).`
         : `Sincronização não concluída: ${[job1, job2].filter((job) => job.status !== 'SUCCESS').map((job) => job.sourceId).join(', ')} falhou ou não possui conector implementado.`,
     };
   }

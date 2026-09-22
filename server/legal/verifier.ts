@@ -1,6 +1,6 @@
-import crypto from 'crypto';
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
+import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrPdfUrl, isExactTjesSearchUrl, isExactCarfPdfUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -30,17 +30,10 @@ export class PrecedentVerifier {
 
     // 1. Oficialidade do Domínio ou Repositório
     const officialUrl = decision.officialUrl || '';
-    const isOfficialDomain =
-      officialUrl.includes('.jus.br') ||
-      officialUrl.includes('.gov.br') ||
-      officialUrl.includes('stj.jus.br') ||
-      officialUrl.includes('stf.jus.br') ||
-      officialUrl.includes('tst.jus.br') ||
-      officialUrl.includes('cnj.jus.br') ||
-      officialUrl.includes('pdpj.jus.br');
+    const isOfficialDomain = isAllowedOfficialUrl(officialUrl, decision.courtCode);
 
     if (!isOfficialDomain) {
-      issues.push('DOMINIO_NAO_OFICIAL: URL da decisão não pertence à infraestrutura pública oficial (.jus.br / .gov.br).');
+      issues.push('DOMINIO_NAO_OFICIAL: hostname não consta da lista exata permitida para o tribunal informado.');
     }
 
     // 2. Identificador Unívoco Verificável
@@ -52,9 +45,13 @@ export class PrecedentVerifier {
       'SUMULA_VINCULANTE', 'SUMULA', 'TEMA_REPETITIVO', 'TEMA_REPERCUSSAO_GERAL',
       'IRDR', 'IAC', 'ORIENTACAO_JURISPRUDENCIAL', 'PRECEDENTE_NORMATIVO',
     ]);
+    const hasAdministrativeIdentifier = decision.sourceId === 'carf-jurisprudencia'
+      && /^\d{5}\.\d{6}\/\d{4}-\d{2}$/.test(rawCaseNum)
+      && Boolean(String(decision.alternativeNumber || '').trim());
     const hasJudicialIdentifier = Boolean(decision.normalizedCnjNumber)
       || /\b(?:REsp|AREsp|AgInt|EREsp|RE|HC|RMS|MS|CC|RR|AIRR|RO|Tema|S[úu]mula|OJ)\s*[\d.-]+/i.test(rawCaseNum)
-      || (qualifiedTypes.has(decision.documentType || '') && Number.isInteger(decision.themeNumber));
+      || (qualifiedTypes.has(decision.documentType || '') && Number.isInteger(decision.themeNumber))
+      || hasAdministrativeIdentifier;
     if (!hasJudicialIdentifier) {
       issues.push('IDENTIFICADOR_NAO_JUDICIAL: página de catálogo, dataset ou descrição institucional não é precedente judicial.');
     }
@@ -71,12 +68,109 @@ export class PrecedentVerifier {
     }
 
     // 4. Tribunal e Órgão Julgador
-    if (!decision.courtCode || !decision.court) {
-      issues.push('TRIBUNAL_AUSENTE: Tribunal de origem ou instância julgadora não especificados.');
+    const normativeTypes = new Set([
+      'SUMULA', 'SUMULA_VINCULANTE', 'ORIENTACAO_JURISPRUDENCIAL',
+      'PRECEDENTE_NORMATIVO', 'ENUNCIADO',
+    ]);
+    const isNormativeDocument = normativeTypes.has(decision.documentType || '');
+    if (!decision.courtCode || !decision.court || !decision.courtOrgan || (!isNormativeDocument && !decision.rapporteur)) {
+      issues.push('METADADOS_JULGAMENTO_INCOMPLETOS: tribunal, órgão julgador e, quando aplicável, relator devem vir da fonte oficial.');
+    }
+    if (decision.courtCode === 'TST' && decision.judicialBranch !== 'TRABALHO') {
+      issues.push('COMPETENCIA_INCOMPATIVEL: decisão do TST deve pertencer ao ramo TRABALHO.');
+    }
+    if (decision.sourceId === 'tst-jurisprudencia' && (!isExactTstDocumentUrl(officialUrl) || decision.courtCode !== 'TST')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TST não aponta para documento individual oficial do TST.');
+    }
+    if (decision.sourceId === 'stj-dados-abertos' && (!isExactStjDocumentUrl(officialUrl) || decision.courtCode !== 'STJ')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro STJ não aponta para o inteiro teor individual oficial do STJ.');
+    }
+    if (decision.sourceId === 'stf-jurisprudencia' && (!isExactStfThemeDetailUrl(officialUrl, decision.themeNumber) || decision.courtCode !== 'STF')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro STF não aponta para o tema individual oficial do leading case.');
+    }
+    if (decision.sourceId === 'trf3-jurisprudencia' && (!isExactTrf3DocumentUrl(officialUrl) || decision.courtCode !== 'TRF3')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TRF3 não aponta para acórdão individual oficial do TRF3.');
+    }
+    if (decision.sourceId === 'trf4-jurisprudencia' && (!isExactTrf4DocumentUrl(officialUrl) || decision.courtCode !== 'TRF4')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TRF4 não aponta para inteiro teor individual oficial do eproc/TRF4.');
+    }
+    if (decision.sourceId === 'tjsc-jurisprudencia' && (!isExactTjscDocumentUrl(officialUrl) || decision.courtCode !== 'TJSC')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJSC não aponta para inteiro teor individual oficial do eproc/TJSC.');
+    }
+    if (decision.sourceId === 'tjba-jurisprudencia' && (!isExactTjbaDocumentUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJBA')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJBA não aponta para inteiro teor individual oficial por hash.');
+    }
+    if (decision.sourceId === 'tjce-jurisprudencia') {
+      const id = String((decision.rawPayloadPreserved as any)?.id || '');
+      if (!isExactTjceDocumentUrl(officialUrl, id) || decision.courtCode !== 'TJCE') {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJCE não aponta para decisão individual oficial do SJURIS/PJe.');
+      }
+    }
+    if (decision.sourceId === 'tjms-esaj-jurisprudencia') {
+      if (!isExactEsajDocumentUrl(officialUrl, 'TJMS') || decision.courtCode !== 'TJMS') {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJMS não aponta para inteiro teor individual oficial do e-SAJ.');
+      }
+    }
+    if (decision.sourceId === 'tjpi-jurisprudencia') {
+      if (!isExactTjpiDetailUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJPI') {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJPI não aponta para página individual oficial do JusPI.');
+      }
+    }
+    if (decision.sourceId === 'tjpa-jurisprudencia') {
+      if (!isExactTjpaPublicDocumentUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJPA') {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJPA não aponta para página pública individual oficial do documento.');
+      }
+    }
+    if (decision.sourceId === 'tjrr-jurisprudencia') {
+      if (!isExactTjrrPdfUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJRR') {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJRR não aponta para PDF individual oficial do tribunal.');
+      }
+    }
+    if (decision.sourceId === 'carf-jurisprudencia') {
+      const carfFileName = String((decision.rawPayloadPreserved as any)?.nomeArquivoPdf || '');
+      const carfEvidence = (decision.rawPayloadPreserved as any)?.verificationEvidence;
+      if (
+        decision.courtCode !== 'CARF'
+        || !isExactCarfPdfUrl(officialUrl, carfFileName)
+        || carfEvidence?.individualRecord?.id !== (decision.rawPayloadPreserved as any)?.id
+        || carfEvidence?.individualRecord?.hits !== 1
+      ) {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: acórdão CARF não possui PDF individual e reconfirmação única no Solr oficial.');
+      }
+    }
+    if (decision.sourceId === 'tjes-jurisprudencia') {
+      const core = (decision.rawPayloadPreserved as any)?.core;
+      const hits = (decision.rawPayloadPreserved as any)?.verificationEvidence?.individualDocument?.hits;
+      if (
+        decision.courtCode !== 'TJES'
+        || (core !== 'pje2g' && core !== 'legado')
+        || !isExactTjesSearchUrl(officialUrl, core, decision.alternativeNumber)
+        || hits !== 1
+      ) {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJES não possui reconfirmação individual única por ID na API oficial.');
+      }
+    }
+    if (decision.sourceId === 'falcao-jurisprudencia' && (!isExactFalcaoDocumentUrl(officialUrl, decision.courtCode) || !/^TRT(?:[1-9]|1\d|2[0-4])$/.test(decision.courtCode))) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro Falcão não aponta para acórdão individual oficial do TRT informado.');
+    }
+    if (decision.sourceId === 'tjdft-jurisprudencia') {
+      const tjdftEvidence = (decision.rawPayloadPreserved as any)?.verificationEvidence;
+      const uuid = (decision.rawPayloadPreserved as any)?.uuid;
+      if (
+        decision.courtCode !== 'TJDFT'
+        || !isExactTjdftSearchUrl(officialUrl)
+        || tjdftEvidence?.individualRequest?.uuid !== uuid
+        || tjdftEvidence?.individualRequest?.hits !== 1
+      ) {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJDFT não possui confirmação individual exata por UUID na API oficial.');
+      }
+    }
+    if (decision.sourceId === 'tst-normativos' && (!isExactTstNormativeCollectionUrl(officialUrl) || decision.courtCode !== 'TST')) {
+      issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: verbete normativo TST não aponta para a coleção oficial permitida.');
     }
 
-    // 5. Data de Julgamento ou Publicação Oficial (Não pode ser futura)
-    const judgmentDate = decision.judgmentDate || decision.publicationDate;
+    // 5. Data de Julgamento, Publicação ou Disponibilidade Oficial (Não pode ser futura)
+    const judgmentDate = decision.judgmentDate || decision.publicationDate || decision.availabilityDate;
     if (!judgmentDate) {
       issues.push('DATA_AUSENTE: Decisão sem data de julgamento ou publicação registrada.');
     } else {
@@ -99,11 +193,32 @@ export class PrecedentVerifier {
       issues.push('PRECEDENTE_SUPERADO: Precedente objeto de overruling superado por nova tese vinculante.');
     }
 
-    // 8. Hash Criptográfico do Conteúdo
-    const computedHash = crypto
-      .createHash('sha256')
-      .update(`${rawCaseNum}|${decision.rapporteur || ''}|${judgmentDate || ''}|${textBody}`, 'utf8')
-      .digest('hex');
+    // 8-10. Documento individual, hash recebido, horário e consulta originária.
+    const evidence = (decision.rawPayloadPreserved as any)?.verificationEvidence;
+    const individualDocument = evidence?.individualDocument;
+    const originatingQuery = evidence?.originatingQuery;
+    if (!individualDocument?.confirmed || individualDocument?.httpStatus !== 200) {
+      issues.push('DOCUMENTO_INDIVIDUAL_NAO_CONFIRMADO: a consulta ao documento individual não retornou confirmação HTTP 200.');
+    }
+    if (individualDocument?.url !== officialUrl || !isAllowedOfficialUrl(individualDocument?.url || '', decision.courtCode)) {
+      issues.push('DOCUMENTO_INDIVIDUAL_DIVERGENTE: a evidência não corresponde ao link oficial individualizado.');
+    }
+    if (!/^[a-f0-9]{64}$/i.test(individualDocument?.contentSha256 || '') || individualDocument?.contentSha256 !== decision.contentSha256) {
+      issues.push('HASH_DOCUMENTO_AUSENTE: o SHA-256 deve ser calculado sobre o conteúdo recebido do documento oficial.');
+    }
+    if (!individualDocument?.fetchedAt || !decision.lastVerifiedAt) {
+      issues.push('DATA_VERIFICACAO_AUSENTE: a confirmação oficial deve registrar data e hora.');
+    }
+    if (
+      !originatingQuery?.id
+      || !/^[a-f0-9]{64}$/i.test(originatingQuery?.querySha256 || '')
+      || !/^[a-f0-9]{64}$/i.test(originatingQuery?.responseRecordSha256 || '')
+      || !originatingQuery?.endpoint
+    ) {
+      issues.push('CONSULTA_ORIGINARIA_AUSENTE: o precedente deve registrar a consulta oficial que o recuperou.');
+    }
+
+    const computedHash = individualDocument?.contentSha256 || '';
 
     // Determinação do Status Canônico
     let status: PrecedentVerificationStatus = 'VERIFIED_OFFICIAL';

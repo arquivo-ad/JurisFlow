@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { DataJudAdapter } from './DataJudAdapter.ts';
 import { PrecedentVerifier } from '../verifier.ts';
+import { isExactTstDocumentUrl } from '../officialSources.ts';
 import type { CanonicalLegalDecision, OfficialSourceDiagnostic } from '../types.ts';
 
 const TST_API_BASE = 'https://jurisprudencia-backend.tst.jus.br';
@@ -146,7 +147,18 @@ export class TstJurisprudenciaAdapter {
 
   public normalizeDecision(
     record: TstSearchRecord,
-    evidence: { endpoint: string; querySha256: string; responseRecordSha256: string; fetchedAt: string }
+    evidence: {
+      endpoint: string;
+      queryId: string;
+      querySha256: string;
+      responseRecordSha256: string;
+      fetchedAt: string;
+      documentUrl: string;
+      documentHttpStatus: number;
+      documentSha256: string;
+      documentBytes: number;
+      documentFetchedAt: string;
+    }
   ): CanonicalLegalDecision | null {
     const caseNumber = String(record.numFormatado || '').trim();
     const headnote = stripHtml(record.ementa || record.ementaHtml);
@@ -165,8 +177,7 @@ export class TstJurisprudenciaAdapter {
     }
 
     const normalizedCnjNumber = TstJurisprudenciaAdapter.buildCnjNumber(record.numeracaoUnica);
-    const hashPayload = `${caseNumber}|${rapporteur}|${judgmentDate}|${headnote}`;
-    const contentSha256 = sha256(hashPayload);
+    const contentSha256 = evidence.documentSha256;
     const processClass = caseNumber.split(/\s+-\s+|\s+/)[0] || String(record.tipo || 'ACÓRDÃO');
 
     const decision: CanonicalLegalDecision = {
@@ -206,6 +217,23 @@ export class TstJurisprudenciaAdapter {
         officialQuerySha256: evidence.querySha256,
         officialResponseSha256: evidence.responseRecordSha256,
         fetchedAt: evidence.fetchedAt,
+        verificationEvidence: {
+          individualDocument: {
+            confirmed: evidence.documentHttpStatus === 200,
+            url: evidence.documentUrl,
+            httpStatus: evidence.documentHttpStatus,
+            contentSha256: evidence.documentSha256,
+            bytes: evidence.documentBytes,
+            fetchedAt: evidence.documentFetchedAt,
+          },
+          originatingQuery: {
+            id: evidence.queryId,
+            endpoint: evidence.endpoint,
+            querySha256: evidence.querySha256,
+            responseRecordSha256: evidence.responseRecordSha256,
+            executedAt: evidence.fetchedAt,
+          },
+        },
         record: {
           id: String(record.id),
           tipo: record.tipo,
@@ -290,14 +318,36 @@ export class TstJurisprudenciaAdapter {
         ? envelope.registros.map((entry) => ('registro' in entry ? entry.registro : entry)).filter(Boolean) as TstSearchRecord[]
         : [];
       const querySha256 = sha256(requestJson);
-      const decisions = records
-        .map((record) => this.normalizeDecision(record, {
-          endpoint,
-          querySha256,
-          responseRecordSha256: sha256(JSON.stringify(record)),
-          fetchedAt,
-        }))
-        .filter((decision): decision is CanonicalLegalDecision => Boolean(decision));
+      const queryId = `tst-query-${querySha256.slice(0, 24)}`;
+      const normalized = await Promise.all(records.map(async (record) => {
+        const documentUrl = TstJurisprudenciaAdapter.buildOfficialDocumentUrl(record);
+        if (!documentUrl || !isExactTstDocumentUrl(documentUrl)) return null;
+        try {
+          const documentResponse = await this.fetchImpl(documentUrl, {
+            method: 'GET',
+            headers: { Accept: 'text/html,application/xhtml+xml,application/json' },
+            signal: controller.signal,
+          });
+          const documentBody = await documentResponse.text();
+          if (!documentResponse.ok || !documentBody.trim()) return null;
+          const documentFetchedAt = new Date().toISOString();
+          return this.normalizeDecision(record, {
+            endpoint,
+            queryId,
+            querySha256,
+            responseRecordSha256: sha256(JSON.stringify(record)),
+            fetchedAt,
+            documentUrl,
+            documentHttpStatus: documentResponse.status,
+            documentSha256: sha256(documentBody),
+            documentBytes: Buffer.byteLength(documentBody, 'utf8'),
+            documentFetchedAt,
+          });
+        } catch {
+          return null;
+        }
+      }));
+      const decisions = normalized.filter((decision): decision is CanonicalLegalDecision => Boolean(decision));
       const rejected = records.length - decisions.length;
       const totalRecords = Number(envelope?.totalRegistros || records.length);
 

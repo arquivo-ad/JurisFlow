@@ -28,6 +28,7 @@ export class LegalCompetenceClassifier {
     const sumulaVinculanteMatch = rawQuery.match(/\b(Súmula Vinculante|SV)\s+([0-9]+)\b/i);
     const sumulaMatch = rawQuery.match(/\b(Súmula)\s+([0-9]+)(?:\s*(?:\/|\s+do\s+)?(STJ|STF|TST))?\b/i);
     const ojMatch = rawQuery.match(/\b(OJ|Orientação Jurisprudencial)\s+(?:n[º°.]\s*)?([0-9]+)\b/i);
+    const pnMatch = rawQuery.match(/\b(PN|Precedente Normativo)\s+(?:n[º°.]\s*)?([0-9]+)(?:\s*(?:\/|\s+do\s+)?TST)?\b/i);
 
     let extractedThemeOrSumula: LegalQueryClassification['extractedThemeOrSumula'] | undefined;
     if (sumulaVinculanteMatch) {
@@ -54,12 +55,18 @@ export class LegalCompetenceClassifier {
         court: 'TST',
         number: parseInt(ojMatch[2], 10),
       };
+    } else if (pnMatch) {
+      extractedThemeOrSumula = {
+        type: 'PN',
+        court: 'TST',
+        number: parseInt(pnMatch[2], 10),
+      };
     }
 
     // 3. Detecção de Ramo Jurídico
     // Dicionários conceituais por área do Direito
     const isLabor =
-      /\b(clt|trabalhist[ao]|trabalhador|empregad[ao]|emprego|cargo de confiança|função de confiança|fundação estadual|fundação pública|verbas rescisórias|rescis[ãa]o|demiss[ãa]o|demitid[ao]|dispensa|aviso prévio|fgts|férias|13[º°]? salário|décimo terceiro|saldo de salário|multa rescisória|tst|trt|oj\b|sindicato|categoria profissional)\b/i.test(
+      /\b(clt|trabalhist[ao]|trabalhador|empregad[ao]|emprego|cargo de confiança|função de confiança|fundação estadual|fundação pública|verbas rescisórias|rescis[ãa]o|demiss[ãa]o|demitid[ao]|dispensa|aviso prévio|fgts|férias|13[º°]? salário|décimo terceiro|saldo de salário|multa rescisória|tst|trt|oj\b|precedente normativo|\bpn\s*\d+|sindicato|categoria profissional)\b/i.test(
         q
       );
 

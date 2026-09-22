@@ -1,6 +1,7 @@
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResponse, LegalSearchResultItem } from './types.ts';
 import { LegalKnowledgeStorage } from './storage.ts';
 import { LegalCompetenceClassifier } from './classifier.ts';
+import { PrecedentVerifier } from './verifier.ts';
 
 /**
  * MOTOR DE PESQUISA JURISPRUDENCIAL COM ADMISSÃO POR PERTINÊNCIA E ZERO-HALLUCINATION
@@ -15,6 +16,13 @@ import { LegalCompetenceClassifier } from './classifier.ts';
  */
 
 // Stop words e termos meramente funcionais/procedimentais
+function foldForSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 const LEGAL_STOP_WORDS = new Set([
   'de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'com', 'não', 'uma',
   'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao',
@@ -29,6 +37,8 @@ const LEGAL_STOP_WORDS = new Set([
   'qual', 'tese', 'tema', 'enunciado', 'tribunal', 'stj', 'stf', 'tst', 'trt'
 ]);
 
+const LEGAL_STOP_WORDS_FOLDED = new Set([...LEGAL_STOP_WORDS].map(foldForSearch));
+
 export class LegalSearchEngine {
   private storage: LegalKnowledgeStorage;
 
@@ -39,18 +49,18 @@ export class LegalSearchEngine {
   public search(queryInput: LegalSearchQuery, tenantId?: string): LegalSearchResponse {
     const start = Date.now();
     const query = (queryInput.query || '').trim();
-    const queryLower = query.toLowerCase();
+    const querySearch = foldForSearch(query);
 
     // 1. Classificação Prévia de Ramo, Matéria e Competência
     const classification = LegalCompetenceClassifier.classify(query);
 
     // Extrai tokens substantivos da consulta do usuário
-    const allTokens = queryLower
-      .replace(/[^\w\sáéíóúâêîôûãõç]/gi, ' ')
+    const allTokens = querySearch
+      .replace(/[^\w\s]/gi, ' ')
       .split(/\s+/)
       .filter((t) => t.length >= 3);
 
-    const substantiveTokens = allTokens.filter((t) => !LEGAL_STOP_WORDS.has(t));
+    const substantiveTokens = allTokens.filter((t) => !LEGAL_STOP_WORDS_FOLDED.has(t));
 
     // Recupera acervo canônico respeitando isolamento multi-tenant (excluindo dados de demonstração)
     const candidates = this.storage.getDecisions({
@@ -139,6 +149,10 @@ export class LegalSearchEngine {
           if (!court || court === d.courtCode) {
             condition2 = true;
           }
+        } else if (type === 'OJ' && d.documentType === 'ORIENTACAO_JURISPRUDENCIAL' && d.themeNumber === number) {
+          if (!court || court === d.courtCode) condition2 = true;
+        } else if (type === 'PN' && d.documentType === 'PRECEDENTE_NORMATIVO' && d.themeNumber === number) {
+          if (!court || court === d.courtCode) condition2 = true;
         } else if (d.rawCaseNumber.toLowerCase().includes(`tema ${number}`) || d.rawCaseNumber.toLowerCase().includes(`súmula ${number}`)) {
           condition2 = true;
         }
@@ -146,10 +160,11 @@ export class LegalSearchEngine {
 
       // Condição 3: Correspondência material suficiente
       const textCorpus = `${d.rulingThesis || ''} ${d.officialHeadnote} ${d.rawCaseNumber}`.toLowerCase();
+      const textCorpusFolded = foldForSearch(textCorpus);
       const matchedSubstantive: string[] = [];
 
       for (const token of substantiveTokens) {
-        if (textCorpus.includes(token)) {
+        if (textCorpusFolded.includes(token)) {
           matchedSubstantive.push(token);
         }
       }
@@ -157,8 +172,8 @@ export class LegalSearchEngine {
       // Verifica correspondência de institutos jurídicos da classificação
       let matchedEntitiesCount = 0;
       for (const entity of classification.entities) {
-        const entityWords = entity.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-        const hasEntity = entityWords.every((w) => textCorpus.includes(w));
+        const entityWords = foldForSearch(entity).split(/\s+/).filter((w) => w.length > 3);
+        const hasEntity = entityWords.every((w) => textCorpusFolded.includes(w));
         if (hasEntity) {
           matchedEntitiesCount++;
           matchedSubstantive.push(entity);
@@ -210,27 +225,9 @@ export class LegalSearchEngine {
         continue;
       }
 
-      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
-        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
-      const payload = d.rawPayloadPreserved as any;
-      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
-        && Array.isArray(payload?.processosRow)
-        && Array.isArray(payload?.temasRow)
-        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
-      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
-        && Boolean(payload?.officialApiRecordId)
-        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
       const hasAuditableEvidence =
         d.verificationStatus === 'VERIFIED_OFFICIAL'
-        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
-        && Boolean(d.lastVerifiedAt)
-        && Boolean(d.rawPayloadPreserved)
-        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
-        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
-        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
+        && PrecedentVerifier.verifyDecision(d).isPassed;
 
       if (queryInput.onlyVerified && !hasAuditableEvidence) continue;
       sourcesActuallyConsulted.add(d.sourceId);
@@ -294,38 +291,26 @@ export class LegalSearchEngine {
 
     const results: LegalSearchResultItem[] = paginated.map((item) => {
       const d = item.decision;
-      const officialUrlIsDirect = /^https:\/\//i.test(d.officialUrl)
-        && !/\/processo\/pesquisa\/?\?termo=/i.test(d.officialUrl);
-      const payload = d.rawPayloadPreserved as any;
-      const hasOfficialDatasetEvidence = d.sourceId === 'stj-dados-abertos'
-        && Array.isArray(payload?.processosRow)
-        && Array.isArray(payload?.temasRow)
-        && /^[a-f0-9]{64}$/i.test(payload?.processosSha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.temasSha256 || '');
-      const hasOfficialTstApiEvidence = d.sourceId === 'tst-jurisprudencia'
-        && Boolean(payload?.officialApiRecordId)
-        && /^https:\/\/jurisprudencia-backend\.tst\.jus\.br\/rest\/pesquisa-textual(?:\/|$)/i.test(payload?.officialApiEndpoint || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialQuerySha256 || '')
-        && /^[a-f0-9]{64}$/i.test(payload?.officialResponseSha256 || '');
       const hasAuditableEvidence = d.verificationStatus === 'VERIFIED_OFFICIAL'
-        && /^[a-f0-9]{64}$/i.test(d.contentSha256)
-        && Boolean(d.lastVerifiedAt)
-        && Boolean(d.rawPayloadPreserved)
-        && (officialUrlIsDirect || hasOfficialDatasetEvidence || hasOfficialTstApiEvidence)
-        && !/^Espelhos de ac[óo]rd[ãa]os\b/i.test(d.rawCaseNumber)
-        && !/\/dataset(?:\/|$)/i.test(d.officialUrl);
+        && PrecedentVerifier.verifyDecision(d).isPassed;
       const evidenceState = hasAuditableEvidence
         ? 'VERIFIED_OFFICIAL'
         : d.officialUrl
           ? 'FOUND_PENDING_REVIEW'
           : 'NOT_VERIFIED_PROHIBITED';
-      const citationBadge = evidenceState === 'VERIFIED_OFFICIAL'
-        ? `[OFICIAL ${d.courtCode} - VERIFICADO]`
-        : evidenceState === 'FOUND_PENDING_REVIEW'
-          ? `[${d.courtCode} - ENCONTRADO, PENDENTE DE CONFERÊNCIA]`
-          : `[${d.courtCode} - NÃO VERIFICADO — PROIBIDO USAR EM PEÇA]`;
+      const citationBadge = d.verificationStatus === 'CANCELLED'
+        ? (d.verificationBadge || `[OFICIAL ${d.courtCode} - CANCELADO]`)
+        : evidenceState === 'VERIFIED_OFFICIAL'
+          ? (d.verificationBadge || `[OFICIAL ${d.courtCode} - VERIFICADO]`)
+          : evidenceState === 'FOUND_PENDING_REVIEW'
+            ? `[${d.courtCode} - ENCONTRADO, PENDENTE DE CONFERÊNCIA]`
+            : `[${d.courtCode} - NÃO VERIFICADO — PROIBIDO USAR EM PEÇA]`;
 
-      const officialCitation = `${d.courtCode}, ${d.rawCaseNumber}, Rel. ${d.rapporteur}, ${d.courtOrgan || ''}, julgado em ${d.judgmentDate || 'N/D'}, DJe ${d.publicationDate || 'N/D'}`;
+      const isNormativeCitation = ['SUMULA', 'SUMULA_VINCULANTE', 'ORIENTACAO_JURISPRUDENCIAL', 'PRECEDENTE_NORMATIVO', 'ENUNCIADO']
+        .includes(d.documentType);
+      const officialCitation = isNormativeCitation
+        ? `${d.courtCode}, ${d.rawCaseNumber}, ${d.courtOrgan || ''}, coleção oficial disponível em ${d.availabilityDate || d.publicationDate || 'N/D'}`
+        : `${d.courtCode}, ${d.rawCaseNumber}, Rel. ${d.rapporteur}, ${d.courtOrgan || ''}, julgado em ${d.judgmentDate || 'N/D'}, DJe ${d.publicationDate || 'N/D'}`;
 
       return {
         id: d.id,

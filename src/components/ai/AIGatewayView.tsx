@@ -435,7 +435,7 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
               Inteligência Artificial Forense & Redução de Erros
             </h1>
             <p className="text-xs lg:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              Equipado com o modelo <strong>Gemini Enterprise for Legal (Agosto/2026)</strong> para auditoria de minutas, erradicação de citações de leis revogadas e contagem blindada de prazos sob o CPC/2015.
+              Modelo configurado: <strong>{aiStats?.activeModel || 'não configurado'}</strong>. Citações jurídicas só podem ser usadas após evidência oficial e verificação determinística.
             </p>
           </div>
 
@@ -448,16 +448,16 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
             <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
               <span className="text-[10px] text-slate-400 block">Erros Prevenidos</span>
               <span className="text-indigo-300 font-bold text-sm">
-                {aiStats?.errorsPrevented || 42} vícios
+                Não mensurado
               </span>
             </div>
             <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
               <span className="text-[10px] text-slate-400 block">Requisições IA</span>
-              <span className="text-white font-bold text-sm">{aiStats?.totalRequests || 28}</span>
+              <span className="text-white font-bold text-sm">{aiStats?.totalRequests ?? 0}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
               <span className="text-[10px] text-slate-400 block">Custo Acumulado</span>
-              <span className="text-amber-300 font-bold text-sm">R$ {aiStats?.totalCostBRL?.toFixed(2) || '1.62'}</span>
+              <span className="text-amber-300 font-bold text-sm">R$ {(aiStats?.totalCostBRL ?? 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -786,16 +786,16 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
           <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200 mb-1">
-                  <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
-                  <span>Conectividade em Tempo Real Ativa</span>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-700 text-[11px] font-semibold border border-slate-200 mb-1">
+                  <Radio className="w-3 h-3 text-slate-500" />
+                  <span>Estado apurado separadamente por fonte</span>
                 </div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Globe className="w-4 h-4 text-indigo-600" />
-                  Sincronização Automatizada: Diários Oficiais & Portal do Planalto (Webhooks & APIs)
+                  Diagnóstico de conectores oficiais
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Conectores que mantêm o Gemini Enterprise for Legal atualizado com novas leis do Congresso Nacional, súmulas dos Tribunais e publicações do DJEN.
+                  Uma fonte só aparece disponível após consulta real; integrações ausentes permanecem como não implementadas ou indisponíveis.
                 </p>
               </div>
 
@@ -820,6 +820,11 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
 
             {/* Grid dos Conectores Oficiais */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {(legalGrounding?.syncConnectors || []).length === 0 && (
+                <div className="sm:col-span-2 lg:col-span-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                  Nenhuma sincronização integral em lote está habilitada. As pesquisas sob demanda exibem diagnóstico por fonte; o DJEN possui consulta pública oficial sob demanda e o BNP/Pangea permanece não implementado.
+                </div>
+              )}
               {(legalGrounding?.syncConnectors || []).map((connector) => (
                 <div
                   key={connector.id}
@@ -830,9 +835,9 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
                       <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">
                         {connector.protocol}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Conectado
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${connector.status === 'CONNECTED' ? 'text-emerald-700 bg-emerald-100/60' : 'text-amber-800 bg-amber-100'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${connector.status === 'CONNECTED' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                        {connector.status === 'CONNECTED' ? 'Conectado' : connector.status === 'NOT_IMPLEMENTED' ? 'Não implementado' : connector.status === 'UNAVAILABLE' ? 'Indisponível' : connector.status}
                       </span>
                     </div>
                     <h3 className="font-bold text-slate-900 text-xs leading-snug">
@@ -910,7 +915,7 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
                     Configuração do Inbound Webhook
                   </h4>
                   <p className="text-[11px] text-indigo-900/80 mt-1 leading-relaxed">
-                    Cadastre a URL abaixo no seu sistema de Diários Oficiais (PJe, DJEN ComunicaAPI ou Jusbrasil) para receber intimações em tempo real:
+                    A consulta pública do DJEN está disponível. A recepção autenticada/push para tribunais continua não implementada nem homologada.
                   </p>
                   <div className="mt-2 p-2 rounded bg-white border border-indigo-200 font-mono text-[10px] text-slate-800 break-all select-all">
                     POST /api/webhooks/djen-intimacoes
@@ -918,7 +923,7 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
                 </div>
 
                 <div className="pt-2 border-t border-indigo-200/60 text-[10px] text-indigo-800">
-                  <span className="font-semibold">Automação Ativa:</span> Ao receber o push, o sistema extrai o prazo pelo CPC/2015 e cria o alerta para o advogado.
+                  <span className="font-semibold">Estado:</span> Não implementado. O endpoint rejeita payload sem número CNJ válido e não cria processos padrão.
                 </div>
               </div>
             </div>
@@ -978,7 +983,7 @@ São Paulo, 31 de agosto de 2026. Advogados: ${lawyerSalutation.fullNameWithTitl
                   Fontes Indexadas no Grounding Ativo
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Total de {legalGrounding?.totalNormsIndexed || 7853} normas e {legalGrounding?.totalPrecedentsIndexed || 3450} precedentes vinculantes no índice de consulta
+                  Registros efetivamente presentes: {legalGrounding?.totalNormsIndexed ?? 0} decisões e {legalGrounding?.totalPrecedentsIndexed ?? 0} precedentes qualificados
                 </p>
               </div>
 

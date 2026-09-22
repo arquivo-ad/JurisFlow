@@ -9,7 +9,12 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:legal": "tsx --test server/legal/__tests__/*.test.ts"
+    "test:legal": "tsx --test server/legal/__tests__/*.test.ts",
+    "test:connectors": "tsx --test server/legal/__tests__/connectorRegression.test.ts",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "report:legal-evidence": "node scripts/legal-evidence-report.mjs",
+    "certificate:bridge": "node tools/certificate-bridge/server.mjs",
+    "certificate:bridge:check": "bash scripts/certificate-bridge/check-prereqs.sh"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
