@@ -1299,6 +1299,20 @@
       "status": "SUCCESS",
       "modelUsed": "gemini-3.1-flash-lite",
       "createdAt": "2026-09-18T14:18:40.628Z"
+    },
+    {
+      "id": "ai-log-1789816812601",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela Maria Manni Capitani",
+      "feature": "LEGAL_CHAT",
+      "promptTokens": 240,
+      "completionTokens": 420,
+      "estimatedCostBRL": 0.009,
+      "executionTimeMs": 7295,
+      "status": "SUCCESS",
+      "modelUsed": "",
+      "createdAt": "2026-09-19T11:20:12.601Z"
     }
   ],
   "legalKnowledgeSources": [
@@ -1568,5 +1582,77 @@
     "privacyPolicyUrl": "https://capitani.adv.br/politica-privacidade-lgpd",
     "termsSummary": "Tratamento de dados estritamente voltado à representação judicial, cumprimento de obrigações legais perante os Tribunais e defesa de direitos conforme arts. 7º, incisos II, V e VI da Lei 13.709/2018.",
     "updatedAt": "2026-09-15T20:22:37.237Z"
-  }
+  },
+  "judicialSearchHistory": [
+    {
+      "id": "jsh-1789816929643",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "JURISPRUDENCE",
+      "query": "verbas rescisórias fundação pública cargo de confiança regime celetista",
+      "filters": {
+        "onlyQualifiedPrecedents": false
+      },
+      "resultsCount": 13,
+      "executionTimeMs": 11588,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-19T11:22:09.643Z"
+    },
+    {
+      "id": "jsh-init-1",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela M. Manni Capitani",
+      "searchType": "JURISPRUDENCE",
+      "query": "prescrição intercorrente cumprimento de sentença",
+      "filters": {
+        "courtCodes": [
+          "STJ"
+        ]
+      },
+      "courtCode": "STJ",
+      "resultsCount": 1,
+      "executionTimeMs": 48,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-19T10:19:34.842Z"
+    },
+    {
+      "id": "jsh-init-2",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Dra. Gabriela M. Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1092834-12.2026.8.26.0100",
+      "filters": {
+        "searchType": "CNJ"
+      },
+      "courtCode": "TJSP",
+      "resultsCount": 1,
+      "executionTimeMs": 112,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-19T09:19:34.842Z"
+    }
+  ],
+  "precedentFavorites": [
+    {
+      "id": "fav-1",
+      "decisionId": "bnp-stf-sumula_vinculante-10",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "title": "Súmula Vinculante 10 - STF (Cláusula de Reserva de Plenário)",
+      "courtCode": "STF",
+      "citation": "STF, Súmula Vinculante 10, Rel. Tribunal Pleno, DJe 2008-06-18",
+      "headnote": "Viola a cláusula de reserva de plenário (CF, art. 97) a decisão de órgão fracionário de Tribunal que, embora não declare expressamente a inconstitucionalidade de lei ou ato normativo do Poder Público, afasta sua incidência, no todo ou em parte.",
+      "thesis": "Cláusula de reserva de plenário (CF, art. 97) de observância obrigatória por órgãos fracionários.",
+      "officialUrl": "https://portal.stf.jus.br/jurisprudencia/sumulaVinculante.asp?id=10",
+      "favoritedAt": "2026-09-18T11:19:34.842Z",
+      "tags": [
+        "Constitucional",
+        "Reserva de Plenário",
+        "Art. 97 CF"
+      ]
+    }
+  ],
+  "lawyerCertificates": {}
 }

@@ -1,0 +1,33 @@
+name: Evidência Jurídica
+
+on:
+  pull_request:
+  push:
+    branches: [main, Dev]
+
+jobs:
+  legal-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 1. Varredura de segredos
+        run: npm run scan:secrets
+      - name: 2. Lint e tipos
+        run: npm run lint
+      - name: 3. Build
+        run: npm run build
+      - name: 4. Testes jurídicos
+        run: npm run test:legal
+      - name: 5. Testes dos conectores
+        run: npm run test:connectors
+      - name: 6. Relatório de evidências
+        run: mkdir -p artifacts && npm run report:legal-evidence > artifacts/legal-evidence.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: legal-evidence-${{ github.sha }}
+          path: artifacts/legal-evidence.json

@@ -197,7 +197,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setSyncFeedback(null);
     try {
       const res = await api.syncSupabase();
-      setSyncFeedback(res.message || 'Sincronização concluída com sucesso!');
+      setSyncFeedback(res.message || 'A operação terminou sem diagnóstico detalhado; confira o estado de cada fonte.');
       await fetchSupabaseStatus();
     } catch (err: any) {
       setSyncFeedback('Erro ao sincronizar com Supabase: ' + err.message);

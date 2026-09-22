@@ -309,7 +309,7 @@ export interface LegalQueryClassification {
   isSpecificThemeOrSumulaQuery: boolean;
   extractedProcessNumber?: string;
   extractedThemeOrSumula?: {
-    type: 'TEMA' | 'SUMULA' | 'SUMULA_VINCULANTE' | 'OJ';
+    type: 'TEMA' | 'SUMULA' | 'SUMULA_VINCULANTE' | 'OJ' | 'PN';
     court?: string;
     number: number;
   };

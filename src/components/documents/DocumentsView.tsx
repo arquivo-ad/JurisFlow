@@ -20,7 +20,6 @@ import {
   User,
   Trash2,
   Calendar,
-  Lock,
   ExternalLink,
   Filter,
   Save,
@@ -100,7 +99,6 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       ? `Advogada Titular - ${currentTenant.visualIdentity.signatoryOab}`
       : 'Advogada Titular - OAB/SP 478.370'
   );
-  const [isSigning, setIsSigning] = useState(false);
 
   // New Document Modal State
   const [isNewDocModalOpen, setIsNewDocModalOpen] = useState(false);
@@ -328,27 +326,6 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
     }
   };
 
-  // Perform Digital Signature
-  const handleExecuteSign = async () => {
-    if (!selectedDoc) return;
-    setIsSigning(true);
-    try {
-      const signedDoc = await api.signDocument(selectedDoc.id, {
-        signerName,
-        signerCpf,
-        signerRole,
-      });
-      setSelectedDoc(signedDoc);
-      setIsSignModalOpen(false);
-      onShowToast(`Documento assinado digitalmente com sucesso! Carimbo ICP-Brasil gerado.`);
-      onRefresh();
-    } catch (err) {
-      onShowToast('Falha ao assinar documento.');
-    } finally {
-      setIsSigning(false);
-    }
-  };
-
   // Delete Document
   const handleDeleteDoc = async (docId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este documento?')) return;
@@ -424,14 +401,8 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
         <div style="font-weight: bold; font-size: 11pt; color: #111;">${lawyerName}</div>
         <div style="font-size: 10pt; color: #4338ca; font-family: monospace; font-weight: 600;">${lawyerOab}</div>
         <div style="font-size: 9pt; color: #666; font-family: sans-serif;">${vi.signatoryRole || 'Advogada'}</div>
-        <div style="margin-top: 14px; display: inline-flex; flex-direction: column; align-items: center;">
-          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1.5px solid #10b981; background-color: #ecfdf5; border-radius: 8px; color: #065f46; font-family: sans-serif; font-size: 8.5pt; font-weight: bold; letter-spacing: 0.5px;">
-            <span>🔒 ASSINADO DIGITALMENTE</span>
-            <span style="font-weight: normal; color: #047857; font-size: 8pt;">• Certificado ICP-Brasil / Token OAB</span>
-          </div>
-          <div style="margin-top: 4px; font-size: 7pt; color: #9ca3af; font-family: sans-serif;">
-            (Documento assinado digitalmente nos termos da Lei nº 14.063/2020 e MP 2.200-2/2001)
-          </div>
+        <div style="margin-top: 14px; font-size: 8pt; color: #9ca3af; font-family: sans-serif;">
+          Assinatura digital ICP-Brasil não implementada neste ambiente.
         </div>
       </div>
       `;
@@ -991,7 +962,7 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-600" />
-                <h2 className="text-base font-bold text-slate-900">Assinatura Digital ICP-Brasil</h2>
+                <h2 className="text-base font-bold text-slate-900">Assinatura Digital — Não implementada</h2>
               </div>
               <button onClick={() => setIsSignModalOpen(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
@@ -999,7 +970,7 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
             </div>
 
             <p className="text-xs text-slate-600">
-              Ao assinar digitalmente, será gerado um carimbo criptográfico SHA-256 com registro de data/hora oficial e código de autenticidade (MP 2.200-2/2001).
+              A ponte local ICP-Brasil/Web PKI ainda não foi instalada. Nenhuma chave, senha, assinatura, autoridade certificadora, IP ou código de validação será simulado.
             </p>
 
             <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
@@ -1042,15 +1013,9 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
               >
                 Cancelar
               </button>
-              <button
-                type="button"
-                onClick={handleExecuteSign}
-                disabled={isSigning}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>{isSigning ? 'Assinando...' : 'Confirmar & Assinar'}</span>
-              </button>
+              <span className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold">
+                Certificado digital não implementado
+              </span>
             </div>
           </div>
         </div>
@@ -1074,7 +1039,7 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                     {selectedDoc.digitalSignature && (
                       <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        Assinado ICP-Brasil
+                        Registro legado — não verificado
                       </span>
                     )}
                   </div>
@@ -1134,7 +1099,7 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                 <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-1.5 text-xs text-emerald-900">
                   <div className="flex items-center gap-2 font-bold text-emerald-800">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Certificado de Assinatura Digital ICP-Brasil</span>
+                    <span>Registro legado de assinatura — não verificado</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                     <div>
@@ -1222,10 +1187,10 @@ DR. CARLOS SILVEIRA - OAB/SP 412.890`);
                     {!selectedDoc.digitalSignature && (
                       <button
                         onClick={() => setIsSignModalOpen(true)}
-                        className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5 shadow-xs"
+                        className="px-4 py-1.5 rounded-lg bg-slate-200 text-slate-600 font-semibold flex items-center gap-1.5"
                       >
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Assinar Digitalmente</span>
+                        <span>Certificado não implementado</span>
                       </button>
                     )}
                   </>

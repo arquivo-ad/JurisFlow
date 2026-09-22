@@ -56,6 +56,8 @@ import {
   PrecedentFavoriteItem,
   LawyerDigitalCertificateInfo,
   CourtAvailabilityMatrixItem,
+  DjenPublicationSearchParams,
+  DjenPublicationSearchResponse,
 } from '../types';
 
 const DEFAULT_TENANT_ID = 't-1789481820042';
@@ -836,6 +838,12 @@ export const api = {
       executionTimeMs: number;
       timestamp: string;
     }>('/api/judicial/search-jurisprudence', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  searchDjenPublications: (params: DjenPublicationSearchParams) =>
+    request<DjenPublicationSearchResponse>('/api/judicial/search-djen', {
       method: 'POST',
       body: JSON.stringify(params),
     }),

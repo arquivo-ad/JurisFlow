@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { PDFParse } from 'pdf-parse';
 import { CanonicalLegalDecision, LegalDocumentType, PrecedentSituation, PrecedentStrength, OfficialSourceDiagnostic } from '../types.ts';
 import { PrecedentVerifier } from '../verifier.ts';
+import { isExactStjDocumentUrl } from '../officialSources.ts';
 
 /**
  * ADAPTADOR OFICIAL STJ - DADOS ABERTOS & SCON
@@ -14,9 +16,20 @@ import { PrecedentVerifier } from '../verifier.ts';
 
 export class StjDadosAbertosAdapter {
   private baseUrl: string;
+  private fetchImpl: typeof fetch;
+  private timeoutMs: number;
+  private extractPdfText: (content: Buffer) => Promise<string>;
 
-  constructor(baseUrl: string = 'https://dadosabertos.web.stj.jus.br') {
+  constructor(
+    baseUrl: string = 'https://dadosabertos.web.stj.jus.br',
+    fetchImpl: typeof fetch = fetch,
+    timeoutMs = 30_000,
+    extractPdfText: (content: Buffer) => Promise<string> = StjDadosAbertosAdapter.extractOfficialPdfText
+  ) {
     this.baseUrl = baseUrl;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+    this.extractPdfText = extractPdfText;
   }
 
   /**
@@ -24,6 +37,117 @@ export class StjDadosAbertosAdapter {
    */
   public static computeSha256(content: string): string {
     return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+  }
+
+  public static computeBufferSha256(content: Buffer): string {
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  private static async extractOfficialPdfText(content: Buffer): Promise<string> {
+    const parser = new PDFParse({ data: content });
+    try {
+      const parsed = await parser.getText({ partial: [1, 2, 3, 4] });
+      return parsed.text || '';
+    } finally {
+      await parser.destroy();
+    }
+  }
+
+  public static extractOfficialDocumentMetadata(text: string): {
+    caseNumber?: string;
+    rapporteur?: string;
+    courtOrgan?: string;
+    documentNumber?: string;
+  } {
+    const clean = String(text || '').replace(/\r/g, '');
+    const caseMatch = clean.match(/(?:RECURSO ESPECIAL|AGRAVO EM RECURSO ESPECIAL|EMBARGOS DE DIVERG[ÊE]NCIA)[^\n]*?N[º°]\s*([^\n(]+)/i);
+    const rapporteurMatch = clean.match(/RELATORA?\s*[\t ]*:\s*(?:MINISTR[OA]\s+)?([^\n]+)/i);
+    const organMatch = clean.match(/acordam os Ministros da\s+([\s\S]{2,80}?)\s+do Superior Tribunal de Justiça/i);
+    const documentMatch = clean.match(/Documento:\s*(\d+)/i);
+    const normalize = (value?: string) => value?.replace(/\s+/g, ' ').trim();
+    return {
+      caseNumber: normalize(caseMatch?.[1]),
+      rapporteur: normalize(rapporteurMatch?.[1]),
+      courtOrgan: normalize(organMatch?.[1]),
+      documentNumber: documentMatch?.[1],
+    };
+  }
+
+  private static toBrazilianDate(value: string): string | null {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? `${match[3]}/${match[2]}/${match[1]}` : null;
+  }
+
+  public static buildOfficialDocumentUrl(publicationDate: string, registrationNumber: string): string | null {
+    const date = StjDadosAbertosAdapter.toBrazilianDate(publicationDate);
+    const registration = String(registrationNumber || '').replace(/\D/g, '');
+    if (!date || !/^\d{10,14}$/.test(registration)) return null;
+    const url = new URL('https://processo.stj.jus.br/SCON/GetInteiroTeorDoAcordao');
+    url.searchParams.set('dt_publicacao', date);
+    url.searchParams.set('num_registro', registration);
+    return url.toString();
+  }
+
+  public async fetchOfficialDocument(documentUrl: string): Promise<{
+    success: boolean;
+    httpStatus: number;
+    contentSha256?: string;
+    bytes?: number;
+    fetchedAt: string;
+    documentMetadata?: ReturnType<typeof StjDadosAbertosAdapter.extractOfficialDocumentMetadata>;
+    error?: string;
+  }> {
+    const fetchedAt = new Date().toISOString();
+    if (!isExactStjDocumentUrl(documentUrl)) {
+      return { success: false, httpStatus: 400, fetchedAt, error: 'URL individual do STJ fora da allowlist exata.' };
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchImpl(documentUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/pdf', 'User-Agent': 'JurisFlow-LegalSync/2026.2 (Auditoria Forense)' },
+        signal: controller.signal,
+      });
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get('content-type') || '';
+      const isPdf = contentType.toLowerCase().includes('application/pdf') && buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+      if (!response.ok || !isPdf || buffer.length < 1024) {
+        return {
+          success: false,
+          httpStatus: response.status,
+          fetchedAt,
+          error: `Inteiro teor STJ inválido: HTTP ${response.status}, Content-Type ${contentType || 'ausente'}, ${buffer.length} bytes.`,
+        };
+      }
+      const documentText = await this.extractPdfText(buffer);
+      const documentMetadata = StjDadosAbertosAdapter.extractOfficialDocumentMetadata(documentText);
+      if (!documentMetadata.caseNumber || !documentMetadata.rapporteur || !documentMetadata.courtOrgan || !documentMetadata.documentNumber) {
+        return {
+          success: false,
+          httpStatus: 422,
+          fetchedAt,
+          error: 'Inteiro teor STJ recebido, mas os metadados judiciais individuais não puderam ser extraídos.',
+        };
+      }
+      return {
+        success: true,
+        httpStatus: response.status,
+        contentSha256: StjDadosAbertosAdapter.computeBufferSha256(buffer),
+        bytes: buffer.length,
+        fetchedAt,
+        documentMetadata,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        httpStatus: error?.name === 'AbortError' ? 408 : 503,
+        fetchedAt,
+        error: error?.name === 'AbortError' ? 'Tempo limite ao baixar o inteiro teor do STJ.' : String(error?.message || error),
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /**
@@ -353,7 +477,7 @@ export class StjDadosAbertosAdapter {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      const ckanRes = await fetch(
+      const ckanRes = await this.fetchImpl(
         'https://dadosabertos.web.stj.jus.br/api/3/action/package_show?id=precedentes-qualificados',
         {
           headers: {
@@ -450,11 +574,11 @@ export class StjDadosAbertosAdapter {
         const timeoutId = setTimeout(() => controller.abort(), 18000);
 
         const [resProc, resTemas] = await Promise.all([
-          fetch(processosUrl, {
+          this.fetchImpl(processosUrl, {
             headers: { 'User-Agent': 'JurisFlow-LegalSync/2026.1 (Auditoria Forense)' },
             signal: controller.signal,
           }),
-          fetch(temasUrl, {
+          this.fetchImpl(temasUrl, {
             headers: { 'User-Agent': 'JurisFlow-LegalSync/2026.1 (Auditoria Forense)' },
             signal: controller.signal,
           }),
@@ -703,6 +827,7 @@ export class StjDadosAbertosAdapter {
     const relator = matchedRow[5]?.trim() || '';
     const dataJulg = matchedRow[12]?.trim() || '';
     const dataPub = matchedRow[13]?.trim() || '';
+    const registrationNumber = matchedRow[4]?.trim() || '';
 
     // Recupera dados do Tema correspondente
     const temasContent = fs.readFileSync(temas, 'utf8');
@@ -733,12 +858,11 @@ export class StjDadosAbertosAdapter {
     const missingOfficialFields = [
       ['processo', procNameRaw],
       ['UF de origem', origemUf],
-      ['relator', relator],
       ['data de julgamento/publicação', dataJulg || dataPub],
+      ['número de registro STJ', registrationNumber],
       ['linha oficial do tema', matchedThemeRow],
       ['questão submetida/tese', headnote],
       ['situação do tema', situacao],
-      ['órgão julgador', orgaoJulgador],
     ].filter(([, value]) => !value).map(([label]) => label as string);
 
     if (missingOfficialFields.length > 0) {
@@ -769,6 +893,91 @@ export class StjDadosAbertosAdapter {
       };
     }
 
+    const officialDocumentUrl = StjDadosAbertosAdapter.buildOfficialDocumentUrl(dataPub, registrationNumber);
+    if (!officialDocumentUrl) {
+      return {
+        diagnostic: {
+          adapter: 'stj-dados-abertos',
+          sourceName: 'Superior Tribunal de Justiça - Portal de Dados Abertos e Inteiro Teor',
+          courtCode: 'STJ',
+          officialUrl: syncStatus.officialUrl,
+          timestamp,
+          httpStatus: 422,
+          latencyMs: syncStatus.latencyMs + (Date.now() - startParse),
+          lifecycleState: 'PARSER_ERROR',
+          stateDescription: 'Registro localizado, mas sem parâmetros válidos para o inteiro teor individual.',
+          bytesTransferred: syncStatus.bytesTransferred,
+          documentsReceived: procRecords.length - 1,
+          documentsNormalized: 0,
+          documentsRejected: 1,
+          recordsRead: syncStatus.recordsRead,
+          recordsAccepted: syncStatus.recordsAccepted,
+          recordsRejected: syncStatus.recordsRejected + 1,
+          parsingErrors: ['Data de publicação ou número de registro STJ inválido.'],
+          rejectionReasons: ['Não foi possível construir um link oficial individualizado do inteiro teor.'],
+          normalizedQueryNumber: queryNum,
+          connectorStatus: 'DEGRADED',
+        },
+      };
+    }
+
+    const documentEvidence = await this.fetchOfficialDocument(officialDocumentUrl);
+    if (!documentEvidence.success || !documentEvidence.contentSha256 || !documentEvidence.bytes || !documentEvidence.documentMetadata) {
+      return {
+        diagnostic: {
+          adapter: 'stj-dados-abertos',
+          sourceName: 'Superior Tribunal de Justiça - Inteiro Teor Individual',
+          courtCode: 'STJ',
+          officialUrl: officialDocumentUrl,
+          timestamp: documentEvidence.fetchedAt,
+          httpStatus: documentEvidence.httpStatus,
+          latencyMs: syncStatus.latencyMs + (Date.now() - startParse),
+          lifecycleState: documentEvidence.httpStatus === 408 ? 'SOURCE_UNAVAILABLE' : 'PARSER_ERROR',
+          stateDescription: documentEvidence.error || 'Inteiro teor individual do STJ não confirmado.',
+          bytesTransferred: syncStatus.bytesTransferred,
+          documentsReceived: 1,
+          documentsNormalized: 0,
+          documentsRejected: 1,
+          recordsRead: syncStatus.recordsRead,
+          recordsAccepted: syncStatus.recordsAccepted,
+          recordsRejected: syncStatus.recordsRejected + 1,
+          parsingErrors: [documentEvidence.error || 'Resposta individual inválida.'],
+          rejectionReasons: ['Precedente retido: o documento individual não foi baixado e confirmado.'],
+          normalizedQueryNumber: queryNum,
+          connectorStatus: 'DEGRADED',
+        },
+      };
+    }
+
+    const documentCaseDigits = (documentEvidence.documentMetadata.caseNumber || '').replace(/\D/g, '');
+    const catalogCaseDigits = procNameRaw.replace(/\D/g, '');
+    if (!documentCaseDigits || !catalogCaseDigits || documentCaseDigits !== catalogCaseDigits) {
+      return {
+        diagnostic: {
+          adapter: 'stj-dados-abertos',
+          sourceName: 'Superior Tribunal de Justiça - Inteiro Teor Individual',
+          courtCode: 'STJ',
+          officialUrl: officialDocumentUrl,
+          timestamp: documentEvidence.fetchedAt,
+          httpStatus: 409,
+          latencyMs: syncStatus.latencyMs + (Date.now() - startParse),
+          lifecycleState: 'PARSER_ERROR',
+          stateDescription: 'O processo do PDF individual não corresponde ao registro do catálogo oficial.',
+          bytesTransferred: syncStatus.bytesTransferred + documentEvidence.bytes,
+          documentsReceived: 1,
+          documentsNormalized: 0,
+          documentsRejected: 1,
+          recordsRead: syncStatus.recordsRead,
+          recordsAccepted: syncStatus.recordsAccepted,
+          recordsRejected: syncStatus.recordsRejected + 1,
+          parsingErrors: ['Divergência de identificador entre catálogo e inteiro teor.'],
+          rejectionReasons: ['Precedente retido por conflito de identidade documental.'],
+          normalizedQueryNumber: queryNum,
+          connectorStatus: 'DEGRADED',
+        },
+      };
+    }
+
     const normalizedSituation = situacao.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const precedentSituation: PrecedentSituation = normalizedSituation.includes('cancelad')
       ? 'CANCELADO'
@@ -785,8 +994,8 @@ export class StjDadosAbertosAdapter {
     const decision: CanonicalLegalDecision = this.normalizeStjDecision({
       rawCaseNumber,
       processClass: 'RECURSO ESPECIAL (REsp)',
-      rapporteur: relator,
-      courtOrgan: orgaoJulgador,
+      rapporteur: documentEvidence.documentMetadata.rapporteur,
+      courtOrgan: documentEvidence.documentMetadata.courtOrgan,
       judgmentDate: dataJulg,
       publicationDate: dataPub,
       officialHeadnote: headnote,
@@ -797,24 +1006,50 @@ export class StjDadosAbertosAdapter {
       themeNumber: themeNum,
       precedentStrength: 'VINCULANTE',
       precedentSituation,
-      officialUrl: `https://processo.stj.jus.br/processo/pesquisa/?termo=${encodeURIComponent(procNameRaw)}&aplicacao=processos.ea`,
-      fullTextUrl: 'https://dadosabertos.web.stj.jus.br/dataset/precedentes-qualificados',
+      officialUrl: officialDocumentUrl,
+      fullTextUrl: officialDocumentUrl,
       originCourt: matchedRow[17]?.trim() || undefined,
     });
 
+    decision.id = `stj-${documentEvidence.contentSha256.slice(0, 20)}`;
+    decision.contentSha256 = documentEvidence.contentSha256;
+    decision.collectedAt = documentEvidence.fetchedAt;
+    decision.lastVerifiedAt = documentEvidence.fetchedAt;
     decision.rawPayloadPreserved = {
       processosRow: matchedRow,
       temasRow: matchedThemeRow,
       processosSha256: syncStatus.processosSha256,
       temasSha256: syncStatus.temasSha256,
       sourceDataset: syncStatus.officialUrl,
+      verificationEvidence: {
+        individualDocument: {
+          confirmed: true,
+          url: officialDocumentUrl,
+          httpStatus: documentEvidence.httpStatus,
+          contentSha256: documentEvidence.contentSha256,
+          bytes: documentEvidence.bytes,
+          fetchedAt: documentEvidence.fetchedAt,
+          contentType: 'application/pdf',
+          documentNumber: documentEvidence.documentMetadata.documentNumber,
+          documentCaseNumber: documentEvidence.documentMetadata.caseNumber,
+          rapporteur: documentEvidence.documentMetadata.rapporteur,
+          courtOrgan: documentEvidence.documentMetadata.courtOrgan,
+        },
+        originatingQuery: {
+          id: `stj-query-${StjDadosAbertosAdapter.computeSha256(JSON.stringify(query)).slice(0, 24)}`,
+          endpoint: syncStatus.officialUrl,
+          querySha256: StjDadosAbertosAdapter.computeSha256(JSON.stringify(query)),
+          responseRecordSha256: StjDadosAbertosAdapter.computeSha256(JSON.stringify({ matchedRow, matchedThemeRow })),
+          executedAt: timestamp,
+        },
+      },
     };
 
     const verification = PrecedentVerifier.verifyDecision(decision);
     decision.verificationStatus = verification.isPassed ? 'VERIFIED_OFFICIAL' : 'REJECTED';
-    decision.verificationBadge = '[OFICIAL STJ - VERIFICADO]';
+    decision.verificationBadge = verification.isPassed ? '[OFICIAL STJ - VERIFICADO]' : undefined;
     decision.rejectionReasons = verification.issues;
-    decision.lastVerifiedAt = timestamp;
+    decision.lastVerifiedAt = documentEvidence.fetchedAt;
 
     const rejectionReasons = verification.isPassed ? [] : verification.issues;
 
@@ -823,13 +1058,13 @@ export class StjDadosAbertosAdapter {
         adapter: 'stj-dados-abertos',
         sourceName: 'Superior Tribunal de Justiça - Portal de Dados Abertos (SCON/CKAN)',
         courtCode: 'STJ',
-        officialUrl: syncStatus.officialUrl,
-        timestamp,
+        officialUrl: officialDocumentUrl,
+        timestamp: documentEvidence.fetchedAt,
         httpStatus: 200,
         latencyMs: syncStatus.latencyMs + (Date.now() - startParse),
         lifecycleState: 'SEARCH_SUCCESS',
-        stateDescription: `Recurso oficial processado com êxito. Precedente qualificado localizado por identificador e verificado contra o catálogo de repetitivos do STJ.`,
-        bytesTransferred: syncStatus.bytesTransferred,
+        stateDescription: 'Precedente localizado no catálogo oficial e inteiro teor PDF individual confirmado no STJ.',
+        bytesTransferred: syncStatus.bytesTransferred + documentEvidence.bytes,
         contentSha256: decision.contentSha256,
         documentsReceived: procRecords.length - 1,
         documentsNormalized: 1,
