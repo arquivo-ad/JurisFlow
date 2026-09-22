@@ -30,9 +30,10 @@ import { TjroPrecedentesAdapter } from '../adapters/TjroPrecedentesAdapter.ts';
 import { TjmaJurisprudenciaAdapter } from '../adapters/TjmaJurisprudenciaAdapter.ts';
 import { TjesJurisprudenciaAdapter } from '../adapters/TjesJurisprudenciaAdapter.ts';
 import { TjseJurisprudenciaAdapter } from '../adapters/TjseJurisprudenciaAdapter.ts';
+import { StateCourtPortalDiagnosticAdapter } from '../adapters/StateCourtPortalDiagnosticAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl, isExactTjseSearchUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl, isExactTjseSearchUrl, isExactStateCourtPortalUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -2241,4 +2242,64 @@ test('busca explícita no TJSE expõe diagnóstico sem fabricar jurisprudência'
   assert.ok(result.sourcesConsulted.includes('tjse-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjse-jurisprudencia');
   assert.ok(result.diagnostic?.rejectionReasons.includes('INTERACTIVE_TURNSTILE_REQUIRED'));
+});
+
+function cloudflare403FetchMock(): typeof fetch {
+  return (async () => new Response(
+    '<html><title>Just a moment...</title><div>Cloudflare challenge</div></html>',
+    { status: 403, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+  )) as typeof fetch;
+}
+
+function maintenanceFetchMock(): typeof fetch {
+  return (async () => new Response(
+    '<html><title>Site em manutenção — TJMT</title><body>Site em manutenção</body></html>',
+    { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+  )) as typeof fetch;
+}
+
+test('portais estaduais de diagnóstico aceitam somente URLs oficiais exatas', () => {
+  assert.equal(isExactStateCourtPortalUrl('https://pje-jurisprudencia.tjpb.jus.br/', 'TJPB'), true);
+  assert.equal(isExactStateCourtPortalUrl('https://tucujuris.tjap.jus.br/', 'TJAP'), true);
+  assert.equal(isExactStateCourtPortalUrl('https://jurisprudencia.tjmt.jus.br/', 'TJMT'), true);
+  assert.equal(isExactStateCourtPortalUrl('https://tucujuris.tjap.jus.br.evil.example/', 'TJAP'), false);
+});
+
+test('TJPB e TJAP permanecem fail-closed sob Cloudflare', async () => {
+  for (const courtCode of ['TJPB', 'TJAP'] as const) {
+    const result = await new StateCourtPortalDiagnosticAdapter(courtCode, cloudflare403FetchMock())
+      .searchOfficialJurisprudence('dano moral');
+    assert.equal(result.decisions.length, 0);
+    assert.equal(result.diagnostic.connectorStatus, 'DEGRADED');
+    assert.ok(result.diagnostic.rejectionReasons.includes('CLOUDFLARE_INTERACTIVE_CHALLENGE_REQUIRED'));
+  }
+});
+
+test('TJMT não reutiliza dados antigos quando o portal oficial está em manutenção', async () => {
+  const result = await new StateCourtPortalDiagnosticAdapter('TJMT', maintenanceFetchMock())
+    .searchOfficialJurisprudence('dano moral');
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.diagnostic.connectorStatus, 'DEGRADED');
+  assert.ok(result.diagnostic.rejectionReasons.includes('OFFICIAL_PORTAL_MAINTENANCE'));
+});
+
+test('busca explícita nos portais degradados expõe diagnóstico sem fabricar precedentes', async () => {
+  const cases = [
+    ['TJPB', cloudflare403FetchMock(), 'CLOUDFLARE_INTERACTIVE_CHALLENGE_REQUIRED'],
+    ['TJAP', cloudflare403FetchMock(), 'CLOUDFLARE_INTERACTIVE_CHALLENGE_REQUIRED'],
+    ['TJMT', maintenanceFetchMock(), 'OFFICIAL_PORTAL_MAINTENANCE'],
+  ] as const;
+  for (const [courtCode, fetchMock, reason] of cases) {
+    const service = new JudicialSearchService();
+    (service as any).statePortalDiagnosticAdapters[courtCode] =
+      new StateCourtPortalDiagnosticAdapter(courtCode, fetchMock);
+    const result = await service.searchJurisprudence({
+      query: 'dano moral',
+      courtCodes: [courtCode],
+      onlyVerified: true,
+    });
+    assert.equal(result.results.some((item) => item.courtCode === courtCode), false);
+    assert.ok(result.sourcesConsulted.includes(`${courtCode.toLowerCase()}-jurisprudencia`));
+    assert.ok(result.diagnostic?.rejectionReasons.includes(reason));
+  }
 });
