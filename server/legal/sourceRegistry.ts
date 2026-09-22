@@ -290,8 +290,15 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     credentialConfigured: false,
   }))),
 
-  // 5. TRIBUNAIS DE JUSTIÇA ESTADUAIS (AMOSTRA REPRESENTATIVA E LINKS OFICIAIS)
+  // 5. TRIBUNAIS DE JUSTIÇA ESTADUAIS E DISTRITAL — MATRIZ NACIONAL
   ...([
+    { code: 'TJPB', name: 'Tribunal de Justiça do Estado da Paraíba', url: 'https://pje-jurisprudencia.tjpb.jus.br/' },
+    { code: 'TJMT', name: 'Tribunal de Justiça do Estado de Mato Grosso', url: 'https://jurisprudencia.tjmt.jus.br/' },
+    { code: 'TJRO', name: 'Tribunal de Justiça do Estado de Rondônia', url: 'https://liame.tjro.jus.br/' },
+    { code: 'TJES', name: 'Tribunal de Justiça do Estado do Espírito Santo', url: 'https://www.tjes.jus.br/portal-transparencia/audiencias-e-sessoes/jurisprudencia/' },
+    { code: 'TJMA', name: 'Tribunal de Justiça do Estado do Maranhão', url: 'https://jurisconsult.tjma.jus.br/' },
+    { code: 'TJAP', name: 'Tribunal de Justiça do Estado do Amapá', url: 'https://tucujuris.tjap.jus.br/' },
+    { code: 'TJSE', name: 'Tribunal de Justiça do Estado de Sergipe', url: 'https://www.tjse.jus.br/portal/servicos/judiciais/eproc' },
     { code: 'TJSP', name: 'Tribunal de Justiça de São Paulo', url: 'https://esaj.tjsp.jus.br/cjsg/' },
     { code: 'TJRJ', name: 'Tribunal de Justiça do Rio de Janeiro', url: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx' },
     { code: 'TJMG', name: 'Tribunal de Justiça de Minas Gerais', url: 'https://www.tjmg.jus.br/jurisprudencia/' },
@@ -319,7 +326,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     jurisdiction: tj.code.replace('TJ', ''),
     sourceType: tj.code === 'TJDFT' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJPA'
       ? 'OFFICIAL_API' as const
-      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJRR' || tj.code === 'TJTO' || tj.code === 'TJRN'
+      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJRR' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJMA' || tj.code === 'TJAP' || tj.code === 'TJSE'
         ? 'OFFICIAL_SEARCH' as const
         : 'MANUAL_VERIFICATION_ONLY' as const,
     officialBaseUrl: tj.code === 'TJPR'
@@ -356,7 +363,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
       ? 'DEGRADED' as const
       : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR'
         ? 'READY' as const
-        : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN'
+        : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJMA' || tj.code === 'TJAP' || tj.code === 'TJSE'
             ? 'PARTIAL' as const
           : tj.code === 'TJRJ' || tj.code === 'TJMG'
             ? 'DEGRADED' as const
@@ -397,7 +404,21 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                               ? 'JusPI público com pesquisa atual, página individual oficial por ID, ementa/acórdão completos e SHA-256.'
                               : tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM'
                               ? 'Pesquisa e-SAJ automatizada com ementa completa. Inteiro teor individual exige reCAPTCHA; resultados permanecem FOUND_UNVERIFIED.'
-                              : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
+                              : tj.code === 'TJPB'
+                                ? 'Novo PJe-Jurisprudência oficial identificado, porém o acesso automatizado atual recebe Cloudflare HTTP 403. Fail-closed, sem bypass.'
+                                : tj.code === 'TJMT'
+                                  ? 'Portal oficial de jurisprudência identificado, mas atualmente responde página de manutenção. Sem reutilizar dados antigos.'
+                                  : tj.code === 'TJRO'
+                                    ? 'Liame oficial público identificado para precedentes; a consulta geral legada não respondeu de forma estável. Cobertura permanece parcial.'
+                                    : tj.code === 'TJES'
+                                      ? 'Portal oficial identificado; a consulta legada de jurisprudência responde Human Verification/CAPTCHA. Fail-closed.'
+                                      : tj.code === 'TJMA'
+                                        ? 'Jurisconsult oficial e API apijuris identificados; frontend incorpora Cloudflare Turnstile e o fluxo de jurisprudência ainda não foi validado sem desafio.'
+                                        : tj.code === 'TJAP'
+                                          ? 'Tucujuris oficial identificado, porém o acesso automatizado atual recebe Cloudflare HTTP 403. Fail-closed, sem bypass.'
+                                          : tj.code === 'TJSE'
+                                            ? 'eproc público expõe formulário de jurisprudência, porém as origens atuais estão configuradas como TRF4/TRU4/Justiça Federal; JurisFlow não atribui esses dados ao TJSE.'
+                                            : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
     verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJRN' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,

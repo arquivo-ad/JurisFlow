@@ -32,6 +32,7 @@ import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, is
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
+import { INITIAL_LEGAL_SOURCE_REGISTRY } from '../sourceRegistry.ts';
 
 const record = {
   id: 'tst-regression-1',
@@ -1986,4 +1987,25 @@ test('busca TJRN respeita onlyVerified e nunca promove fonte parcial', async () 
     query: 'dano moral', courtCodes: ['TJRN'], onlyVerified: false,
   });
   assert.equal(partialAllowed.results.some((item) => item.courtCode === 'TJRN'), true);
+});
+
+test('matriz estadual cobre todos os 26 TJs estaduais e o TJDFT', () => {
+  const expected = [
+    'TJAC','TJAL','TJAP','TJAM','TJBA','TJCE','TJDFT','TJES','TJGO',
+    'TJMA','TJMT','TJMS','TJMG','TJPA','TJPB','TJPR','TJPE','TJPI',
+    'TJRJ','TJRN','TJRO','TJRR','TJRS','TJSC','TJSE','TJSP','TJTO',
+  ].sort();
+
+  const registryCodes = INITIAL_LEGAL_SOURCE_REGISTRY
+    .filter((item) => /^TJ(?:AC|AL|AP|AM|BA|CE|DFT|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RO|RR|RS|SC|SE|SP|TO)$/.test(item.courtCode))
+    .map((item) => item.courtCode)
+    .sort();
+  assert.deepEqual(registryCodes, expected);
+
+  const matrixCodes = new JudicialSearchService()
+    .getAvailabilityMatrix()
+    .map((item) => item.courtCode)
+    .filter((code) => expected.includes(code))
+    .sort();
+  assert.deepEqual(matrixCodes, expected);
 });
