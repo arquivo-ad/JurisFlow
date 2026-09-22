@@ -23,9 +23,10 @@ import { TjpeJurisprudenciaAdapter } from '../adapters/TjpeJurisprudenciaAdapter
 import { EsajJurisprudenciaAdapter } from '../adapters/EsajJurisprudenciaAdapter.ts';
 import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter.ts';
 import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter.ts';
+import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1739,4 +1740,98 @@ test('busca explícita no TJPA admite apenas decisão oficial verificada', async
   assert.equal(result.results.some((item) => item.courtCode === 'TJPA'), true);
   assert.ok(result.sourcesConsulted.includes('tjpa-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjpa-jurisprudencia');
+});
+
+const tjrrHomeHtml = `
+<form id="menuinicial" action="/index.xhtml">
+  <input type="hidden" name="javax.faces.ViewState" value="state-1" />
+  <input name="menuinicial:j_idt35" value="" />
+  <button name="menuinicial:j_idt38" type="submit">Buscar</button>
+</form>`;
+
+const tjrrSearchHtml = `
+<table><tbody>
+<tr data-ri="0" role="row"><td>
+  <button onclick="abrirJanela('/inteiroTeor.xhtml?id=132193');"></button>
+  <div class="docTitulo">PROCESSO</div>
+  <div class="docTexto">AC - Apelação Cível<br/>08517023220258230010</div>
+  <div class="docTitulo">RELATOR</div><div class="docTexto">ALMIRO PADILHA</div>
+  <div class="docTitulo">ÓRGÃO JULGADOR:</div><div class="docTexto">Câmara Cível</div>
+  <div class="docTitulo">DATA DO JULGAMENTO:</div><div class="docTexto">18/09/2026</div>
+  <div class="docTitulo">DATA DA PUBLICAÇÃO:</div><div class="docTexto">18/09/2026</div>
+  <div class="docTitulo">EMENTA:</div>
+  <div class="docTexto">EMENTA OFICIAL TJRR SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA VERIFICAÇÃO DETERMINÍSTICA.</div>
+  <span>INTEIRO TEOR</span>
+  <div style="display:none;">PODER JUDICIÁRIO DO ESTADO DE RORAIMA. APELAÇÃO CÍVEL N. 0851702-32.2025.8.23.0010. RELATOR: DES. ALMIRO PADILHA. INTEIRO TEOR OFICIAL.</div>
+</td></tr>
+</tbody></table>`;
+
+function tjrrFetchMock(pdfOk = true): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === 'https://jurisprudencia.tjrr.jus.br/') {
+      return new Response(tjrrHomeHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html', 'Set-Cookie': 'JSESSIONID=test; Path=/' },
+      });
+    }
+    if (url.startsWith('https://jurisprudencia.tjrr.jus.br/index.xhtml')) {
+      return new Response(tjrrSearchHtml, { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+    if (url === 'https://jurisprudencia.tjrr.jus.br/inteiroTeor.xhtml?id=132193') {
+      return new Response('<html><a href="/pdf?id=132193">PDF</a></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+    if (url === 'https://jurisprudencia.tjrr.jus.br/pdf?id=132193') {
+      const body = pdfOk ? '%PDF-1.4\nTJRR OFFICIAL PDF BODY DANO MORAL REGRESSION V2\n%%EOF' : '<html>bloqueado</html>';
+      return new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': pdfOk ? 'application/pdf' : 'text/html' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJRR aceita somente busca e PDF oficiais exatos', () => {
+  assert.equal(isExactTjrrSearchUrl('https://jurisprudencia.tjrr.jus.br/index.xhtml'), true);
+  assert.equal(isExactTjrrSearchUrl('https://jurisprudencia.tjrr.jus.br/index.xhtml;jsessionid=abc-123.DEF'), true);
+  assert.equal(isExactTjrrPdfUrl('https://jurisprudencia.tjrr.jus.br/pdf?id=132193', '132193'), true);
+  assert.equal(isExactTjrrPdfUrl('https://jurisprudencia.tjrr.jus.br.evil.example/pdf?id=132193'), false);
+});
+
+test('TJRR verifica somente após PDF individual oficial', async () => {
+  const result = await new TjrrJurisprudenciaAdapter(tjrrFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJRR');
+  assert.equal(decision.normalizedCnjNumber, '0851702-32.2025.8.23.0010');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJRR - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJRR rejeita HTML no lugar do PDF individual', async () => {
+  const result = await new TjrrJurisprudenciaAdapter(tjrrFetchMock(false))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('PDF individual TJRR inválido')));
+});
+
+test('busca explícita no TJRR admite apenas decisão oficial verificada', async () => {
+  const official = await new TjrrJurisprudenciaAdapter(tjrrFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjrrAdapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({
+    query: 'dano moral',
+    courtCodes: ['TJRR'],
+    onlyVerified: true,
+  });
+  assert.equal(result.results.some((item) => item.courtCode === 'TJRR'), true);
+  assert.ok(result.sourcesConsulted.includes('tjrr-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjrr-jurisprudencia');
 });

@@ -14,6 +14,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJAL: new Set(['www2.tjal.jus.br']),
   TJMS: new Set(['esaj.tjms.jus.br']),
   TJPA: new Set(['jurisprudencia.tjpa.jus.br']),
+  TJRR: new Set(['jurisprudencia.tjrr.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
   TJAC: new Set(['esaj.tjac.jus.br']),
@@ -520,6 +521,30 @@ export function isExactTjpaPublicDocumentUrl(value: string, expectedId?: string)
     const match = url.pathname.match(/^\/documento\/(\d+)$/);
     if (!match || url.search || url.hash) return false;
     return !expectedId || match[1] === expectedId;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjrrSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjrr.jus.br') return false;
+    return url.pathname === '/index.xhtml'
+      || /^\/index\.xhtml;jsessionid=[A-Za-z0-9._-]+$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjrrPdfUrl(value: string, expectedId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjrr.jus.br') return false;
+    if (!/^\/pdf(?:;jsessionid=[A-Za-z0-9._-]+)?$/.test(url.pathname)) return false;
+    const id = url.searchParams.get('id') || '';
+    if (!/^\d+$/.test(id)) return false;
+    return !expectedId || id === expectedId;
   } catch {
     return false;
   }
