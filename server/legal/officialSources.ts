@@ -17,6 +17,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJRR: new Set(['jurisprudencia.tjrr.jus.br']),
   TJRN: new Set(['jurisprudencia.tjrn.jus.br']),
   TJRO: new Set(['liame.tjro.jus.br']),
+  TJMA: new Set(['apijuris.tjma.jus.br', 'jurisconsult.tjma.jus.br']),
   TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
@@ -599,6 +600,32 @@ export function isExactTjroPrecedentsUrl(value: string): boolean {
     return url.protocol === 'https:'
       && url.hostname === 'liame.tjro.jus.br'
       && url.pathname === '/api/pesquisa/precedentes'
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjmaTurnstileStatusUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'apijuris.tjma.jus.br'
+      && url.pathname === '/v1/util/turnstile/check_habilitado'
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjmaSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'apijuris.tjma.jus.br'
+      && url.pathname === '/v1/sg/jurisprudencias/processos'
       && !url.search
       && !url.hash;
   } catch {

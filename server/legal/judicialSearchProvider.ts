@@ -31,6 +31,7 @@ import { TjrrJurisprudenciaAdapter } from './adapters/TjrrJurisprudenciaAdapter.
 import { TjtoJurisprudenciaAdapter } from './adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from './adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from './adapters/TjroPrecedentesAdapter.ts';
+import { TjmaJurisprudenciaAdapter } from './adapters/TjmaJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -232,6 +233,7 @@ export class JudicialSearchService {
   private tjtoAdapter: TjtoJurisprudenciaAdapter;
   private tjrnAdapter: TjrnJurisprudenciaAdapter;
   private tjroAdapter: TjroPrecedentesAdapter;
+  private tjmaAdapter: TjmaJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -265,6 +267,7 @@ export class JudicialSearchService {
     this.tjtoAdapter = new TjtoJurisprudenciaAdapter();
     this.tjrnAdapter = new TjrnJurisprudenciaAdapter();
     this.tjroAdapter = new TjroPrecedentesAdapter();
+    this.tjmaAdapter = new TjmaJurisprudenciaAdapter();
   }
 
   /**
@@ -300,6 +303,7 @@ export class JudicialSearchService {
     const requestsTjto = params.courtCodes?.includes('TJTO') === true;
     const requestsTjrn = params.courtCodes?.includes('TJRN') === true;
     const requestsTjro = params.courtCodes?.includes('TJRO') === true;
+    const requestsTjma = params.courtCodes?.includes('TJMA') === true;
     const requestedEsajCodes = (params.courtCodes || []).filter(
       (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
     );
@@ -333,6 +337,7 @@ export class JudicialSearchService {
     let activeTjrnDecisions: CanonicalLegalDecision[] | undefined;
     let tjroDiagnostic = undefined as Awaited<ReturnType<TjroPrecedentesAdapter['searchOfficialPrecedents']>>['diagnostic'] | undefined;
     let activeTjroDecisions: CanonicalLegalDecision[] | undefined;
+    let tjmaDiagnostic = undefined as Awaited<ReturnType<TjmaJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
@@ -447,6 +452,12 @@ export class JudicialSearchService {
       tjrnDiagnostic = tjrnResult.diagnostic;
       regionalSourcesConsulted.push('tjrn-jurisprudencia');
       activeTjrnDecisions = tjrnResult.decisions;
+    }
+
+    if (requestsTjma) {
+      const tjmaResult = await this.tjmaAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '');
+      tjmaDiagnostic = tjmaResult.diagnostic;
+      regionalSourcesConsulted.push('tjma-jurisprudencia');
     }
 
     if (requestsTjro) {
@@ -591,7 +602,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -767,9 +778,9 @@ export class JudicialSearchService {
       {
         courtCode: 'TJMA', courtName: 'TJMA - Jurisconsult', jurisdiction: 'MA',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
-        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://jurisconsult.tjma.jus.br/',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://apijuris.tjma.jus.br/v1/sg/jurisprudencias/processos',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Jurisconsult e apijuris oficiais identificados; frontend incorpora Turnstile e o fluxo público ainda não foi validado sem desafio.',
+        notes: 'API oficial confirmada. Turnstile está habilitado e a rota de acórdãos responde captcha_not_provided sem token; JurisFlow não gera nem contorna o desafio.',
       },
       {
         courtCode: 'TJAP', courtName: 'TJAP - Tucujuris', jurisdiction: 'AP',

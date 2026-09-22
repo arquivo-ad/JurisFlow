@@ -27,9 +27,10 @@ import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter
 import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from '../adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from '../adapters/TjroPrecedentesAdapter.ts';
+import { TjmaJurisprudenciaAdapter } from '../adapters/TjmaJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -2084,4 +2085,46 @@ test('busca TJRO respeita onlyVerified e nunca promove precedente parcial', asyn
   assert.equal(partialAllowed.results.some((item) => item.courtCode === 'TJRO'), true);
   assert.ok(partialAllowed.sourcesConsulted.includes('tjro-precedentes'));
   assert.equal(partialAllowed.diagnostic?.adapter, 'tjro-precedentes');
+});
+
+function tjmaFetchMock(enabled = true): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === 'https://apijuris.tjma.jus.br/v1/util/turnstile/check_habilitado') {
+      return new Response(JSON.stringify({ habilitado: enabled ? 1 : 0 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJMA aceita somente endpoints oficiais exatos da API Jurisconsult', () => {
+  assert.equal(isExactTjmaTurnstileStatusUrl('https://apijuris.tjma.jus.br/v1/util/turnstile/check_habilitado'), true);
+  assert.equal(isExactTjmaSearchUrl('https://apijuris.tjma.jus.br/v1/sg/jurisprudencias/processos'), true);
+  assert.equal(isExactTjmaSearchUrl('https://apijuris.tjma.jus.br.evil.example/v1/sg/jurisprudencias/processos'), false);
+});
+
+test('TJMA falha fechado quando Turnstile oficial está habilitado', async () => {
+  const result = await new TjmaJurisprudenciaAdapter(tjmaFetchMock(true))
+    .searchOfficialJurisprudence('dano moral');
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.requiresInteractiveChallenge, true);
+  assert.equal(result.diagnostic.lifecycleState, 'SOURCE_UNAVAILABLE');
+  assert.ok(result.diagnostic.rejectionReasons.includes('INTERACTIVE_TURNSTILE_REQUIRED'));
+});
+
+test('busca explícita no TJMA expõe diagnóstico de Turnstile sem fabricar acórdão', async () => {
+  const partial = await new TjmaJurisprudenciaAdapter(tjmaFetchMock(true))
+    .searchOfficialJurisprudence('dano moral');
+  const service = new JudicialSearchService();
+  (service as any).tjmaAdapter = { searchOfficialJurisprudence: async () => partial };
+  const result = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJMA'], onlyVerified: true,
+  });
+  assert.equal(result.results.some((item) => item.courtCode === 'TJMA'), false);
+  assert.ok(result.sourcesConsulted.includes('tjma-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjma-jurisprudencia');
+  assert.equal(result.diagnostic?.lifecycleState, 'SOURCE_UNAVAILABLE');
 });

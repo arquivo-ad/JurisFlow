@@ -367,7 +367,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
       ? 'DEGRADED' as const
       : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR'
         ? 'READY' as const
-        : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJMA' || tj.code === 'TJAP' || tj.code === 'TJSE'
+        : tj.code === 'TJMA'
+          ? 'DEGRADED' as const
+          : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJAP' || tj.code === 'TJSE'
             ? 'PARTIAL' as const
           : tj.code === 'TJRJ' || tj.code === 'TJMG'
             ? 'DEGRADED' as const
@@ -417,7 +419,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                                     : tj.code === 'TJES'
                                       ? 'Portal oficial identificado; a consulta legada de jurisprudência responde Human Verification/CAPTCHA. Fail-closed.'
                                       : tj.code === 'TJMA'
-                                        ? 'Jurisconsult oficial e API apijuris identificados; frontend incorpora Cloudflare Turnstile e o fluxo de jurisprudência ainda não foi validado sem desafio.'
+                                        ? 'Jurisconsult e API apijuris oficiais confirmados. Backend informa Turnstile habilitado e a rota de acórdãos responde captcha_not_provided sem token; automação permanece fail-closed.'
                                         : tj.code === 'TJAP'
                                           ? 'Tucujuris oficial identificado, porém o acesso automatizado atual recebe Cloudflare HTTP 403. Fail-closed, sem bypass.'
                                           : tj.code === 'TJSE'
