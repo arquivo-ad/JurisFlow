@@ -15,6 +15,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJMS: new Set(['esaj.tjms.jus.br']),
   TJPA: new Set(['jurisprudencia.tjpa.jus.br']),
   TJRR: new Set(['jurisprudencia.tjrr.jus.br']),
+  TJRN: new Set(['jurisprudencia.tjrn.jus.br']),
   TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
@@ -573,6 +574,19 @@ export function isExactTjtoCandidateDocumentUrl(value: string, expectedUuid?: st
     if (!/^[a-f0-9]{32}$/i.test(uuid)) return false;
     for (const key of url.searchParams.keys()) if (key !== 'uuid' && key !== 'options') return false;
     return !expectedUuid || uuid.toLowerCase() === expectedUuid.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjrnSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'jurisprudencia.tjrn.jus.br'
+      && url.pathname === '/api/pesquisar'
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }

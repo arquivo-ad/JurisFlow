@@ -29,6 +29,7 @@ import { TjpiJurisprudenciaAdapter } from './adapters/TjpiJurisprudenciaAdapter.
 import { TjpaJurisprudenciaAdapter } from './adapters/TjpaJurisprudenciaAdapter.ts';
 import { TjrrJurisprudenciaAdapter } from './adapters/TjrrJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from './adapters/TjtoJurisprudenciaAdapter.ts';
+import { TjrnJurisprudenciaAdapter } from './adapters/TjrnJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -228,6 +229,7 @@ export class JudicialSearchService {
   private tjpaAdapter: TjpaJurisprudenciaAdapter;
   private tjrrAdapter: TjrrJurisprudenciaAdapter;
   private tjtoAdapter: TjtoJurisprudenciaAdapter;
+  private tjrnAdapter: TjrnJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -259,6 +261,7 @@ export class JudicialSearchService {
     this.tjpaAdapter = new TjpaJurisprudenciaAdapter();
     this.tjrrAdapter = new TjrrJurisprudenciaAdapter();
     this.tjtoAdapter = new TjtoJurisprudenciaAdapter();
+    this.tjrnAdapter = new TjrnJurisprudenciaAdapter();
   }
 
   /**
@@ -292,6 +295,7 @@ export class JudicialSearchService {
     const requestsTjpa = params.courtCodes?.includes('TJPA') === true;
     const requestsTjrr = params.courtCodes?.includes('TJRR') === true;
     const requestsTjto = params.courtCodes?.includes('TJTO') === true;
+    const requestsTjrn = params.courtCodes?.includes('TJRN') === true;
     const requestedEsajCodes = (params.courtCodes || []).filter(
       (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
     );
@@ -321,6 +325,8 @@ export class JudicialSearchService {
     let tjrrDiagnostic = undefined as Awaited<ReturnType<TjrrJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjtoDiagnostic = undefined as Awaited<ReturnType<TjtoJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let activeTjtoDecisions: CanonicalLegalDecision[] | undefined;
+    let tjrnDiagnostic = undefined as Awaited<ReturnType<TjrnJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let activeTjrnDecisions: CanonicalLegalDecision[] | undefined;
     const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
@@ -428,6 +434,13 @@ export class JudicialSearchService {
       activeTjtoDecisions = tjtoResult.decisions;
     }
 
+    if (requestsTjrn) {
+      const tjrnResult = await this.tjrnAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      tjrnDiagnostic = tjrnResult.diagnostic;
+      regionalSourcesConsulted.push('tjrn-jurisprudencia');
+      activeTjrnDecisions = tjrnResult.decisions;
+    }
+
     if (requestsTjrr) {
       const tjrrResult = await this.tjrrAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
       tjrrDiagnostic = tjrrResult.diagnostic;
@@ -490,8 +503,8 @@ export class JudicialSearchService {
     }
 
     let transientDecisions: CanonicalLegalDecision[] | undefined = activeTstDecisions;
-    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions || activeTjtoDecisions || activeEsajPartialDecisions.length > 0)) {
-      const partialCourts = new Set(['TJRS', 'TJPE', 'TJTO', 'TJAC', 'TJAL', 'TJAM']);
+    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions || activeTjtoDecisions || activeTjrnDecisions || activeEsajPartialDecisions.length > 0)) {
+      const partialCourts = new Set(['TJRS', 'TJPE', 'TJTO', 'TJRN', 'TJAC', 'TJAL', 'TJAM']);
       const otherCourts = (params.courtCodes || []).filter((code) => !partialCourts.has(code));
       const persisted = otherCourts.length > 0
         ? legalStorage.getDecisions({ tenantId, courtCodes: otherCourts, onlyVerified: params.onlyVerified })
@@ -501,6 +514,7 @@ export class JudicialSearchService {
         ...(activeTjrsDecisions || []),
         ...(activeTjpeDecisions || []),
         ...(activeTjtoDecisions || []),
+        ...(activeTjrnDecisions || []),
         ...activeEsajPartialDecisions,
       ];
     }
@@ -561,7 +575,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -754,6 +768,13 @@ export class JudicialSearchService {
         authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://jurisprudencia.tjto.jus.br/consulta.php',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Busca pública com ementa completa, CNJ, relator, órgão e UUID. Inteiro teor viewFileDoc.php retornou HTTP 403 no smoke direto; permanece FOUND_UNVERIFIED.',
+      },
+      {
+        courtCode: 'TJRN', courtName: 'TJRN - Banco de Jurisprudência', jurisdiction: 'RN',
+        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'API_PUBLICA', officialUrl: 'https://jurisprudencia.tjrn.jus.br/api/pesquisar',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
+        notes: 'API pública retorna acórdãos, ementas e inteiro teor reais. O documento individual do PJe redireciona para SSO; resultados permanecem FOUND_UNVERIFIED.',
       },
       {
         courtCode: 'TJPI', courtName: 'TJPI - JusPI', jurisdiction: 'PI',

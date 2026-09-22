@@ -25,9 +25,10 @@ import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter
 import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter.ts';
 import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter.ts';
+import { TjrnJurisprudenciaAdapter } from '../adapters/TjrnJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1904,4 +1905,85 @@ test('busca TJTO respeita onlyVerified e nunca promove fonte parcial', async () 
     query: 'dano moral', courtCodes: ['TJTO'], onlyVerified: false,
   });
   assert.equal(partialAllowed.results.some((item) => item.courtCode === 'TJTO'), true);
+});
+
+const tjrnPayload = {
+  hits: {
+    total: 1,
+    hits: [{
+      _id: 'doc-1',
+      _source: {
+        numero_processo: '08004189020248205122',
+        classe_judicial: 'APELAÇÃO CÍVEL',
+        orgao_julgador: 'Gab. Des. Claudio Santos na Câmara Cível',
+        colegiado: 'Primeira Câmara Cível',
+        sigiloso: false,
+        sistema: 'PJE',
+        inteiro_teor: '<p>Inteiro teor oficial TJRN com conteúdo suficiente para pesquisa material.</p>'.repeat(20),
+        id_documento_teor: '41829816',
+        ementa: '<p>EMENTA OFICIAL TJRN SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA NORMALIZAÇÃO.</p>',
+        id_documento_ementa: '41267505',
+        tipo_teor: 'Acórdão',
+        grau: 2,
+        dt_assinatura_teor: '2026-09-20',
+        dt_publicacao: '2026-09-21T12:12:35.430Z',
+        magistrado: 'CLAUDIO MANOEL DE AMORIM SANTOS',
+      },
+    }],
+  },
+};
+
+function tjrnFetchMock(payload: any = tjrnPayload): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === 'https://jurisprudencia.tjrn.jus.br/api/pesquisar') {
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJRN aceita somente endpoint oficial exato da API pública', () => {
+  assert.equal(isExactTjrnSearchUrl('https://jurisprudencia.tjrn.jus.br/api/pesquisar'), true);
+  assert.equal(isExactTjrnSearchUrl('https://jurisprudencia.tjrn.jus.br.evil.example/api/pesquisar'), false);
+});
+
+test('TJRN normaliza acórdão real mas mantém FOUND_UNVERIFIED por SSO individual', async () => {
+  const result = await new TjrnJurisprudenciaAdapter(tjrnFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJRN');
+  assert.equal(decision.normalizedCnjNumber, '0800418-90.2024.8.20.5122');
+  assert.equal(decision.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.ok(decision.fullText && decision.fullText.length > 100);
+  assert.ok(decision.rejectionReasons?.some((reason) => reason.includes('DOCUMENTO_INDIVIDUAL_SSO')));
+});
+
+test('TJRN descarta registro sigiloso', async () => {
+  const secret = JSON.parse(JSON.stringify(tjrnPayload));
+  secret.hits.hits[0]._source.sigiloso = true;
+  const result = await new TjrnJurisprudenciaAdapter(tjrnFetchMock(secret))
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 0);
+});
+
+test('busca TJRN respeita onlyVerified e nunca promove fonte parcial', async () => {
+  const partial = await new TjrnJurisprudenciaAdapter(tjrnFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjrnAdapter = { searchOfficialJurisprudence: async () => partial };
+
+  const verifiedOnly = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJRN'], onlyVerified: true,
+  });
+  assert.equal(verifiedOnly.results.some((item) => item.courtCode === 'TJRN'), false);
+
+  const partialAllowed = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJRN'], onlyVerified: false,
+  });
+  assert.equal(partialAllowed.results.some((item) => item.courtCode === 'TJRN'), true);
 });
