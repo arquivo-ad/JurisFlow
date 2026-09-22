@@ -45,4 +45,3 @@ test_url \
 test_url \
   "STF - Teses" \
   "https://portal.stf.jus.br/repercussaogeral/teses.asp"
-
