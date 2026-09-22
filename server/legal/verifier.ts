@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrPdfUrl, isExactTjesSearchUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrPdfUrl, isExactTjesSearchUrl, isExactCarfPdfUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -45,9 +45,13 @@ export class PrecedentVerifier {
       'SUMULA_VINCULANTE', 'SUMULA', 'TEMA_REPETITIVO', 'TEMA_REPERCUSSAO_GERAL',
       'IRDR', 'IAC', 'ORIENTACAO_JURISPRUDENCIAL', 'PRECEDENTE_NORMATIVO',
     ]);
+    const hasAdministrativeIdentifier = decision.sourceId === 'carf-jurisprudencia'
+      && /^\d{5}\.\d{6}\/\d{4}-\d{2}$/.test(rawCaseNum)
+      && Boolean(String(decision.alternativeNumber || '').trim());
     const hasJudicialIdentifier = Boolean(decision.normalizedCnjNumber)
       || /\b(?:REsp|AREsp|AgInt|EREsp|RE|HC|RMS|MS|CC|RR|AIRR|RO|Tema|S[úu]mula|OJ)\s*[\d.-]+/i.test(rawCaseNum)
-      || (qualifiedTypes.has(decision.documentType || '') && Number.isInteger(decision.themeNumber));
+      || (qualifiedTypes.has(decision.documentType || '') && Number.isInteger(decision.themeNumber))
+      || hasAdministrativeIdentifier;
     if (!hasJudicialIdentifier) {
       issues.push('IDENTIFICADOR_NAO_JUDICIAL: página de catálogo, dataset ou descrição institucional não é precedente judicial.');
     }
@@ -120,6 +124,18 @@ export class PrecedentVerifier {
     if (decision.sourceId === 'tjrr-jurisprudencia') {
       if (!isExactTjrrPdfUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJRR') {
         issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJRR não aponta para PDF individual oficial do tribunal.');
+      }
+    }
+    if (decision.sourceId === 'carf-jurisprudencia') {
+      const carfFileName = String((decision.rawPayloadPreserved as any)?.nomeArquivoPdf || '');
+      const carfEvidence = (decision.rawPayloadPreserved as any)?.verificationEvidence;
+      if (
+        decision.courtCode !== 'CARF'
+        || !isExactCarfPdfUrl(officialUrl, carfFileName)
+        || carfEvidence?.individualRecord?.id !== (decision.rawPayloadPreserved as any)?.id
+        || carfEvidence?.individualRecord?.hits !== 1
+      ) {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: acórdão CARF não possui PDF individual e reconfirmação única no Solr oficial.');
       }
     }
     if (decision.sourceId === 'tjes-jurisprudencia') {

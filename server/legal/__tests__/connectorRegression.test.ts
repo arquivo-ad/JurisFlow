@@ -24,6 +24,7 @@ import { EsajJurisprudenciaAdapter } from '../adapters/EsajJurisprudenciaAdapter
 import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter.ts';
 import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter.ts';
 import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter.ts';
+import { CarfJurisprudenciaAdapter, unwrapCarfPdf } from '../adapters/CarfJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from '../adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from '../adapters/TjroPrecedentesAdapter.ts';
@@ -33,7 +34,7 @@ import { TjseJurisprudenciaAdapter } from '../adapters/TjseJurisprudenciaAdapter
 import { StateCourtPortalDiagnosticAdapter } from '../adapters/StateCourtPortalDiagnosticAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl, isExactTjseSearchUrl, isExactStateCourtPortalUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl, isExactTjseSearchUrl, isExactStateCourtPortalUrl, isExactCarfBrowseUrl, isExactCarfPdfUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -2302,4 +2303,103 @@ test('busca explícita nos portais degradados expõe diagnóstico sem fabricar p
     assert.ok(result.sourcesConsulted.includes(`${courtCode.toLowerCase()}-jurisprudencia`));
     assert.ok(result.diagnostic?.rejectionReasons.includes(reason));
   }
+});
+
+const carfRecord = {
+  id: '8796773',
+  numero_processo_s: '13656.720067/2010-81',
+  numero_decisao_s: '3301-009.853',
+  nome_relator_s: 'Semíramis de Oliveira Duro',
+  turma_s: 'Primeira Turma Ordinária da Terceira Câmara da Terceira Seção',
+  camara_s: 'Terceira Câmara',
+  secao_s: 'Terceira Seção De Julgamento',
+  dt_sessao_tdt: '2021-03-23T00:00:00Z',
+  dt_publicacao_tdt: '2021-05-11T00:00:00Z',
+  ementa_s: 'CONTRIBUIÇÃO PARA O PIS/PASEP E COFINS. CRÉDITO PRESUMIDO. EMENTA OFICIAL CARF SUFICIENTE PARA VERIFICAÇÃO.',
+  decisao_txt: ['Acordam os membros do colegiado, por unanimidade, dar provimento ao recurso voluntário.'],
+  conteudo_txt: 'Processo nº 13656.720067/2010-81. Acórdão nº 3301-009.853. Inteiro teor oficial CARF.',
+  conteudo_id_s: '6380164',
+  nome_arquivo_pdf_s: '13656720067201081_6380164.pdf',
+};
+
+function makeCarfPgCopyPdf(): Buffer {
+  const pdf = Buffer.from('%PDF-1.5\nCARF OFFICIAL PDF 13656.720067/2010-81 ACORDAO 3301-009.853\n%%EOF');
+  const raw = Buffer.alloc(19 + 2 + 4 + pdf.length + 2);
+  Buffer.from('PGCOPY\n\xff\r\n\0', 'binary').copy(raw, 0);
+  raw.writeUInt32BE(0, 11);
+  raw.writeUInt32BE(0, 15);
+  raw.writeInt16BE(1, 19);
+  raw.writeInt32BE(pdf.length, 21);
+  pdf.copy(raw, 25);
+  raw.writeInt16BE(-1, 25 + pdf.length);
+  return raw;
+}
+
+function carfFetchMock(mismatch = false): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/solr/acordaos2/browse/') {
+      return new Response('<form id="query-form" method="GET" action="/solr/acordaos2_shard1_replica_n2/browse"><input name="q"></form>', { status: 200 });
+    }
+    if (url.pathname === '/solr/acordaos2_shard1_replica_n2/browse') {
+      const q = url.searchParams.get('q');
+      const doc = q === 'id:8796773' && mismatch
+        ? { ...carfRecord, numero_decisao_s: '9999-999.999' }
+        : carfRecord;
+      return new Response(JSON.stringify({
+        response: { numFound: 1, start: 0, docs: [doc] },
+      }), { status: 200, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+    }
+    if (url.pathname === '/acordaos2/pdfs/processados/13656720067201081_6380164.pdf') {
+      return new Response(makeCarfPgCopyPdf(), {
+        status: 200,
+        headers: { 'Content-Type': 'application/pdf' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('CARF aceita somente shard Solr e PDF oficiais exatos', () => {
+  assert.equal(isExactCarfBrowseUrl('https://acordaos.economia.gov.br/solr/acordaos2_shard1_replica_n2/browse'), true);
+  assert.equal(isExactCarfPdfUrl('https://acordaos.economia.gov.br/acordaos2/pdfs/processados/13656720067201081_6380164.pdf', '13656720067201081_6380164.pdf'), true);
+  assert.equal(isExactCarfPdfUrl('https://acordaos.economia.gov.br.evil.example/acordaos2/pdfs/processados/13656720067201081_6380164.pdf'), false);
+});
+
+test('CARF extrai PDF válido do envelope PGCOPY oficial', () => {
+  const raw = makeCarfPgCopyPdf();
+  const pdf = unwrapCarfPdf(raw);
+  assert.ok(pdf);
+  assert.equal(pdf!.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf!.includes(Buffer.from('13656.720067/2010-81')));
+});
+
+test('CARF verifica acórdão somente após reconfirmação individual e PDF', async () => {
+  const result = await new CarfJurisprudenciaAdapter(carfFetchMock()).searchOfficialJurisprudence('PIS COFINS', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'CARF');
+  assert.equal(decision.rawCaseNumber, '13656.720067/2010-81');
+  assert.equal(decision.alternativeNumber, '3301-009.853');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL CARF - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+  assert.match((decision.rawPayloadPreserved as any).rawResponseSha256, /^[a-f0-9]{64}$/);
+  assert.notEqual(decision.contentSha256, (decision.rawPayloadPreserved as any).rawResponseSha256);
+});
+
+test('CARF rejeita reconfirmação individual divergente', async () => {
+  const result = await new CarfJurisprudenciaAdapter(carfFetchMock(true)).searchOfficialJurisprudence('PIS COFINS', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('divergente')));
+});
+
+test('busca explícita no CARF admite apenas acórdão oficial verificado', async () => {
+  const official = await new CarfJurisprudenciaAdapter(carfFetchMock()).searchOfficialJurisprudence('PIS COFINS', 1);
+  const service = new JudicialSearchService();
+  (service as any).carfAdapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({ query: 'crédito presumido', courtCodes: ['CARF'], onlyVerified: true });
+  assert.equal(result.results.some((item) => item.courtCode === 'CARF'), true);
+  assert.ok(result.sourcesConsulted.includes('carf-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'carf-jurisprudencia');
 });

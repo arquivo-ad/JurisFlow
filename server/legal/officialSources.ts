@@ -2,6 +2,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TST: new Set(['jurisprudencia-backend.tst.jus.br', 'jurisprudencia.tst.jus.br', 'www.tst.jus.br']),
   STJ: new Set(['processo.stj.jus.br', 'scon.stj.jus.br', 'dadosabertos.web.stj.jus.br']),
   STF: new Set(['portal.stf.jus.br', 'jurisprudencia.stf.jus.br']),
+  CARF: new Set(['acordaos.economia.gov.br']),
   TRT2: new Set(['pje.trt2.jus.br']),
   TJSP: new Set(['esaj.tjsp.jus.br']),
   TRF3: new Set(['web.trf3.jus.br']),
@@ -702,6 +703,35 @@ export function isExactStateCourtPortalUrl(value: string, courtCode: 'TJPB' | 'T
       && url.pathname === expectedUrl.pathname
       && !url.search
       && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactCarfBrowseUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'acordaos.economia.gov.br'
+      && /^\/solr\/acordaos2_shard\d+_replica_n\d+\/browse$/.test(url.pathname)
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactCarfPdfUrl(value: string, expectedFileName?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'acordaos.economia.gov.br'
+      || !/^\/acordaos2\/pdfs\/processados\/\d+_\d+\.pdf$/i.test(url.pathname)
+      || url.search
+      || url.hash
+    ) return false;
+    const fileName = decodeURIComponent(url.pathname.split('/').pop() || '');
+    return !expectedFileName || fileName === expectedFileName;
   } catch {
     return false;
   }
