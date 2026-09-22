@@ -15,6 +15,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJMS: new Set(['esaj.tjms.jus.br']),
   TJPA: new Set(['jurisprudencia.tjpa.jus.br']),
   TJRR: new Set(['jurisprudencia.tjrr.jus.br']),
+  TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
   TJAC: new Set(['esaj.tjac.jus.br']),
@@ -545,6 +546,33 @@ export function isExactTjrrPdfUrl(value: string, expectedId?: string): boolean {
     const id = url.searchParams.get('id') || '';
     if (!/^\d+$/.test(id)) return false;
     return !expectedId || id === expectedId;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjtoSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjto.jus.br') return false;
+    if (url.pathname !== '/consulta.php') return false;
+    const allowed = new Set(['q']);
+    for (const key of url.searchParams.keys()) if (!allowed.has(key)) return false;
+    return Boolean(url.searchParams.get('q'));
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjtoCandidateDocumentUrl(value: string, expectedUuid?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'jurisprudencia.tjto.jus.br') return false;
+    if (url.pathname !== '/viewFileDoc.php') return false;
+    const uuid = url.searchParams.get('uuid') || '';
+    if (!/^[a-f0-9]{32}$/i.test(uuid)) return false;
+    for (const key of url.searchParams.keys()) if (key !== 'uuid' && key !== 'options') return false;
+    return !expectedUuid || uuid.toLowerCase() === expectedUuid.toLowerCase();
   } catch {
     return false;
   }

@@ -309,6 +309,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     { code: 'TJPI', name: 'Tribunal de Justiça do Estado do Piauí', url: 'https://jurisprudencia.tjpi.jus.br/' },
     { code: 'TJPA', name: 'Tribunal de Justiça do Estado do Pará', url: 'https://jurisprudencia.tjpa.jus.br/' },
     { code: 'TJRR', name: 'Tribunal de Justiça do Estado de Roraima', url: 'https://jurisprudencia.tjrr.jus.br/' },
+    { code: 'TJTO', name: 'Tribunal de Justiça do Estado do Tocantins', url: 'https://jurisprudencia.tjto.jus.br/' },
     { code: 'TJDFT', name: 'Tribunal de Justiça do Distrito Federal e Territórios', url: 'https://pesquisajurisprudencia.tjdft.jus.br/' },
   ].map((tj) => ({
     sourceId: `${tj.code.toLowerCase()}-jurisprudencia`,
@@ -317,7 +318,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     jurisdiction: tj.code.replace('TJ', ''),
     sourceType: tj.code === 'TJDFT' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJPA'
       ? 'OFFICIAL_API' as const
-      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJRR'
+      : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJRR' || tj.code === 'TJTO'
         ? 'OFFICIAL_SEARCH' as const
         : 'MANUAL_VERIFICATION_ONLY' as const,
     officialBaseUrl: tj.code === 'TJPR'
@@ -350,7 +351,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
       ? 'DEGRADED' as const
       : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR'
         ? 'READY' as const
-        : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM'
+        : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO'
             ? 'PARTIAL' as const
           : tj.code === 'TJRJ' || tj.code === 'TJMG'
             ? 'DEGRADED' as const
@@ -377,7 +378,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                         ? 'Banco de Jurisprudência oficial com BFF público; busca estruturada e confirmação individual única por id, com página pública /documento/{id} e SHA-256.'
                         : tj.code === 'TJRR'
                           ? 'Pesquisa pública PrimeFaces/JSF sem CAPTCHA, com inteiro teor e PDF individual oficial por ID; SHA-256 calculado sobre o PDF confirmado.'
-                          : tj.code === 'TJPE'
+                          : tj.code === 'TJTO'
+                            ? 'Busca pública automatizada com CNJ, relator, órgão, ementa completa e UUID. Inteiro teor viewFileDoc.php retornou HTTP 403 no smoke direto; resultados permanecem FOUND_UNVERIFIED.'
+                            : tj.code === 'TJPE'
                         ? 'Busca REST oficial automatizada com texto de acórdãos. Inteiro teor por codigoProcesso apresentou PDFs de processos divergentes em smoke real; resultados permanecem FOUND_UNVERIFIED e fail-closed.'
                         : tj.code === 'TJGO'
                           ? 'Portal Projudi oficial identificado. Pesquisa e AJAX de texto formatado exigem Turnstile/Cloudflare; automação permanece INTERACTIVE_REQUIRED e fail-closed.'

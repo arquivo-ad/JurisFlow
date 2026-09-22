@@ -24,9 +24,10 @@ import { EsajJurisprudenciaAdapter } from '../adapters/EsajJurisprudenciaAdapter
 import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter.ts';
 import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter.ts';
 import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter.ts';
+import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -1834,4 +1835,73 @@ test('busca explícita no TJRR admite apenas decisão oficial verificada', async
   assert.equal(result.results.some((item) => item.courtCode === 'TJRR'), true);
   assert.ok(result.sourcesConsulted.includes('tjrr-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjrr-jurisprudencia');
+});
+
+const tjtoSearchHtml = `
+<div class="panel panel-default panel-document">
+  <a onclick='JusTo.jurisprudencia.windowView("viewFileDoc.php?uuid=82e70a23acf44aa9c23e303b54e4a37f")'>Inteiro Teor</a>
+  <button onclick="JusTo.jurisprudencia.setcopiarConteudo('0003178-71.2021.8.27.2724')">Processo</button>
+  <a href="https://eproc2.tjto.jus.br/consulta_publica/2G/processo/00031787120218272724/">Processo</a>
+  <table>
+    <tr><td>Classe</td><td>Apelação Cível</td></tr>
+    <tr><td>Competência</td><td>TURMAS DAS CAMARAS CIVEIS</td></tr>
+    <tr><td>Relator</td><td>ETELVINA MARIA SAMPAIO FELIPE</td></tr>
+    <tr><td>Data Julgamento</td><td>02/09/2026</td></tr>
+  </table>
+  <div readonly class="content_ementa" id="content_82e70a23acf44aa9c23e303b54e4a37f">
+    EMENTA OFICIAL TJTO SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA PESQUISA MATERIAL.
+  </div>
+</div>`;
+
+function tjtoFetchMock(): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.startsWith('https://jurisprudencia.tjto.jus.br/consulta.php?q=')) {
+      return new Response(tjtoSearchHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=UTF-8' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJTO aceita somente busca e candidato de inteiro teor oficiais exatos', () => {
+  assert.equal(isExactTjtoSearchUrl('https://jurisprudencia.tjto.jus.br/consulta.php?q=dano+moral'), true);
+  assert.equal(isExactTjtoCandidateDocumentUrl(
+    'https://jurisprudencia.tjto.jus.br/viewFileDoc.php?uuid=82e70a23acf44aa9c23e303b54e4a37f',
+    '82e70a23acf44aa9c23e303b54e4a37f'
+  ), true);
+  assert.equal(isExactTjtoCandidateDocumentUrl(
+    'https://jurisprudencia.tjto.jus.br.evil.example/viewFileDoc.php?uuid=82e70a23acf44aa9c23e303b54e4a37f'
+  ), false);
+});
+
+test('TJTO normaliza busca oficial sem promover para VERIFIED_OFFICIAL', async () => {
+  const result = await new TjtoJurisprudenciaAdapter(tjtoFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJTO');
+  assert.equal(decision.normalizedCnjNumber, '0003178-71.2021.8.27.2724');
+  assert.equal(decision.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.equal(decision.fullText, undefined);
+  assert.ok(decision.rejectionReasons?.some((reason) => reason.includes('INTEIRO_TEOR_NAO_CONFIRMADO')));
+});
+
+test('busca TJTO respeita onlyVerified e nunca promove fonte parcial', async () => {
+  const partial = await new TjtoJurisprudenciaAdapter(tjtoFetchMock())
+    .searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjtoAdapter = { searchOfficialJurisprudence: async () => partial };
+
+  const verifiedOnly = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJTO'], onlyVerified: true,
+  });
+  assert.equal(verifiedOnly.results.some((item) => item.courtCode === 'TJTO'), false);
+
+  const partialAllowed = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJTO'], onlyVerified: false,
+  });
+  assert.equal(partialAllowed.results.some((item) => item.courtCode === 'TJTO'), true);
 });
