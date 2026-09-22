@@ -1,6 +1,6 @@
 import { CanonicalLegalDecision, PrecedentVerificationStatus } from './types.ts';
 import { DataJudAdapter } from './adapters/DataJudAdapter.ts';
-import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrPdfUrl } from './officialSources.ts';
+import { isAllowedOfficialUrl, isExactFalcaoDocumentUrl, isExactStfThemeDetailUrl, isExactStjDocumentUrl, isExactTstDocumentUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTstNormativeCollectionUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjbaDocumentUrl, isExactTjceDocumentUrl, isExactEsajDocumentUrl, isExactTjpiDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrPdfUrl, isExactTjesSearchUrl } from './officialSources.ts';
 
 /**
  * PRECEDENT VERIFIER INDEPENDENTE DO MODELO
@@ -120,6 +120,18 @@ export class PrecedentVerifier {
     if (decision.sourceId === 'tjrr-jurisprudencia') {
       if (!isExactTjrrPdfUrl(officialUrl, decision.alternativeNumber) || decision.courtCode !== 'TJRR') {
         issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJRR não aponta para PDF individual oficial do tribunal.');
+      }
+    }
+    if (decision.sourceId === 'tjes-jurisprudencia') {
+      const core = (decision.rawPayloadPreserved as any)?.core;
+      const hits = (decision.rawPayloadPreserved as any)?.verificationEvidence?.individualDocument?.hits;
+      if (
+        decision.courtCode !== 'TJES'
+        || (core !== 'pje2g' && core !== 'legado')
+        || !isExactTjesSearchUrl(officialUrl, core, decision.alternativeNumber)
+        || hits !== 1
+      ) {
+        issues.push('FONTE_TRIBUNAL_INCOMPATIVEL: registro TJES não possui reconfirmação individual única por ID na API oficial.');
       }
     }
     if (decision.sourceId === 'falcao-jurisprudencia' && (!isExactFalcaoDocumentUrl(officialUrl, decision.courtCode) || !/^TRT(?:[1-9]|1\d|2[0-4])$/.test(decision.courtCode))) {

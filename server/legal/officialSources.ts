@@ -18,6 +18,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJRN: new Set(['jurisprudencia.tjrn.jus.br']),
   TJRO: new Set(['liame.tjro.jus.br']),
   TJMA: new Set(['apijuris.tjma.jus.br', 'jurisconsult.tjma.jus.br']),
+  TJES: new Set(['sistemas.tjes.jus.br']),
   TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
@@ -628,6 +629,42 @@ export function isExactTjmaSearchUrl(value: string): boolean {
       && url.pathname === '/v1/sg/jurisprudencias/processos'
       && !url.search
       && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjesSearchUrl(value: string, expectedCore?: 'pje2g' | 'legado', expectedId?: string): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'sistemas.tjes.jus.br'
+      || url.pathname !== '/consulta-jurisprudencia/api/search'
+      || url.hash
+    ) return false;
+
+    const allowed = new Set(['core', 'q', 'page', 'per_page', 'id']);
+    for (const key of url.searchParams.keys()) {
+      if (!allowed.has(key)) return false;
+    }
+
+    const core = url.searchParams.get('core') || '';
+    if (!['pje2g', 'legado'].includes(core)) return false;
+    if (expectedCore && core !== expectedCore) return false;
+
+    const page = url.searchParams.get('page');
+    const perPage = url.searchParams.get('per_page');
+    const query = url.searchParams.get('q');
+    if (!page || !/^\d+$/.test(page) || !perPage || !/^\d+$/.test(perPage) || !query) return false;
+
+    if (expectedId) {
+      return url.searchParams.get('id') === expectedId
+        && query === '*:*'
+        && page === '1'
+        && perPage === '1';
+    }
+    return !url.searchParams.has('id');
   } catch {
     return false;
   }

@@ -28,9 +28,10 @@ import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter
 import { TjrnJurisprudenciaAdapter } from '../adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from '../adapters/TjroPrecedentesAdapter.ts';
 import { TjmaJurisprudenciaAdapter } from '../adapters/TjmaJurisprudenciaAdapter.ts';
+import { TjesJurisprudenciaAdapter } from '../adapters/TjesJurisprudenciaAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -2127,4 +2128,75 @@ test('busca explícita no TJMA expõe diagnóstico de Turnstile sem fabricar ac�
   assert.ok(result.sourcesConsulted.includes('tjma-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'tjma-jurisprudencia');
   assert.equal(result.diagnostic?.lifecycleState, 'SOURCE_UNAVAILABLE');
+});
+
+const tjesPjeRecord = {
+  id: '19231193',
+  id_bin: 18478048,
+  nr_processo: '0009613-14.2020.8.08.0012',
+  magistrado: 'ROBSON LUIZ ALBANEZ',
+  orgao_julgador: '4ª Câmara Cível',
+  dt_juntada: '2026-05-15T21:57:21.391Z',
+  classe_judicial: 'APELAÇÃO CÍVEL',
+  ementa: 'EMENTA OFICIAL TJES SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA VERIFICAÇÃO.',
+  acordao: 'ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. '.repeat(30),
+};
+
+function tjesFetchMock(mismatch = false): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    if (url.hostname !== 'sistemas.tjes.jus.br') return new Response('not found', { status: 404 });
+    const core = url.searchParams.get('core');
+    const id = url.searchParams.get('id');
+    if (core === 'legado') {
+      return new Response(JSON.stringify({ core_used: 'legado', docs: [], total: 0, page: 1, per_page: 1, total_pages: 0 }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (core === 'pje2g' && id === '19231193') {
+      const detail = mismatch ? { ...tjesPjeRecord, nr_processo: '0000000-00.2026.8.08.0000' } : tjesPjeRecord;
+      return new Response(JSON.stringify({ core_used: 'pje2g', docs: [detail], total: 1, page: 1, per_page: 1, total_pages: 1 }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (core === 'pje2g') {
+      return new Response(JSON.stringify({ core_used: 'pje2g', docs: [tjesPjeRecord], total: 1, page: 1, per_page: 1, total_pages: 1 }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJES aceita somente busca oficial exata e detalhe filtrado por ID', () => {
+  assert.equal(isExactTjesSearchUrl('https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search?core=pje2g&q=dano+moral&page=1&per_page=5', 'pje2g'), true);
+  assert.equal(isExactTjesSearchUrl('https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search?core=pje2g&q=*%3A*&page=1&per_page=1&id=19231193', 'pje2g', '19231193'), true);
+  assert.equal(isExactTjesSearchUrl('https://sistemas.tjes.jus.br.evil.example/consulta-jurisprudencia/api/search?core=pje2g&q=x&page=1&per_page=1'), false);
+});
+
+test('TJES verifica somente após reconfirmação individual única pelo mesmo ID e CNJ', async () => {
+  const result = await new TjesJurisprudenciaAdapter(tjesFetchMock()).searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJES');
+  assert.equal(decision.normalizedCnjNumber, '0009613-14.2020.8.08.0012');
+  assert.equal(decision.verificationStatus, 'VERIFIED_OFFICIAL');
+  assert.equal(decision.verificationBadge, '[OFICIAL TJES - VERIFICADO]');
+  assert.match(decision.contentSha256, /^[a-f0-9]{64}$/);
+});
+
+test('TJES rejeita reconfirmação individual divergente', async () => {
+  const result = await new TjesJurisprudenciaAdapter(tjesFetchMock(true)).searchOfficialJurisprudence('dano moral', 1);
+  assert.equal(result.decisions.length, 0);
+  assert.ok(result.diagnostic.rejectionReasons.some((reason) => reason.includes('não reuniu evidência individual suficiente')));
+});
+
+test('busca explícita no TJES admite apenas decisão oficial verificada', async () => {
+  const official = await new TjesJurisprudenciaAdapter(tjesFetchMock()).searchOfficialJurisprudence('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjesAdapter = { searchOfficialJurisprudence: async () => official };
+  const result = await service.searchJurisprudence({ query: 'dano moral', courtCodes: ['TJES'], onlyVerified: true });
+  assert.equal(result.results.some((item) => item.courtCode === 'TJES'), true);
+  assert.ok(result.sourcesConsulted.includes('tjes-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tjes-jurisprudencia');
 });

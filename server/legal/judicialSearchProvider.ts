@@ -32,6 +32,7 @@ import { TjtoJurisprudenciaAdapter } from './adapters/TjtoJurisprudenciaAdapter.
 import { TjrnJurisprudenciaAdapter } from './adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from './adapters/TjroPrecedentesAdapter.ts';
 import { TjmaJurisprudenciaAdapter } from './adapters/TjmaJurisprudenciaAdapter.ts';
+import { TjesJurisprudenciaAdapter } from './adapters/TjesJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -234,6 +235,7 @@ export class JudicialSearchService {
   private tjrnAdapter: TjrnJurisprudenciaAdapter;
   private tjroAdapter: TjroPrecedentesAdapter;
   private tjmaAdapter: TjmaJurisprudenciaAdapter;
+  private tjesAdapter: TjesJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -268,6 +270,7 @@ export class JudicialSearchService {
     this.tjrnAdapter = new TjrnJurisprudenciaAdapter();
     this.tjroAdapter = new TjroPrecedentesAdapter();
     this.tjmaAdapter = new TjmaJurisprudenciaAdapter();
+    this.tjesAdapter = new TjesJurisprudenciaAdapter();
   }
 
   /**
@@ -304,6 +307,7 @@ export class JudicialSearchService {
     const requestsTjrn = params.courtCodes?.includes('TJRN') === true;
     const requestsTjro = params.courtCodes?.includes('TJRO') === true;
     const requestsTjma = params.courtCodes?.includes('TJMA') === true;
+    const requestsTjes = params.courtCodes?.includes('TJES') === true;
     const requestedEsajCodes = (params.courtCodes || []).filter(
       (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
     );
@@ -338,6 +342,7 @@ export class JudicialSearchService {
     let tjroDiagnostic = undefined as Awaited<ReturnType<TjroPrecedentesAdapter['searchOfficialPrecedents']>>['diagnostic'] | undefined;
     let activeTjroDecisions: CanonicalLegalDecision[] | undefined;
     let tjmaDiagnostic = undefined as Awaited<ReturnType<TjmaJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tjesDiagnostic = undefined as Awaited<ReturnType<TjesJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
@@ -452,6 +457,15 @@ export class JudicialSearchService {
       tjrnDiagnostic = tjrnResult.diagnostic;
       regionalSourcesConsulted.push('tjrn-jurisprudencia');
       activeTjrnDecisions = tjrnResult.decisions;
+    }
+
+    if (requestsTjes) {
+      const tjesResult = await this.tjesAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
+      tjesDiagnostic = tjesResult.diagnostic;
+      regionalSourcesConsulted.push('tjes-jurisprudencia');
+      for (const decision of tjesResult.decisions) {
+        if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
+      }
     }
 
     if (requestsTjma) {
@@ -602,7 +616,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjesDiagnostic ?? tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -769,11 +783,11 @@ export class JudicialSearchService {
         notes: 'API Liame pública e funcional para IRDR/IAC, com tese e processos paradigma. O acórdão individual PJe exige SSO; resultados permanecem FOUND_UNVERIFIED.',
       },
       {
-        courtCode: 'TJES', courtName: 'TJES - Jurisprudência', jurisdiction: 'ES',
-        jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
-        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://www.tjes.jus.br/portal-transparencia/audiencias-e-sessoes/jurisprudencia/',
-        latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Consulta legada retorna Human Verification/CAPTCHA; automação permanece fail-closed.',
+        courtCode: 'TJES', courtName: 'TJES - Consulta de Jurisprudência', jurisdiction: 'ES',
+        jurisprudenceStatus: 'DISPONIVEL', processStatus: 'DISPONIVEL_PUBLICO',
+        authenticationMethod: 'API_PUBLICA', officialUrl: 'https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search',
+        latencyMs: 0, lastCheckedAt: checkedAt, status: 'READY',
+        notes: 'Nova API pública oficial. PJe 2G e acervo legado são pesquisados; cada resultado é reconfirmado por ID único com inteiro teor e SHA-256.',
       },
       {
         courtCode: 'TJMA', courtName: 'TJMA - Jurisconsult', jurisdiction: 'MA',

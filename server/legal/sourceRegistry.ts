@@ -324,12 +324,14 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     name: `${tj.name} (${tj.code})`,
     courtCode: tj.code,
     jurisdiction: tj.code.replace('TJ', ''),
-    sourceType: tj.code === 'TJDFT' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJPA'
+    sourceType: tj.code === 'TJDFT' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJPA' || tj.code === 'TJES'
       ? 'OFFICIAL_API' as const
       : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJRR' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJMA' || tj.code === 'TJAP' || tj.code === 'TJSE'
         ? 'OFFICIAL_SEARCH' as const
         : 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: tj.code === 'TJRO'
+    officialBaseUrl: tj.code === 'TJES'
+      ? 'https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search'
+      : tj.code === 'TJRO'
       ? 'https://liame.tjro.jus.br/api/pesquisa/precedentes'
       : tj.code === 'TJPR'
       ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
@@ -346,7 +348,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                 : tj.code === 'TJPE'
               ? 'https://consultajurisprudencia.app.tjpe.jus.br/api/v1/jurisprudencias'
               : tj.url,
-    documentationUrl: tj.code === 'TJRO'
+    documentationUrl: tj.code === 'TJES'
+      ? 'https://sistemas.tjes.jus.br/consulta-jurisprudencia/'
+      : tj.code === 'TJRO'
       ? 'https://liame.tjro.jus.br/'
       : tj.code === 'TJPR'
       ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
@@ -365,11 +369,11 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
               : tj.url,
     connectorStatus: tj.code === 'TJSP'
       ? 'DEGRADED' as const
-      : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR'
+      : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJES'
         ? 'READY' as const
         : tj.code === 'TJMA'
           ? 'DEGRADED' as const
-          : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJAP' || tj.code === 'TJSE'
+          : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJAP' || tj.code === 'TJSE'
             ? 'PARTIAL' as const
           : tj.code === 'TJRJ' || tj.code === 'TJMG'
             ? 'DEGRADED' as const
@@ -417,7 +421,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                                   : tj.code === 'TJRO'
                                     ? 'Liame público oficial com API de precedentes qualificados (IRDR/IAC), tese e processos paradigma. Acórdão individual PJe exige SSO; resultados permanecem FOUND_UNVERIFIED.'
                                     : tj.code === 'TJES'
-                                      ? 'Portal oficial identificado; a consulta legada de jurisprudência responde Human Verification/CAPTCHA. Fail-closed.'
+                                      ? 'Nova consulta pública oficial com API Solr agregadora. PJe 2G e acervo legado são pesquisados e cada acórdão é reconfirmado por ID único com inteiro teor e SHA-256.'
                                       : tj.code === 'TJMA'
                                         ? 'Jurisconsult e API apijuris oficiais confirmados. Backend informa Turnstile habilitado e a rota de acórdãos responde captcha_not_provided sem token; automação permanece fail-closed.'
                                         : tj.code === 'TJAP'
@@ -425,8 +429,8 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                                           : tj.code === 'TJSE'
                                             ? 'eproc público expõe formulário de jurisprudência, porém as origens atuais estão configuradas como TRF4/TRU4/Justiça Federal; JurisFlow não atribui esses dados ao TJSE.'
                                             : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
-    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJRN' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
+    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJES' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
+    termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJES' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJRN' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,
