@@ -391,8 +391,8 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                               : tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM'
                               ? 'Pesquisa e-SAJ automatizada com ementa completa. Inteiro teor individual exige reCAPTCHA; resultados permanecem FOUND_UNVERIFIED.'
                               : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
-    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
-    termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
+    verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
+    termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,
     documentsDiscovered: 0,
     documentsFetched: 0,
     documentsValidated: 0,
