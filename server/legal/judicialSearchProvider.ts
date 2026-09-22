@@ -66,7 +66,7 @@ export interface JudicialSearchProvider {
     sourcesConsulted: string[];
     executionTimeMs: number;
   }>;
-  getProcessDetails(processNumber: string): Promise<JudicialProcessSearchResult | null>;
+  getProcessDetails(processNumber: string, courtCode?: string): Promise<JudicialProcessSearchResult | null>;
   getMovements(processNumber: string): Promise<JudicialProcessMovementItem[]>;
   getPublicDocuments(processNumber: string): Promise<JudicialProcessDocumentItem[]>;
 }
@@ -98,19 +98,19 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
     }
 
     if (params.cnjNumber) {
-      const detail = await this.getProcessDetails(params.cnjNumber);
+      const detail = await this.getProcessDetails(params.cnjNumber, params.courtCode);
       return detail ? [detail] : [];
     }
 
     throw new Error('SEARCH_MODE_NOT_IMPLEMENTED: busca por OAB ou nome não possui conector oficial habilitado.');
   }
 
-  public async getProcessDetails(processNumber: string): Promise<JudicialProcessSearchResult | null> {
+  public async getProcessDetails(processNumber: string, courtCode?: string): Promise<JudicialProcessSearchResult | null> {
     const normalized = DataJudAdapter.normalizeCnjNumber(processNumber);
     if (!normalized) throw new Error('INVALID_CNJ_NUMBER: formato ou dígito verificador inválido.');
 
     // Consulta API pública oficial do DataJud
-    const queryResult = await this.adapter.queryProcessByCnj(normalized);
+    const queryResult = await this.adapter.queryProcessByCnj(normalized, courtCode);
 
     if (queryResult.success && queryResult.metadata && queryResult.evidence) {
       const meta = queryResult.metadata;
@@ -142,12 +142,14 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
         judicialDegree: meta.judicialDegree,
         processClass: meta.processClass.name,
         courtOrgan: meta.courtOrgan,
+        courtOrganCode: meta.courtOrganCode,
+        courtOrganMunicipality: meta.courtOrganMunicipality,
         distributionDate: meta.distributionDate || '',
         claimValue: meta.value,
         isConfidential: meta.isConfidential,
         subjects: meta.subjects,
-        parties: [],
-        lawyers: [],
+        parties: meta.parties || [],
+        lawyers: meta.lawyers || [],
         movements,
         documents: [],
         retrievedAt: queryResult.evidence.verifiedAt,
@@ -159,6 +161,10 @@ export class DataJudSearchProvider implements JudicialSearchProvider {
         verificationTimestamp: queryResult.evidence.verifiedAt,
         originatingQueryId: queryResult.evidence.queryId,
         isAlreadyImported: false,
+        systemName: meta.systemName,
+        formatName: meta.formatName,
+        lastUpdateDate: meta.lastMovementDate,
+        totalMovementsCount: movements.length,
       };
     }
 
@@ -713,7 +719,7 @@ export class JudicialSearchService {
     let result: JudicialProcessSearchResult | null = null;
 
     if (params.searchType === 'CNJ' && params.cnjNumber) {
-      result = await this.datajudProvider.getProcessDetails(params.cnjNumber);
+      result = await this.datajudProvider.getProcessDetails(params.cnjNumber, params.courtCode);
     } else {
       const results = await this.datajudProvider.searchProcess({
         courtCode: params.courtCode,
@@ -724,6 +730,11 @@ export class JudicialSearchService {
     }
 
     if (result) {
+      result.parties = result.parties || [];
+      result.lawyers = result.lawyers || [];
+      result.subjects = result.subjects || [];
+      result.documents = result.documents || [];
+      result.movements = result.movements || [];
       result = this.enrichWithExistingCaseStatus(result, existingCases);
       this.setCache(cacheKey, result);
     }

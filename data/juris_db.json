@@ -957,7 +957,52 @@
       ]
     }
   ],
-  "persons": [],
+  "persons": [
+    {
+      "id": "person-1789777894009-aut",
+      "tenantId": "t-1789481820042",
+      "type": "INDIVIDUAL",
+      "name": "Requerente Processual Identificado",
+      "tradeName": "Requerente Processual Identificado",
+      "document": "00.000.000/0001-00",
+      "stateRegOrRg": "",
+      "email": "contato@cliente.com.br",
+      "phone": "(11) 99999-0000",
+      "mobilePhone": "",
+      "address": {
+        "city": "São Paulo",
+        "state": "SP",
+        "number": "1000",
+        "street": "Av. Paulista",
+        "zipCode": "01310-100",
+        "neighborhood": "Bela Vista"
+      },
+      "notes": "",
+      "createdAt": "2026-09-19T00:31:34.009+00:00"
+    },
+    {
+      "id": "person-1789819934459-aut",
+      "tenantId": "t-1789481820042",
+      "type": "INDIVIDUAL",
+      "name": "Polo Ativo (Protegido por Sigilo/LGPD Res. 331/CNJ)",
+      "tradeName": "Polo Ativo (Protegido por Sigilo/LGPD Res. 331/CNJ)",
+      "document": "00.000.000/0001-00",
+      "stateRegOrRg": "",
+      "email": "contato@cliente.com.br",
+      "phone": "(11) 99999-0000",
+      "mobilePhone": "",
+      "address": {
+        "city": "São Paulo",
+        "state": "SP",
+        "number": "1000",
+        "street": "Av. Paulista",
+        "zipCode": "01310-100",
+        "neighborhood": "Bela Vista"
+      },
+      "notes": "",
+      "createdAt": "2026-09-19T12:12:14.459+00:00"
+    }
+  ],
   "clients": [],
   "leads": [],
   "cases": [],
@@ -1315,168 +1360,9 @@
       "createdAt": "2026-09-19T11:20:12.601Z"
     }
   ],
-  "legalKnowledgeSources": [
-    {
-      "id": "lk-cf88",
-      "title": "Constituição da República Federativa do Brasil de 1988",
-      "category": "CONSTITUCIONAL",
-      "officialSource": "Portal da Legislação da Presidência da República (Planalto)",
-      "lastUpdated": "2026-08-15",
-      "groundingStatus": "SYNCED",
-      "articlesIndexed": 250,
-      "description": "Texto constitucional com Emendas Constitucionais consolidadas até 2026, com foco em Direitos Fundamentais (Art. 5º), Ordem Econômica e Competências Judiciais."
-    },
-    {
-      "id": "lk-cpc15",
-      "title": "Código de Processo Civil (Lei nº 13.105/2015)",
-      "category": "PROCESSO_CIVIL",
-      "officialSource": "Portal do Planalto & Banco Nacional de Precedentes (CNJ)",
-      "lastUpdated": "2026-08-28",
-      "groundingStatus": "ACTIVE",
-      "articlesIndexed": 1072,
-      "description": "Regras processuais, prazos em dias úteis (Art. 219), tutelas provisórias (Art. 300), petição inicial (Art. 319) e sistema de precedentes vinculantes (Art. 927)."
-    },
-    {
-      "id": "lk-cc02",
-      "title": "Código Civil Brasileiro (Lei nº 10.406/2002)",
-      "category": "CIVIL",
-      "officialSource": "Portal da Legislação da Presidência da República (Planalto)",
-      "lastUpdated": "2026-08-10",
-      "groundingStatus": "SYNCED",
-      "articlesIndexed": 2046,
-      "description": "Direito das obrigações, contratos, responsabilidade civil, prescrição e decadência (Arts. 205 e 206), direito de família e sucessões."
-    },
-    {
-      "id": "lk-clt",
-      "title": "Consolidação das Leis do Trabalho (Decreto-Lei nº 5.452/1943)",
-      "category": "TRABALHISTA",
-      "officialSource": "Portal do Planalto & TST",
-      "lastUpdated": "2026-07-20",
-      "groundingStatus": "SYNCED",
-      "articlesIndexed": 922,
-      "description": "Normas de Direito Material e Processual do Trabalho, prazos recursais trabalhistas (Art. 895, 896 CLT), súmulas e orientações jurisprudenciais do TST."
-    },
-    {
-      "id": "lk-cdc",
-      "title": "Código de Defesa do Consumidor (Lei nº 8.078/1990)",
-      "category": "CONSUMIDOR",
-      "officialSource": "Portal da Legislação da Presidência da República (Planalto)",
-      "lastUpdated": "2026-06-30",
-      "groundingStatus": "SYNCED",
-      "articlesIndexed": 119,
-      "description": "Relações de consumo, responsabilidade objetiva por fato e vício do produto/serviço, inversão do ônus da prova e práticas abusivas."
-    },
-    {
-      "id": "lk-stf-stj",
-      "title": "Súmulas Vinculantes STF & Teses Repetitivas STJ",
-      "category": "PROCESSO_CIVIL",
-      "officialSource": "Repositório Oficial de Jurisprudência STF / STJ",
-      "lastUpdated": "2026-08-30",
-      "groundingStatus": "ACTIVE",
-      "articlesIndexed": 3450,
-      "description": "Jurisprudência com filtro anti-alucinação: validação cruzada para garantir que o acórdão existe e não foi cancelado por overruling."
-    },
-    {
-      "id": "lk-escritorio-teses",
-      "title": "Acervo de Teses e Peças Precedentes do Escritório",
-      "category": "INTERNO_ESCRITORIO",
-      "officialSource": "JurisFlow Private Document Store (Tenant Silveira Advogados)",
-      "lastUpdated": "2026-08-31",
-      "groundingStatus": "ACTIVE",
-      "articlesIndexed": 184,
-      "description": "Banco de minutas vitoriosas, contratos padrão aprovados e teses proprietárias do escritório indexados via vetorização semântica (RAG Corporativo).",
-      "isCustomOfficeTesis": true
-    }
-  ],
-  "legalSyncConnectors": [
-    {
-      "id": "conn-planalto",
-      "name": "Portal da Legislação da Presidência da República (Planalto)",
-      "type": "PLANALTO_LEGISLACAO",
-      "status": "CONNECTED",
-      "protocol": "REST_API",
-      "endpointUrl": "https://legis.planalto.gov.br/legis/api/v2/normas",
-      "lastSyncAt": "Hoje, 03:15 BRT",
-      "frequency": "Diária automatizada (03:00 BRT)",
-      "recordsSynced": 7853,
-      "description": "Varredura contínua de Leis Complementares, Leis Ordinárias e Decretos com atualização de vigência e marcação de derrogações no CPC, CC, CLT e CDC.",
-      "autoSyncEnabled": true
-    },
-    {
-      "id": "conn-djen",
-      "name": "DJEN - Diário da Justiça Eletrônico Nacional (CNJ)",
-      "type": "DJEN_DIARIO_JUSTICA",
-      "status": "CONNECTED",
-      "protocol": "WEBHOOK",
-      "endpointUrl": "https://comunicaapi.pje.jus.br/api/v1/comunicacao",
-      "webhookPushUrl": "/api/webhooks/djen-intimacoes",
-      "lastSyncAt": "Hoje, 10:45 BRT",
-      "frequency": "Tempo Real (Push Webhook a cada 15 min)",
-      "recordsSynced": 1248,
-      "description": "Captura ativa e contínua de publicações forenses e intimações em nome dos advogados da banca com cálculo automático de prazos CPC/2015.",
-      "autoSyncEnabled": true
-    },
-    {
-      "id": "conn-precedentes-stf-stj",
-      "name": "Banco Nacional de Precedentes (STF / STJ)",
-      "type": "STF_STJ_PRECEDENTES",
-      "status": "CONNECTED",
-      "protocol": "REST_API",
-      "endpointUrl": "https://jurisprudencia.stf.jus.br/api/v1/sumulas-repetitivos",
-      "lastSyncAt": "Ontem, 22:00 BRT",
-      "frequency": "Diária (22:00 BRT)",
-      "recordsSynced": 3450,
-      "description": "Catalogação de Súmulas Vinculantes do STF, Recursos Especiais Repetitivos do STJ e detecção imediata de superação de teses (overruling).",
-      "autoSyncEnabled": true
-    },
-    {
-      "id": "conn-tjsp-dje",
-      "name": "Diários de Justiça Estaduais (DJe SP, RJ, MG, RS)",
-      "type": "TRIBUNAIS_ESTADUAIS_DJE",
-      "status": "CONNECTED",
-      "protocol": "REST_API",
-      "endpointUrl": "https://dje.tjsp.jus.br/cdje/api/cadernos",
-      "lastSyncAt": "Hoje, 06:00 BRT",
-      "frequency": "Matutina (06:00 BRT)",
-      "recordsSynced": 932,
-      "description": "Conector unificado aos cadernos administrativos e judiciais dos Tribunais de Justiça estaduais para checagem de despachos locais.",
-      "autoSyncEnabled": true
-    }
-  ],
-  "legalWebhookLogs": [
-    {
-      "id": "wh-log-1",
-      "timestamp": "Hoje, 10:45:12 BRT",
-      "source": "DJEN / CNJ Webhook Inbound",
-      "event": "INTIMACAO_RECEBIDA",
-      "payloadSummary": "Publicação identificada para Dr. Carlos Silveira (OAB/SP 184.920) no Proc. 1092834-12.2026.8.26.0100",
-      "status": "SUCCESS"
-    },
-    {
-      "id": "wh-log-2",
-      "timestamp": "Hoje, 03:15:04 BRT",
-      "source": "Portal do Planalto REST API",
-      "event": "SINC_LEGISLACAO_FEDERAL",
-      "payloadSummary": "Varredura normativo-federal concluída: 7.853 normas validadas. 0 revogações nos Códigos principais.",
-      "status": "SUCCESS"
-    },
-    {
-      "id": "wh-log-3",
-      "timestamp": "Ontem, 22:00:31 BRT",
-      "source": "Banco de Precedentes STJ",
-      "event": "OVERRULING_HEALTH_CHECK",
-      "payloadSummary": "Verificação de Súmulas Repetitivas: Súmula 385/STJ validada sem cancelamento ativo.",
-      "status": "SUCCESS"
-    },
-    {
-      "id": "wh-log-4",
-      "timestamp": "Ontem, 16:20:00 BRT",
-      "source": "DJEN / CNJ Webhook Inbound",
-      "event": "INTIMACAO_RECEBIDA",
-      "payloadSummary": "Intimação eletrônica da 4ª Vara de Família recebida e processada pelo extrator neural.",
-      "status": "SUCCESS"
-    }
-  ],
+  "legalKnowledgeSources": [],
+  "legalSyncConnectors": [],
+  "legalWebhookLogs": [],
   "processedWebhookIds": {},
   "tenantSecurityConfigs": {
     "t-1789481820042": {
@@ -1585,6 +1471,312 @@
   },
   "judicialSearchHistory": [
     {
+      "id": "jsh-1790118645419",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1048291-34.2025.8.26.0100",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 23566,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T23:10:45.419Z"
+    },
+    {
+      "id": "jsh-1790118597653",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TRT2"
+      },
+      "courtCode": "TRT2",
+      "resultsCount": 1,
+      "executionTimeMs": 0,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T23:09:57.653Z"
+    },
+    {
+      "id": "jsh-1790118357303",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TRT2"
+      },
+      "courtCode": "TRT2",
+      "resultsCount": 1,
+      "executionTimeMs": 13237,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T23:05:57.303Z"
+    },
+    {
+      "id": "jsh-1790118318501",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TRT2"
+      },
+      "courtCode": "TRT2",
+      "resultsCount": 1,
+      "executionTimeMs": 0,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T23:05:18.501Z"
+    },
+    {
+      "id": "jsh-1790118168935",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TRT2"
+      },
+      "courtCode": "TRT2",
+      "resultsCount": 1,
+      "executionTimeMs": 17580,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T23:02:48.935Z"
+    },
+    {
+      "id": "jsh-1790117835499",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TRT2"
+      },
+      "courtCode": "TRT2",
+      "resultsCount": 1,
+      "executionTimeMs": 20701,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T22:57:15.499Z"
+    },
+    {
+      "id": "jsh-1790117452130",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TRT2"
+      },
+      "courtCode": "TRT2",
+      "resultsCount": 1,
+      "executionTimeMs": 24935,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T22:50:52.130Z"
+    },
+    {
+      "id": "jsh-1790117385115",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1048291-34.2025.8.26.0100",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TJSP"
+      },
+      "courtCode": "TJSP",
+      "resultsCount": 1,
+      "executionTimeMs": 25474,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T22:49:45.115Z"
+    },
+    {
+      "id": "jsh-1790117237377",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 25243,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T22:47:17.377Z"
+    },
+    {
+      "id": "jsh-1790116659552",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 23403,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T22:37:39.552Z"
+    },
+    {
+      "id": "jsh-1790113857968",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 2206,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T21:50:57.968Z"
+    },
+    {
+      "id": "jsh-1790113613416",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1048291-34.2025.8.26.0100",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 549,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T21:46:53.416Z"
+    },
+    {
+      "id": "jsh-1790113443963",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1048291-34.2025.8.26.0100",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TJSP"
+      },
+      "courtCode": "TJSP",
+      "resultsCount": 1,
+      "executionTimeMs": 1102,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T21:44:03.963Z"
+    },
+    {
+      "id": "jsh-1790112828606",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1048291-34.2025.8.26.0100",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TJSP"
+      },
+      "courtCode": "TJSP",
+      "resultsCount": 1,
+      "executionTimeMs": 0,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T21:33:48.606Z"
+    },
+    {
+      "id": "jsh-1790112815975",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1048291-34.2025.8.26.0100",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "TJSP"
+      },
+      "courtCode": "TJSP",
+      "resultsCount": 1,
+      "executionTimeMs": 9985,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T21:33:35.975Z"
+    },
+    {
+      "id": "jsh-1790112090544",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 28112,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T21:21:30.544Z"
+    },
+    {
+      "id": "jsh-1790110772494",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 1,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T20:59:32.494Z"
+    },
+    {
+      "id": "jsh-1790110727527",
+      "tenantId": "t-1789481820042",
+      "userId": "u-1789481820042-admin",
+      "userName": "Gabriela Maria Manni Capitani",
+      "searchType": "PROCESS",
+      "query": "1001382-17.2021.5.02.0059",
+      "filters": {
+        "searchType": "CNJ",
+        "courtCode": "AUTO"
+      },
+      "courtCode": "AUTO",
+      "resultsCount": 1,
+      "executionTimeMs": 432,
+      "status": "SUCCESS",
+      "timestamp": "2026-09-22T20:58:47.527Z"
+    },
+    {
       "id": "jsh-1789816929643",
       "tenantId": "t-1789481820042",
       "userId": "u-1789481820042-admin",
@@ -1598,61 +1790,8 @@
       "executionTimeMs": 11588,
       "status": "SUCCESS",
       "timestamp": "2026-09-19T11:22:09.643Z"
-    },
-    {
-      "id": "jsh-init-1",
-      "tenantId": "t-1789481820042",
-      "userId": "u-1789481820042-admin",
-      "userName": "Dra. Gabriela M. Manni Capitani",
-      "searchType": "JURISPRUDENCE",
-      "query": "prescrição intercorrente cumprimento de sentença",
-      "filters": {
-        "courtCodes": [
-          "STJ"
-        ]
-      },
-      "courtCode": "STJ",
-      "resultsCount": 1,
-      "executionTimeMs": 48,
-      "status": "SUCCESS",
-      "timestamp": "2026-09-19T10:19:34.842Z"
-    },
-    {
-      "id": "jsh-init-2",
-      "tenantId": "t-1789481820042",
-      "userId": "u-1789481820042-admin",
-      "userName": "Dra. Gabriela M. Manni Capitani",
-      "searchType": "PROCESS",
-      "query": "1092834-12.2026.8.26.0100",
-      "filters": {
-        "searchType": "CNJ"
-      },
-      "courtCode": "TJSP",
-      "resultsCount": 1,
-      "executionTimeMs": 112,
-      "status": "SUCCESS",
-      "timestamp": "2026-09-19T09:19:34.842Z"
     }
   ],
-  "precedentFavorites": [
-    {
-      "id": "fav-1",
-      "decisionId": "bnp-stf-sumula_vinculante-10",
-      "tenantId": "t-1789481820042",
-      "userId": "u-1789481820042-admin",
-      "title": "Súmula Vinculante 10 - STF (Cláusula de Reserva de Plenário)",
-      "courtCode": "STF",
-      "citation": "STF, Súmula Vinculante 10, Rel. Tribunal Pleno, DJe 2008-06-18",
-      "headnote": "Viola a cláusula de reserva de plenário (CF, art. 97) a decisão de órgão fracionário de Tribunal que, embora não declare expressamente a inconstitucionalidade de lei ou ato normativo do Poder Público, afasta sua incidência, no todo ou em parte.",
-      "thesis": "Cláusula de reserva de plenário (CF, art. 97) de observância obrigatória por órgãos fracionários.",
-      "officialUrl": "https://portal.stf.jus.br/jurisprudencia/sumulaVinculante.asp?id=10",
-      "favoritedAt": "2026-09-18T11:19:34.842Z",
-      "tags": [
-        "Constitucional",
-        "Reserva de Plenário",
-        "Art. 97 CF"
-      ]
-    }
-  ],
+  "precedentFavorites": [],
   "lawyerCertificates": {}
 }

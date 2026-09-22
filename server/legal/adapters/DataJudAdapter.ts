@@ -18,6 +18,43 @@ import { isExactDataJudSearchUrl } from '../officialSources.ts';
 // respeitar o bootstrap do .env e permitir testes com chave explicitamente vazia.
 const DATAJUD_BASE_URL = 'https://api-publica.datajud.cnj.jus.br';
 
+export function formatDataJudDate(rawDate?: string): string {
+  if (!rawDate) return '';
+  const trimmed = String(rawDate).trim();
+  // Formato compacto YYYYMMDDHHmmss (14 dígitos)
+  if (/^\d{14}$/.test(trimmed)) {
+    const y = trimmed.slice(0, 4);
+    const m = trimmed.slice(4, 6);
+    const d = trimmed.slice(6, 8);
+    const hh = trimmed.slice(8, 10);
+    const mm = trimmed.slice(10, 12);
+    const ss = trimmed.slice(12, 14);
+    return `${d}/${m}/${y} ${hh}:${mm}:${ss}`;
+  }
+  // Formato compacto YYYYMMDD (8 dígitos)
+  if (/^\d{8}$/.test(trimmed)) {
+    const y = trimmed.slice(0, 4);
+    const m = trimmed.slice(4, 6);
+    const d = trimmed.slice(6, 8);
+    return `${d}/${m}/${y}`;
+  }
+  // Formato ISO 8601 (ex: 2021-11-05T13:02:55.000Z)
+  if (trimmed.includes('T')) {
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const d = pad(parsed.getDate());
+      const m = pad(parsed.getMonth() + 1);
+      const y = parsed.getFullYear();
+      const hh = pad(parsed.getHours());
+      const mm = pad(parsed.getMinutes());
+      const ss = pad(parsed.getSeconds());
+      return `${d}/${m}/${y} ${hh}:${mm}:${ss}`;
+    }
+  }
+  return trimmed;
+}
+
 export class DataJudAdapter {
   private apiKey: string;
   private baseUrl: string;
@@ -113,7 +150,10 @@ export class DataJudAdapter {
   /**
    * Consulta oficial de metadados processuais via DataJud API
    */
-  public async queryProcessByCnj(cnjNumber: string): Promise<{
+  public async queryProcessByCnj(
+    cnjNumber: string,
+    courtCodeOverride?: string
+  ): Promise<{
     success: boolean;
     metadata?: CaseMetadata;
     movements?: CourtMovement[];
@@ -148,16 +188,20 @@ export class DataJudAdapter {
       };
     }
 
-    const { courtCode } = DataJudAdapter.extractCourtFromCnj(normalized);
-    if (courtCode === 'INDEFINIDO') {
+    const detectedCourt = DataJudAdapter.extractCourtFromCnj(normalized);
+    const finalCourtCode = (courtCodeOverride && courtCodeOverride.trim() !== '' && courtCodeOverride.toUpperCase() !== 'AUTO')
+      ? courtCodeOverride.toUpperCase().trim()
+      : detectedCourt.courtCode;
+
+    if (finalCourtCode === 'INDEFINIDO') {
       return { success: false, statusCode: 422, error: 'Tribunal do número CNJ não possui alias DataJud validado.' };
     }
     // Endpoint do DataJud para busca por processo por tribunal:
     // POST /api_publica_{sigla_tribunal}/_search
-    const endpointAlias = courtCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const endpointAlias = finalCourtCode.toLowerCase().replace(/[^a-z0-9]/g, '');
     const url = `${this.baseUrl}/api_publica_${endpointAlias}/_search`;
     if (!isExactDataJudSearchUrl(url, endpointAlias)) {
-      return { success: false, statusCode: 400, error: 'Endpoint DataJud fora da allowlist oficial exata.' };
+      return { success: false, statusCode: 400, error: `Endpoint DataJud fora da allowlist oficial exata: ${endpointAlias}` };
     }
 
     const requestBody = {
@@ -214,7 +258,7 @@ export class DataJudAdapter {
       if (hits.length === 0) {
         return {
           success: false,
-          error: `Processo nº ${normalized} não localizado no repositório público do ${courtCode} via DataJud.`,
+          error: `Processo nº ${normalized} não localizado no repositório público do ${finalCourtCode} via DataJud.`,
           statusCode: 404,
         };
       }
@@ -223,7 +267,8 @@ export class DataJudAdapter {
       const expectedDigits = normalized.replace(/\D/g, '');
       const receivedDigits = String(sourceData?.numeroProcesso || '').replace(/\D/g, '');
       const receivedCourt = String(sourceData?.tribunal || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (receivedDigits !== expectedDigits || receivedCourt !== courtCode) {
+      const matchesCourt = !receivedCourt || receivedCourt === finalCourtCode || receivedCourt === detectedCourt.courtCode;
+      if (receivedDigits !== expectedDigits || !matchesCourt) {
         return {
           success: false,
           statusCode: 409,
@@ -233,10 +278,76 @@ export class DataJudAdapter {
       const recordSha256 = DataJudAdapter.sha256(JSON.stringify(sourceData));
       const isConfidential = sourceData.nivelSigilo ? sourceData.nivelSigilo > 0 : false;
 
+      const extractedParties: any[] = [];
+      const extractedLawyers: any[] = [];
+
+      if (Array.isArray(sourceData.polos)) {
+        for (const p of sourceData.polos) {
+          const rawPolo = String(p.polo || '').toUpperCase();
+          const poloRole = (rawPolo === 'AT' || rawPolo === 'A' || rawPolo === 'ATIVO')
+            ? 'AUTOR'
+            : (rawPolo === 'PA' || rawPolo === 'P' || rawPolo === 'PASSIVO')
+            ? 'REU'
+            : (rawPolo === 'TC' || rawPolo === 'TERCEIRO')
+            ? 'TERCEIRO'
+            : (rawPolo === 'FL')
+            ? 'FISCAL_LEI'
+            : (p.polo || 'PARTE');
+
+          const partesList = Array.isArray(p.parte) ? p.parte : [];
+          for (const parte of partesList) {
+            let primaryLawyerName: string | undefined;
+            let primaryLawyerOab: string | undefined;
+
+            const advs = Array.isArray(parte.advogado) ? parte.advogado : [];
+            for (const adv of advs) {
+              if (adv.nome) {
+                const oabNum = adv.inscricao ? String(adv.inscricao).trim() : '';
+                const oabUf = adv.uf ? String(adv.uf).trim() : '';
+                extractedLawyers.push({
+                  name: String(adv.nome).trim(),
+                  oabNumber: oabNum,
+                  oabUf: oabUf,
+                });
+                if (!primaryLawyerName) {
+                  primaryLawyerName = String(adv.nome).trim();
+                  primaryLawyerOab = oabNum && oabUf ? `${oabNum}/${oabUf}` : oabNum || oabUf;
+                }
+              }
+            }
+
+            if (parte.nome) {
+              extractedParties.push({
+                role: poloRole,
+                name: String(parte.nome).trim(),
+                document: parte.numeroDocumentoPrincipal ? String(parte.numeroDocumentoPrincipal).trim() : undefined,
+                personType: parte.tipoPessoa === 'JURIDICA' ? 'LEGAL_ENTITY' : 'INDIVIDUAL',
+                lawyer: primaryLawyerName,
+                lawyerOab: primaryLawyerOab,
+              });
+            }
+          }
+        }
+      }
+
+      const systemName = typeof sourceData.sistema === 'object' && sourceData.sistema !== null
+        ? (sourceData.sistema.nome || 'PJe')
+        : (typeof sourceData.sistema === 'string' ? sourceData.sistema : undefined);
+
+      const formatName = typeof sourceData.formato === 'object' && sourceData.formato !== null
+        ? (sourceData.formato.nome || 'Eletrônico')
+        : (typeof sourceData.formato === 'string' ? sourceData.formato : undefined);
+
+      const courtOrganCode = sourceData.orgaoJulgador?.codigo;
+      const courtOrganMunicipality = sourceData.orgaoJulgador?.municipio || sourceData.orgaoJulgador?.cidade;
+
+      const formattedDistributionDate = formatDataJudDate(sourceData.dataAjuizamento);
+      const formattedLastUpdateDate = formatDataJudDate(sourceData.dataHoraUltimaAtualizacao);
+
       const metadata: CaseMetadata = {
         normalizedCnjNumber: normalized,
         rawCaseNumber: sourceData.numeroProcesso || normalized,
-        courtCode: sourceData.tribunal || courtCode,
+        courtCode: sourceData.tribunal || finalCourtCode,
         judicialDegree: sourceData.grau || 'G1',
         processClass: {
           code: sourceData.classe?.codigo || 0,
@@ -247,23 +358,44 @@ export class DataJudAdapter {
           name: a.nome,
         })),
         courtOrgan: sourceData.orgaoJulgador?.nome || 'Não informado pelo DataJud',
-        distributionDate: sourceData.dataAjuizamento,
+        courtOrganCode,
+        courtOrganMunicipality,
+        distributionDate: formattedDistributionDate || sourceData.dataAjuizamento,
+        formattedDistributionDate,
         value: sourceData.valorCausa,
         isConfidential,
-        lastMovementDate: sourceData.dataHoraUltimaAtualizacao,
+        lastMovementDate: formattedLastUpdateDate || sourceData.dataHoraUltimaAtualizacao,
+        systemName,
+        formatName,
+        parties: extractedParties,
+        lawyers: extractedLawyers,
         source: 'DATAJUD_CNJ',
         collectedAt: new Date().toISOString(),
       };
 
-      const movements: CourtMovement[] = (sourceData.movimentos || []).slice(0, 30).map((m: any, idx: number) => ({
-        id: `mov-${normalized}-${idx}`,
-        normalizedCnjNumber: normalized,
-        movementCode: m.codigo,
-        movementName: m.nome,
-        movementDate: m.dataHora,
-        complement: m.complementosTabelados?.[0]?.descricao,
-        source: 'DATAJUD_CNJ',
-      }));
+      const rawMovements = Array.isArray(sourceData.movimentos) ? sourceData.movimentos : [];
+      const movements: CourtMovement[] = rawMovements.map((m: any, idx: number) => {
+        const complementTexts = (m.complementosTabelados || [])
+          .map((c: any) => {
+            const label = c.nome || c.descricao;
+            return label ? String(label).trim() : '';
+          })
+          .filter(Boolean);
+
+        const complement = complementTexts.length > 0 ? complementTexts.join(' • ') : undefined;
+        const fallbackName = m.codigo ? `Movimento CNJ ${m.codigo}` : 'Andamento Processual';
+        const movementName = (m.nome && String(m.nome).trim()) ? String(m.nome).trim() : fallbackName;
+
+        return {
+          id: `mov-${normalized}-${idx}`,
+          normalizedCnjNumber: normalized,
+          movementCode: m.codigo || 0,
+          movementName,
+          movementDate: formatDataJudDate(m.dataHora) || m.dataHora,
+          complement,
+          source: 'DATAJUD_CNJ' as const,
+        };
+      });
 
       return {
         success: true,

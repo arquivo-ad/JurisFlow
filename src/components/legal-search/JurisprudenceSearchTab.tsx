@@ -158,21 +158,28 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="space-y-4">
+        <div className="space-y-4">
           <div className="relative">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSearch();
+                }
+              }}
               placeholder="Digite termos de busca, teses jurídicas, número do RE/REsp ou enunciado de Súmula..."
               className="w-full pl-10 pr-24 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 shadow-sm"
               required
             />
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
             <button
-              type="submit"
+              type="button"
+              onClick={() => handleSearch()}
               disabled={loading}
-              className="absolute right-1.5 top-1.5 bottom-1.5 px-4 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              className="absolute right-1.5 top-1.5 bottom-1.5 px-4 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <>
@@ -237,7 +244,7 @@ export const JurisprudenceSearchTab: React.FC<JurisprudenceSearchTabProps> = ({
               </label>
             </div>
           </div>
-        </form>
+        </div>
       </div>
 
       {/* Results Header */}

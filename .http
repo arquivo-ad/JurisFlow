@@ -1,0 +1,11 @@
+POST https://api-publica.datajud.cnj.jus.br/api_publica_trt2/_search HTTP/1.1
+Authorization: APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==
+content-type: application/json
+
+{
+    "query": {
+        "match": {
+            "numeroProcesso": "10013821720215020059"
+        }
+    }
+}

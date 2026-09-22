@@ -1287,6 +1287,8 @@ export interface JudicialProcessParty {
   name: string;
   document?: string;
   personType: 'INDIVIDUAL' | 'LEGAL_ENTITY';
+  lawyer?: string;
+  lawyerOab?: string;
 }
 
 export interface JudicialProcessLawyer {
@@ -1345,6 +1347,12 @@ export interface JudicialProcessSearchResult {
   existingCaseId?: string;
   existingCaseTitle?: string;
   newMovementsCount?: number;
+  systemName?: string;
+  formatName?: string;
+  courtOrganCode?: number;
+  courtOrganMunicipality?: string;
+  lastUpdateDate?: string;
+  totalMovementsCount?: number;
 }
 
 export interface JurisprudenceSearchParams {

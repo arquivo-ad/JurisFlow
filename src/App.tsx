@@ -20,6 +20,7 @@ import { AdminView } from './components/admin/AdminView';
 import { NewTenantModal } from './components/settings/NewTenantModal';
 import { LoginModal } from './components/common/LoginModal';
 import { AccessDeniedView } from './components/common/AccessDeniedView';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { canAccessModule, getDefaultModuleForRole, isSuperAdmin } from './utils/rbac';
 
 import { api } from './services/api';
@@ -48,7 +49,40 @@ import {
 } from './types';
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState<AppModule>('dashboard');
+  const [activeModule, setActiveModuleState] = useState<AppModule>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('jurisflow_active_module') as AppModule;
+        const validModules: AppModule[] = [
+          'dashboard',
+          'crm',
+          'cases',
+          'legal-search',
+          'calendar',
+          'tasks',
+          'documents',
+          'financial',
+          'ai-gateway',
+          'settings',
+          'admin',
+        ];
+        if (saved && validModules.includes(saved)) {
+          return saved;
+        }
+      } catch {}
+    }
+    return 'dashboard';
+  });
+
+  const setActiveModule = useCallback((mod: AppModule) => {
+    setActiveModuleState(mod);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('jurisflow_active_module', mod);
+      } catch {}
+    }
+  }, []);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -547,14 +581,16 @@ export default function App() {
               )}
 
               {activeModule === 'legal-search' && (
-                <LegalSearchView
-                  cases={cases}
-                  currentUser={currentUser}
-                  currentRole={activeUserRole}
-                  onRefreshCases={loadBootstrapData}
-                  onOpenAiGateway={handleOpenAiGateway}
-                  onShowToast={showToast}
-                />
+                <ErrorBoundary fallbackTitle="Erro ao carregar o módulo de Pesquisa Jurídica">
+                  <LegalSearchView
+                    cases={cases}
+                    currentUser={currentUser}
+                    currentRole={activeUserRole}
+                    onRefreshCases={loadBootstrapData}
+                    onOpenAiGateway={handleOpenAiGateway}
+                    onShowToast={showToast}
+                  />
+                </ErrorBoundary>
               )}
 
               {activeModule === 'calendar' && (
