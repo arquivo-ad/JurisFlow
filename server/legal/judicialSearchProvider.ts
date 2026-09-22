@@ -29,6 +29,7 @@ import { TjpiJurisprudenciaAdapter } from './adapters/TjpiJurisprudenciaAdapter.
 import { TjpaJurisprudenciaAdapter } from './adapters/TjpaJurisprudenciaAdapter.ts';
 import { TjrrJurisprudenciaAdapter } from './adapters/TjrrJurisprudenciaAdapter.ts';
 import { CarfJurisprudenciaAdapter } from './adapters/CarfJurisprudenciaAdapter.ts';
+import { TseJurisprudenciaAdapter } from './adapters/TseJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from './adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from './adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from './adapters/TjroPrecedentesAdapter.ts';
@@ -235,6 +236,7 @@ export class JudicialSearchService {
   private tjpaAdapter: TjpaJurisprudenciaAdapter;
   private tjrrAdapter: TjrrJurisprudenciaAdapter;
   private carfAdapter: CarfJurisprudenciaAdapter;
+  private tseAdapter: TseJurisprudenciaAdapter;
   private tjtoAdapter: TjtoJurisprudenciaAdapter;
   private tjrnAdapter: TjrnJurisprudenciaAdapter;
   private tjroAdapter: TjroPrecedentesAdapter;
@@ -273,6 +275,7 @@ export class JudicialSearchService {
     this.tjpaAdapter = new TjpaJurisprudenciaAdapter();
     this.tjrrAdapter = new TjrrJurisprudenciaAdapter();
     this.carfAdapter = new CarfJurisprudenciaAdapter();
+    this.tseAdapter = new TseJurisprudenciaAdapter();
     this.tjtoAdapter = new TjtoJurisprudenciaAdapter();
     this.tjrnAdapter = new TjrnJurisprudenciaAdapter();
     this.tjroAdapter = new TjroPrecedentesAdapter();
@@ -317,6 +320,7 @@ export class JudicialSearchService {
     const requestsTjpa = params.courtCodes?.includes('TJPA') === true;
     const requestsTjrr = params.courtCodes?.includes('TJRR') === true;
     const requestsCarf = params.courtCodes?.includes('CARF') === true;
+    const requestsTse = params.courtCodes?.includes('TSE') === true;
     const requestsTjto = params.courtCodes?.includes('TJTO') === true;
     const requestsTjrn = params.courtCodes?.includes('TJRN') === true;
     const requestsTjro = params.courtCodes?.includes('TJRO') === true;
@@ -354,6 +358,7 @@ export class JudicialSearchService {
     let tjpaDiagnostic = undefined as Awaited<ReturnType<TjpaJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjrrDiagnostic = undefined as Awaited<ReturnType<TjrrJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let carfDiagnostic = undefined as Awaited<ReturnType<CarfJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tseDiagnostic = undefined as Awaited<ReturnType<TseJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjtoDiagnostic = undefined as Awaited<ReturnType<TjtoJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let activeTjtoDecisions: CanonicalLegalDecision[] | undefined;
     let tjrnDiagnostic = undefined as Awaited<ReturnType<TjrnJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
@@ -515,6 +520,12 @@ export class JudicialSearchService {
       activeTjroDecisions = tjroResult.decisions;
     }
 
+    if (requestsTse) {
+      const tseResult = await this.tseAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '');
+      tseDiagnostic = tseResult.diagnostic;
+      nationalSourcesConsulted.push('tse-jurisprudencia');
+    }
+
     if (requestsCarf) {
       const carfResult = await this.carfAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
       carfDiagnostic = carfResult.diagnostic;
@@ -659,7 +670,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: carfDiagnostic ?? statePortalDiagnostic ?? tjseDiagnostic ?? tjesDiagnostic ?? tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tseDiagnostic ?? carfDiagnostic ?? statePortalDiagnostic ?? tjseDiagnostic ?? tjesDiagnostic ?? tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);

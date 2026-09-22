@@ -2,6 +2,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TST: new Set(['jurisprudencia-backend.tst.jus.br', 'jurisprudencia.tst.jus.br', 'www.tst.jus.br']),
   STJ: new Set(['processo.stj.jus.br', 'scon.stj.jus.br', 'dadosabertos.web.stj.jus.br']),
   STF: new Set(['portal.stf.jus.br', 'jurisprudencia.stf.jus.br']),
+  TSE: new Set(['www.tse.jus.br', 'jurisprudencia.tse.jus.br', 'sjur-pesquisa-api.tse.jus.br']),
   CARF: new Set(['acordaos.economia.gov.br']),
   TRT2: new Set(['pje.trt2.jus.br']),
   TJSP: new Set(['esaj.tjsp.jus.br']),
@@ -732,6 +733,19 @@ export function isExactCarfPdfUrl(value: string, expectedFileName?: string): boo
     ) return false;
     const fileName = decodeURIComponent(url.pathname.split('/').pop() || '');
     return !expectedFileName || fileName === expectedFileName;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTseSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'sjur-pesquisa-api.tse.jus.br'
+      && url.pathname === '/tse/sjur-pesquisa-backend/rest/public/pesquisa'
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }

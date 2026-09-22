@@ -25,6 +25,7 @@ import { TjpiJurisprudenciaAdapter } from '../adapters/TjpiJurisprudenciaAdapter
 import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter.ts';
 import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter.ts';
 import { CarfJurisprudenciaAdapter, unwrapCarfPdf } from '../adapters/CarfJurisprudenciaAdapter.ts';
+import { TseJurisprudenciaAdapter } from '../adapters/TseJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from '../adapters/TjrnJurisprudenciaAdapter.ts';
 import { TjroPrecedentesAdapter } from '../adapters/TjroPrecedentesAdapter.ts';
@@ -34,7 +35,7 @@ import { TjseJurisprudenciaAdapter } from '../adapters/TjseJurisprudenciaAdapter
 import { StateCourtPortalDiagnosticAdapter } from '../adapters/StateCourtPortalDiagnosticAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl, isExactTjseSearchUrl, isExactStateCourtPortalUrl, isExactCarfBrowseUrl, isExactCarfPdfUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl, isExactTjmaTurnstileStatusUrl, isExactTjmaSearchUrl, isExactTjesSearchUrl, isExactTjseSearchUrl, isExactStateCourtPortalUrl, isExactCarfBrowseUrl, isExactCarfPdfUrl, isExactTseSearchUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -2402,4 +2403,44 @@ test('busca explícita no CARF admite apenas acórdão oficial verificado', asyn
   assert.equal(result.results.some((item) => item.courtCode === 'CARF'), true);
   assert.ok(result.sourcesConsulted.includes('carf-jurisprudencia'));
   assert.equal(result.diagnostic?.adapter, 'carf-jurisprudencia');
+});
+
+function tseFetchMock(body: string): typeof fetch {
+  return (async () => new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })) as typeof fetch;
+}
+
+test('TSE aceita somente o endpoint público oficial exato da Jurisprudência 4.0', () => {
+  assert.equal(isExactTseSearchUrl('https://sjur-pesquisa-api.tse.jus.br/tse/sjur-pesquisa-backend/rest/public/pesquisa'), true);
+  assert.equal(isExactTseSearchUrl('https://sjur-pesquisa-api.tse.jus.br.evil.example/tse/sjur-pesquisa-backend/rest/public/pesquisa'), false);
+  assert.equal(isExactTseSearchUrl('https://sjur-pesquisa-api.tse.jus.br/tse/sjur-pesquisa-backend/rest/public/pesquisa/pesquisaTokenValidado'), false);
+});
+
+test('TSE falha fechado quando a API exige hCaptcha antirrobô', async () => {
+  const result = await new TseJurisprudenciaAdapter(
+    tseFetchMock(JSON.stringify({ mensagem: 'Falha na verificação antirrobô.', content: [], totalRegistros: 0, aggs: [] }))
+  ).searchOfficialJurisprudence('abuso de poder');
+  assert.equal(result.decisions.length, 0);
+  assert.equal(result.requiresInteractiveChallenge, true);
+  assert.equal(result.diagnostic.connectorStatus, 'DEGRADED');
+  assert.ok(result.diagnostic.rejectionReasons.includes('INTERACTIVE_HCAPTCHA_REQUIRED'));
+});
+
+test('busca explícita no TSE expõe diagnóstico de hCaptcha sem fabricar precedente', async () => {
+  const adapterResult = await new TseJurisprudenciaAdapter(
+    tseFetchMock(JSON.stringify({ mensagem: 'Falha na verificação antirrobô.', content: [], totalRegistros: 0, aggs: [] }))
+  ).searchOfficialJurisprudence('abuso de poder');
+  const service = new JudicialSearchService();
+  (service as any).tseAdapter = { searchOfficialJurisprudence: async () => adapterResult };
+  const result = await service.searchJurisprudence({
+    query: 'abuso de poder',
+    courtCodes: ['TSE'],
+    onlyVerified: true,
+  });
+  assert.equal(result.results.some((item) => item.courtCode === 'TSE'), false);
+  assert.ok(result.sourcesConsulted.includes('tse-jurisprudencia'));
+  assert.equal(result.diagnostic?.adapter, 'tse-jurisprudencia');
+  assert.equal(result.diagnostic?.connectorStatus, 'DEGRADED');
 });
