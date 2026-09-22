@@ -292,7 +292,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
 
   // 5. TRIBUNAIS DE JUSTIÇA ESTADUAIS E DISTRITAL — MATRIZ NACIONAL
   ...([
-    { code: 'TJPB', name: 'Tribunal de Justiça do Estado da Paraíba', url: 'https://pje-jurisprudencia.tjpb.jus.br/' },
+    { code: 'TJPB', name: 'Tribunal de Justiça do Estado da Paraíba', url: 'https://app.tjpb.jus.br/juris-pb/' },
     { code: 'TJMT', name: 'Tribunal de Justiça do Estado de Mato Grosso', url: 'https://jurisprudencia.tjmt.jus.br/' },
     { code: 'TJRO', name: 'Tribunal de Justiça do Estado de Rondônia', url: 'https://liame.tjro.jus.br/' },
     { code: 'TJES', name: 'Tribunal de Justiça do Estado do Espírito Santo', url: 'https://www.tjes.jus.br/portal-transparencia/audiencias-e-sessoes/jurisprudencia/' },

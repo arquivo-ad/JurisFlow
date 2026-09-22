@@ -6,7 +6,7 @@ type FetchLike = typeof fetch;
 
 const CONFIG: Record<DiagnosticCourtCode, { url: string; name: string }> = {
   TJPB: {
-    url: 'https://pje-jurisprudencia.tjpb.jus.br/',
+    url: 'https://app.tjpb.jus.br/juris-pb/',
     name: 'TJPB - PJe Jurisprudência',
   },
   TJAP: {

@@ -2259,7 +2259,7 @@ function maintenanceFetchMock(): typeof fetch {
 }
 
 test('portais estaduais de diagnóstico aceitam somente URLs oficiais exatas', () => {
-  assert.equal(isExactStateCourtPortalUrl('https://pje-jurisprudencia.tjpb.jus.br/', 'TJPB'), true);
+  assert.equal(isExactStateCourtPortalUrl('https://app.tjpb.jus.br/juris-pb/', 'TJPB'), true);
   assert.equal(isExactStateCourtPortalUrl('https://tucujuris.tjap.jus.br/', 'TJAP'), true);
   assert.equal(isExactStateCourtPortalUrl('https://jurisprudencia.tjmt.jus.br/', 'TJMT'), true);
   assert.equal(isExactStateCourtPortalUrl('https://tucujuris.tjap.jus.br.evil.example/', 'TJAP'), false);

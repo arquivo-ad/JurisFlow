@@ -20,7 +20,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJMA: new Set(['apijuris.tjma.jus.br', 'jurisconsult.tjma.jus.br']),
   TJES: new Set(['sistemas.tjes.jus.br']),
   TJSE: new Set(['www.tjse.jus.br']),
-  TJPB: new Set(['pje-jurisprudencia.tjpb.jus.br']),
+  TJPB: new Set(['app.tjpb.jus.br']),
   TJAP: new Set(['tucujuris.tjap.jus.br']),
   TJMT: new Set(['jurisprudencia.tjmt.jus.br']),
   TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
@@ -689,15 +689,17 @@ export function isExactTjseSearchUrl(value: string): boolean {
 
 export function isExactStateCourtPortalUrl(value: string, courtCode: 'TJPB' | 'TJAP' | 'TJMT'): boolean {
   const expected: Record<'TJPB' | 'TJAP' | 'TJMT', string> = {
-    TJPB: 'https://pje-jurisprudencia.tjpb.jus.br/',
+    TJPB: 'https://app.tjpb.jus.br/juris-pb/',
     TJAP: 'https://tucujuris.tjap.jus.br/',
     TJMT: 'https://jurisprudencia.tjmt.jus.br/',
   };
   try {
     const url = new URL(value);
+    const expectedUrl = new URL(expected[courtCode]);
     return value === expected[courtCode]
       && url.protocol === 'https:'
-      && url.pathname === '/'
+      && url.hostname === expectedUrl.hostname
+      && url.pathname === expectedUrl.pathname
       && !url.search
       && !url.hash;
   } catch {

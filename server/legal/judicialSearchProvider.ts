@@ -793,7 +793,7 @@ export class JudicialSearchService {
       {
         courtCode: 'TJPB', courtName: 'TJPB - PJe Jurisprudência', jurisdiction: 'PB',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
-        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://pje-jurisprudencia.tjpb.jus.br/',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://app.tjpb.jus.br/juris-pb/',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
         notes: 'Sistema oficial identificado; acesso automatizado atual recebe Cloudflare HTTP 403. Fail-closed, sem bypass.',
       },
