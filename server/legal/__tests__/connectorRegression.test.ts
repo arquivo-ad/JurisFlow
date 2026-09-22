@@ -26,9 +26,10 @@ import { TjpaJurisprudenciaAdapter } from '../adapters/TjpaJurisprudenciaAdapter
 import { TjrrJurisprudenciaAdapter } from '../adapters/TjrrJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from '../adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from '../adapters/TjrnJurisprudenciaAdapter.ts';
+import { TjroPrecedentesAdapter } from '../adapters/TjroPrecedentesAdapter.ts';
 import { DjenPublicationsAdapter } from '../adapters/DjenPublicationsAdapter.ts';
 import { CourtFamilyProbeAdapter } from '../adapters/CourtFamilyProbeAdapter.ts';
-import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl } from '../officialSources.ts';
+import { isExactTrt2OptionsUrl, isExactTjspSearchUrl, isExactTrf3DocumentUrl, isExactTrf4DocumentUrl, isExactTrf4SearchUrl, isExactTstNormativeCollectionUrl, isExactDjenSearchUrl, isExactDjenCertificateUrl, isExactFalcaoSearchUrl, isExactFalcaoDocumentUrl, isExactTjdftSearchUrl, isExactTjscDocumentUrl, isExactTjscSearchUrl, isExactTjbaGraphqlUrl, isExactTjbaDocumentUrl, isExactTjceSearchUrl, isExactTjceDocumentUrl, isExactTjpeSearchUrl, isExactTjpeCandidatePdfUrl, isExactEsajSearchUrl, isExactEsajDocumentUrl, isExactTjpiSearchUrl, isExactTjpiDetailUrl, isExactTjpaSearchUrl, isExactTjpaDetailUrl, isExactTjpaPublicDocumentUrl, isExactTjrrSearchUrl, isExactTjrrPdfUrl, isExactTjtoSearchUrl, isExactTjtoCandidateDocumentUrl, isExactTjrnSearchUrl, isExactTjroPrecedentsUrl } from '../officialSources.ts';
 import { DataJudSearchProvider, JudicialSearchService } from '../judicialSearchProvider.ts';
 import { LegalCompetenceClassifier } from '../classifier.ts';
 import { getCourtFamilyConfig, isAllowedCourtFamilyUrl } from '../courtFamilies.ts';
@@ -2008,4 +2009,79 @@ test('matriz estadual cobre todos os 26 TJs estaduais e o TJDFT', () => {
     .filter((code) => expected.includes(code))
     .sort();
   assert.deepEqual(matrixCodes, expected);
+});
+
+const tjroPayload = {
+  data: {
+    total: 1,
+    results: [{
+      sigla: 'TJRO',
+      especie: 'incidente_demanda_repetitiva',
+      registro: {
+        numero: '16',
+        questao: 'Uniformizar entendimento sobre cobrança de tarifas bancárias e dano moral.',
+        tese: 'A cobrança indevida de tarifas bancárias, por si só, não gera dano moral presumido.',
+        textoAcordaoMerito: 'https://pjesg.tjro.jus.br/pje/Processo/ConsultaDocumento/listView.seam?x=25121811331800000000030270520',
+        relator: 'Des. Alexandre Miguel',
+        processosParadigma: [{ classe: 12085, numero: '08046734320258220000' }],
+        dataJulgamento: '2025-12-18',
+        dataPublicacao: '2025-12-19',
+        dataTransitoJulgado: '2026-04-13',
+        dataAtualizacao: '2026-04-23',
+        situacao: 'TRANSITADO_EM_JULGADO',
+        referenciaLegislativa: 'Código de Processo Civil, arts. 976, 979, 981, 982, 983.',
+      },
+    }],
+  },
+};
+
+function tjroFetchMock(): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === 'https://liame.tjro.jus.br/api/pesquisa/precedentes') {
+      return new Response(JSON.stringify(tjroPayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+}
+
+test('TJRO aceita somente endpoint oficial exato do Liame', () => {
+  assert.equal(isExactTjroPrecedentsUrl('https://liame.tjro.jus.br/api/pesquisa/precedentes'), true);
+  assert.equal(isExactTjroPrecedentsUrl('https://liame.tjro.jus.br.evil.example/api/pesquisa/precedentes'), false);
+});
+
+test('TJRO normaliza IRDR real mas mantém FOUND_UNVERIFIED por SSO individual', async () => {
+  const result = await new TjroPrecedentesAdapter(tjroFetchMock())
+    .searchOfficialPrecedents('dano moral', 1);
+  assert.equal(result.decisions.length, 1);
+  const decision = result.decisions[0]!;
+  assert.equal(decision.courtCode, 'TJRO');
+  assert.equal(decision.documentType, 'IRDR');
+
+  assert.equal(decision.normalizedCnjNumber, '0804673-43.2025.8.22.0000');
+  assert.equal(decision.verificationStatus, 'FOUND_UNVERIFIED');
+  assert.equal(decision.precedentStrength, 'QUALIFICADO');
+  assert.ok(decision.rejectionReasons?.some((reason) => reason.includes('DOCUMENTO_INDIVIDUAL_SSO')));
+});
+
+test('busca TJRO respeita onlyVerified e nunca promove precedente parcial', async () => {
+  const partial = await new TjroPrecedentesAdapter(tjroFetchMock())
+    .searchOfficialPrecedents('dano moral', 1);
+  const service = new JudicialSearchService();
+  (service as any).tjroAdapter = { searchOfficialPrecedents: async () => partial };
+
+  const verifiedOnly = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJRO'], onlyVerified: true,
+  });
+  assert.equal(verifiedOnly.results.some((item) => item.courtCode === 'TJRO'), false);
+
+  const partialAllowed = await service.searchJurisprudence({
+    query: 'dano moral', courtCodes: ['TJRO'], onlyVerified: false,
+  });
+  assert.equal(partialAllowed.results.some((item) => item.courtCode === 'TJRO'), true);
+  assert.ok(partialAllowed.sourcesConsulted.includes('tjro-precedentes'));
+  assert.equal(partialAllowed.diagnostic?.adapter, 'tjro-precedentes');
 });

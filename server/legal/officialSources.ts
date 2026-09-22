@@ -16,6 +16,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJPA: new Set(['jurisprudencia.tjpa.jus.br']),
   TJRR: new Set(['jurisprudencia.tjrr.jus.br']),
   TJRN: new Set(['jurisprudencia.tjrn.jus.br']),
+  TJRO: new Set(['liame.tjro.jus.br']),
   TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
@@ -585,6 +586,19 @@ export function isExactTjrnSearchUrl(value: string): boolean {
     return url.protocol === 'https:'
       && url.hostname === 'jurisprudencia.tjrn.jus.br'
       && url.pathname === '/api/pesquisar'
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjroPrecedentsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'liame.tjro.jus.br'
+      && url.pathname === '/api/pesquisa/precedentes'
       && !url.search
       && !url.hash;
   } catch {

@@ -329,7 +329,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
       : tj.code === 'TJSP' || tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJRJ' || tj.code === 'TJSC' || tj.code === 'TJMG' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJRR' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJES' || tj.code === 'TJMA' || tj.code === 'TJAP' || tj.code === 'TJSE'
         ? 'OFFICIAL_SEARCH' as const
         : 'MANUAL_VERIFICATION_ONLY' as const,
-    officialBaseUrl: tj.code === 'TJPR'
+    officialBaseUrl: tj.code === 'TJRO'
+      ? 'https://liame.tjro.jus.br/api/pesquisa/precedentes'
+      : tj.code === 'TJPR'
       ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
       : tj.code === 'TJDFT'
         ? 'https://jurisdf.tjdft.jus.br/api/v1/pesquisa'
@@ -344,7 +346,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                 : tj.code === 'TJPE'
               ? 'https://consultajurisprudencia.app.tjpe.jus.br/api/v1/jurisprudencias'
               : tj.url,
-    documentationUrl: tj.code === 'TJPR'
+    documentationUrl: tj.code === 'TJRO'
+      ? 'https://liame.tjro.jus.br/'
+      : tj.code === 'TJPR'
       ? 'https://consulta.tjpr.jus.br/projudi_consulta/paginaPrincipal.jsp'
       : tj.code === 'TJDFT'
         ? 'https://www.tjdft.jus.br/transparencia/tecnologia-da-informacao-e-comunicacao/dados-abertos/webservice-ou-api'
@@ -409,7 +413,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                                 : tj.code === 'TJMT'
                                   ? 'Portal oficial de jurisprudência identificado, mas atualmente responde página de manutenção. Sem reutilizar dados antigos.'
                                   : tj.code === 'TJRO'
-                                    ? 'Liame oficial público identificado para precedentes; a consulta geral legada não respondeu de forma estável. Cobertura permanece parcial.'
+                                    ? 'Liame público oficial com API de precedentes qualificados (IRDR/IAC), tese e processos paradigma. Acórdão individual PJe exige SSO; resultados permanecem FOUND_UNVERIFIED.'
                                     : tj.code === 'TJES'
                                       ? 'Portal oficial identificado; a consulta legada de jurisprudência responde Human Verification/CAPTCHA. Fail-closed.'
                                       : tj.code === 'TJMA'

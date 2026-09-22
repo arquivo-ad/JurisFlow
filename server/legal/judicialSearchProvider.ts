@@ -30,6 +30,7 @@ import { TjpaJurisprudenciaAdapter } from './adapters/TjpaJurisprudenciaAdapter.
 import { TjrrJurisprudenciaAdapter } from './adapters/TjrrJurisprudenciaAdapter.ts';
 import { TjtoJurisprudenciaAdapter } from './adapters/TjtoJurisprudenciaAdapter.ts';
 import { TjrnJurisprudenciaAdapter } from './adapters/TjrnJurisprudenciaAdapter.ts';
+import { TjroPrecedentesAdapter } from './adapters/TjroPrecedentesAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -230,6 +231,7 @@ export class JudicialSearchService {
   private tjrrAdapter: TjrrJurisprudenciaAdapter;
   private tjtoAdapter: TjtoJurisprudenciaAdapter;
   private tjrnAdapter: TjrnJurisprudenciaAdapter;
+  private tjroAdapter: TjroPrecedentesAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -262,6 +264,7 @@ export class JudicialSearchService {
     this.tjrrAdapter = new TjrrJurisprudenciaAdapter();
     this.tjtoAdapter = new TjtoJurisprudenciaAdapter();
     this.tjrnAdapter = new TjrnJurisprudenciaAdapter();
+    this.tjroAdapter = new TjroPrecedentesAdapter();
   }
 
   /**
@@ -296,6 +299,7 @@ export class JudicialSearchService {
     const requestsTjrr = params.courtCodes?.includes('TJRR') === true;
     const requestsTjto = params.courtCodes?.includes('TJTO') === true;
     const requestsTjrn = params.courtCodes?.includes('TJRN') === true;
+    const requestsTjro = params.courtCodes?.includes('TJRO') === true;
     const requestedEsajCodes = (params.courtCodes || []).filter(
       (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
     );
@@ -327,6 +331,8 @@ export class JudicialSearchService {
     let activeTjtoDecisions: CanonicalLegalDecision[] | undefined;
     let tjrnDiagnostic = undefined as Awaited<ReturnType<TjrnJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let activeTjrnDecisions: CanonicalLegalDecision[] | undefined;
+    let tjroDiagnostic = undefined as Awaited<ReturnType<TjroPrecedentesAdapter['searchOfficialPrecedents']>>['diagnostic'] | undefined;
+    let activeTjroDecisions: CanonicalLegalDecision[] | undefined;
     const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
@@ -364,7 +370,9 @@ export class JudicialSearchService {
         trtCode,
         5
       );
-      falcaoDiagnostic = falcaoDiagnostic ?? falcaoResult.diagnostic;
+      if (falcaoResult.decisions.length > 0 || !trt2Diagnostic) {
+        falcaoDiagnostic = falcaoDiagnostic ?? falcaoResult.diagnostic;
+      }
       regionalSourcesConsulted.push('falcao-jurisprudencia');
       for (const decision of falcaoResult.decisions) {
         if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
@@ -441,6 +449,13 @@ export class JudicialSearchService {
       activeTjrnDecisions = tjrnResult.decisions;
     }
 
+    if (requestsTjro) {
+      const tjroResult = await this.tjroAdapter.searchOfficialPrecedents(params.query || params.caseNumber || '', 10);
+      tjroDiagnostic = tjroResult.diagnostic;
+      regionalSourcesConsulted.push('tjro-precedentes');
+      activeTjroDecisions = tjroResult.decisions;
+    }
+
     if (requestsTjrr) {
       const tjrrResult = await this.tjrrAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '', 10);
       tjrrDiagnostic = tjrrResult.diagnostic;
@@ -503,8 +518,8 @@ export class JudicialSearchService {
     }
 
     let transientDecisions: CanonicalLegalDecision[] | undefined = activeTstDecisions;
-    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions || activeTjtoDecisions || activeTjrnDecisions || activeEsajPartialDecisions.length > 0)) {
-      const partialCourts = new Set(['TJRS', 'TJPE', 'TJTO', 'TJRN', 'TJAC', 'TJAL', 'TJAM']);
+    if (!transientDecisions && (activeTjrsDecisions || activeTjpeDecisions || activeTjtoDecisions || activeTjrnDecisions || activeTjroDecisions || activeEsajPartialDecisions.length > 0)) {
+      const partialCourts = new Set(['TJRS', 'TJPE', 'TJTO', 'TJRN', 'TJRO', 'TJAC', 'TJAL', 'TJAM']);
       const otherCourts = (params.courtCodes || []).filter((code) => !partialCourts.has(code));
       const persisted = otherCourts.length > 0
         ? legalStorage.getDecisions({ tenantId, courtCodes: otherCourts, onlyVerified: params.onlyVerified })
@@ -515,6 +530,7 @@ export class JudicialSearchService {
         ...(activeTjpeDecisions || []),
         ...(activeTjtoDecisions || []),
         ...(activeTjrnDecisions || []),
+        ...(activeTjroDecisions || []),
         ...activeEsajPartialDecisions,
       ];
     }
@@ -575,7 +591,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -737,9 +753,9 @@ export class JudicialSearchService {
       {
         courtCode: 'TJRO', courtName: 'TJRO - Liame / Jurisprudência', jurisdiction: 'RO',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
-        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://liame.tjro.jus.br/',
+        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://liame.tjro.jus.br/api/pesquisa/precedentes',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Liame público cobre precedentes; consulta geral legada não respondeu de forma estável. Não há promoção automática.',
+        notes: 'API Liame pública e funcional para IRDR/IAC, com tese e processos paradigma. O acórdão individual PJe exige SSO; resultados permanecem FOUND_UNVERIFIED.',
       },
       {
         courtCode: 'TJES', courtName: 'TJES - Jurisprudência', jurisdiction: 'ES',
