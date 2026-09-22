@@ -244,6 +244,73 @@ test('provedor DataJud só exibe selo verificado com evidência criptográfica',
   assert.match(result?.evidenceId || '', /^DATAJUD:0000832-35\.2018\.4\.01\.3202:[a-f0-9]{20}$/);
 });
 
+test('DataJud preserva todas as movimentações sem truncamento, extrai complementos humanos e formata datas', async () => {
+  // Simula processo com 45 movimentações, complementos ricos, polos e datas compactas
+  const manyMovements = Array.from({ length: 45 }, (_, i) => ({
+    codigo: i === 44 ? 15238 : 100 + i,
+    nome: i === 44 ? undefined : `Andamento ${i}`,
+    dataHora: '20211105130255',
+    complementosTabelados: i === 0 ? [{ codigo: 1, nome: 'sorteio', descricao: 'tipo_de_distribuicao_redistribuicao' }] : undefined,
+  }));
+
+  const richSource = {
+    ...dataJudSource,
+    dataAjuizamento: '20211105130255',
+    sistema: { codigo: 1, nome: 'PJe' },
+    formato: { codigo: 1, nome: 'Eletrônico' },
+    orgaoJulgador: { codigo: 29958, nome: '59ª Vara do Trabalho de São Paulo' },
+    movimentos: manyMovements,
+    polos: [
+      {
+        polo: 'AT',
+        parte: [
+          {
+            nome: 'Reclamante Teste',
+            tipoPessoa: 'FISICA',
+            advogado: [{ nome: 'Dra. Advogada', inscricao: '123456', uf: 'SP' }],
+          },
+        ],
+      },
+      {
+        polo: 'PA',
+        parte: [
+          {
+            nome: 'Empresa Ré S.A.',
+            tipoPessoa: 'JURIDICA',
+            numeroDocumentoPrincipal: '12345678000199',
+          },
+        ],
+      },
+    ],
+  };
+
+  const adapter = new DataJudAdapter('chave-publica-de-teste', undefined, dataJudFetch(richSource));
+  const result = await adapter.queryProcessByCnj('0000832-35.2018.4.01.3202');
+
+  assert.equal(result.success, true);
+  // Todas as 45 movimentações preservadas (sem truncar em 30)
+  assert.equal(result.movements?.length, 45);
+  // Complemento humano "sorteio" extraído ao invés do slug "tipo_de_distribuicao_redistribuicao"
+  assert.equal(result.movements?.[0]?.complement, 'sorteio');
+  // Fallback para andamento sem nome
+  assert.equal(result.movements?.[44]?.movementName, 'Movimento CNJ 15238');
+  // Data formatada
+  assert.equal(result.metadata?.distributionDate, '05/11/2021 13:02:55');
+  // Metadados enriquecidos
+  assert.equal(result.metadata?.systemName, 'PJe');
+  assert.equal(result.metadata?.formatName, 'Eletrônico');
+  assert.equal(result.metadata?.courtOrganCode, 29958);
+  // Polos / Partes e advogados mapeados
+  assert.equal(result.metadata?.parties?.length, 2);
+  assert.equal(result.metadata?.parties?.[0]?.role, 'AUTOR');
+  assert.equal(result.metadata?.parties?.[0]?.name, 'Reclamante Teste');
+  assert.equal(result.metadata?.parties?.[0]?.lawyer, 'Dra. Advogada');
+  assert.equal(result.metadata?.parties?.[0]?.lawyerOab, '123456/SP');
+  assert.equal(result.metadata?.parties?.[1]?.role, 'REU');
+  assert.equal(result.metadata?.parties?.[1]?.name, 'Empresa Ré S.A.');
+  assert.equal(result.metadata?.lawyers?.length, 1);
+});
+
 test('produção não contém assinatura nem processo DJEN fabricados', () => {
   const server = fs.readFileSync(new URL('../../../server.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(server, /Autoridade Certificadora JurisFlow ICP-Brasil/);

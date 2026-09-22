@@ -7909,7 +7909,12 @@ exit 0
   // ==========================================
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: ['**/data/**', '**/DOCS/**', '**/.git/**', '**/dist/**', '**/*.jsonl', '**/*.log'],
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

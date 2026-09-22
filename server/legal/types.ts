@@ -157,10 +157,28 @@ export interface CaseMetadata {
   processClass: { code: number; name: string };
   subjects: { code: number; name: string }[];
   courtOrgan: string;
+  courtOrganCode?: number;
+  courtOrganMunicipality?: string;
   distributionDate?: string;
+  formattedDistributionDate?: string;
   value?: number;
   isConfidential: boolean;             // Processo em Segredo de Justiça
   lastMovementDate?: string;
+  systemName?: string;
+  formatName?: string;
+  parties?: Array<{
+    role: string;
+    name: string;
+    document?: string;
+    personType: 'INDIVIDUAL' | 'LEGAL_ENTITY';
+    lawyer?: string;
+    lawyerOab?: string;
+  }>;
+  lawyers?: Array<{
+    name: string;
+    oabNumber: string;
+    oabUf: string;
+  }>;
   source: 'DATAJUD_CNJ';
   collectedAt: string;
 }

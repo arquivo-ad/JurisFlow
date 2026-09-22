@@ -30,7 +30,7 @@
       "sourceType": "OFFICIAL_API",
       "officialBaseUrl": "https://api-publica.datajud.cnj.jus.br/",
       "documentationUrl": "https://datajud-wiki.cnj.jus.br/api-publica/",
-      "connectorStatus": "SOURCE_UNAVAILABLE",
+      "connectorStatus": "HEALTHY",
       "coverageStatus": "Metadados processuais (capa, classe, órgão julgador, movimentos e TPU)",
       "verificationMethod": "AUTOMATED_API",
       "termsStatus": "COMPLIANT_PUBLIC_ACCESS",
@@ -40,10 +40,11 @@
       "documentsRejected": 0,
       "enabled": true,
       "requiresCredential": true,
-      "credentialConfigured": false,
-      "lastFailureAt": "2026-09-20T14:15:13.805Z",
-      "lastErrorCode": "503",
-      "lastErrorMessage": "fonte indisponível"
+      "credentialConfigured": true,
+      "lastFailureAt": "2026-09-22T23:03:03.265Z",
+      "lastSuccessfulSyncAt": "2026-09-22T23:10:45.413Z",
+      "checksum": "54423be71b3fa2ce8bd055ee68333338e636bf32ca9ca0ba8da328639fe6dca9",
+      "latencyMs": 23560
     },
     {
       "sourceId": "cnj-bnp-pangea",
@@ -76,7 +77,7 @@
       "officialBaseUrl": "https://portal.stf.jus.br/jurisprudencia/",
       "documentationUrl": "https://portal.stf.jus.br/hotsites/corteaberta/",
       "connectorStatus": "PARTIAL",
-      "coverageStatus": "Temas de repercussão geral individualizados; Súmulas Vinculantes permanecem pendentes de verificação cumulativa",
+      "coverageStatus": "Temas de repercussão geral individualizados; cadeia TLS corrigida com intermediária oficial GlobalSign; runtime local ainda recebe HTTP 403 do ELB; Súmulas Vinculantes pendentes",
       "verificationMethod": "OPEN_DATA_DIGEST",
       "termsStatus": "COMPLIANT_PUBLIC_ACCESS",
       "documentsDiscovered": 0,
@@ -96,7 +97,7 @@
       "officialBaseUrl": "https://jurisprudencia-backend.tst.jus.br/",
       "documentationUrl": "https://www.tst.jus.br/jurisprudencia",
       "connectorStatus": "PARTIAL",
-      "coverageStatus": "Consulta oficial em tempo real de acórdãos; súmulas, OJs e precedentes normativos ainda pendentes de integração dedicada",
+      "coverageStatus": "Consulta oficial em tempo real de acórdãos; coleção normativa integrada separadamente em tst-normativos",
       "verificationMethod": "AUTOMATED_API",
       "termsStatus": "COMPLIANT_PUBLIC_ACCESS",
       "documentsDiscovered": 0,
@@ -3354,6 +3355,671 @@
         }
       },
       "verificationBadge": "[OFICIAL TST - VERIFICADO]"
+    },
+    {
+      "id": "trf3-0d9fb2c4371a75af1c10",
+      "sourceId": "trf3-jurisprudencia",
+      "officialUrl": "https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/9?np=1",
+      "fullTextUrl": "https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/9?np=1",
+      "court": "Tribunal Regional Federal da 3ª Região",
+      "courtCode": "TRF3",
+      "judicialBranch": "FEDERAL",
+      "jurisdiction": "TRF3",
+      "courtOrgan": "8ª Turma",
+      "processClass": "ApCiv",
+      "rawCaseNumber": "5003867-82.2023.4.03.6112",
+      "normalizedCnjNumber": "5003867-82.2023.4.03.6112",
+      "rapporteur": "Desembargador Federal TORU YAMAMOTO",
+      "judgmentDate": "2026-09-16",
+      "publicationDate": "2026-09-19",
+      "availabilityDate": "2026-09-19",
+      "officialHeadnote": "PREVIDENCIÁRIO. BENEFÍCIO PREVIDENCIÁRIO. EMBARGOS DE DECLARAÇÃO. OMISSÃO. CORREÇÃO. EMBARGOS ACOLHIDOS. A concessão do benefício foi mantida e o período especial reconhecido nos termos da fundamentação.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "0d9fb2c4371a75af1c100cddb8ac2f277256cdeb9d36977ee39eea84488983f7",
+      "collectedAt": "2026-09-20T18:00:00.000Z",
+      "lastVerifiedAt": "2026-09-22T22:33:45.970Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "trf3-html-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://web.trf3.jus.br/jurisprudencia/Home/ListaColecao/9?np=1",
+            "httpStatus": 200,
+            "contentSha256": "0d9fb2c4371a75af1c100cddb8ac2f277256cdeb9d36977ee39eea84488983f7",
+            "bytes": 795,
+            "fetchedAt": "2026-09-20T18:00:00.000Z"
+          },
+          "originatingQuery": {
+            "id": "trf3-query-service-test",
+            "endpoint": "https://web.trf3.jus.br/jurisprudencia/Home/ResultadoTotais",
+            "querySha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "responseRecordSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "executedAt": "2026-09-20T18:00:00.000Z"
+          }
+        },
+        "parsed": {
+          "rawCaseNumber": "5003867-82.2023.4.03.6112",
+          "processClassRaw": "ApCiv - APELAÇÃO CÍVEL",
+          "courtOrgan": "8ª Turma",
+          "rapporteur": "Desembargador Federal TORU YAMAMOTO",
+          "judgmentDate": "2026-09-16",
+          "publicationDate": "2026-09-19"
+        }
+      },
+      "verificationBadge": "[OFICIAL TRF3 - VERIFICADO]"
+    },
+    {
+      "id": "trf4-a1d9d6496744c461c459",
+      "sourceId": "trf4-jurisprudencia",
+      "officialUrl": "https://jurisprudencia.trf4.jus.br/eproc2trf4/externo_controlador.php?acao=jurisprudencia%40jurisprudencia%2Fdownload_inteiro_teor&id_jurisprudencia=41789749459516495890278691697",
+      "fullTextUrl": "https://jurisprudencia.trf4.jus.br/eproc2trf4/externo_controlador.php?acao=jurisprudencia%40jurisprudencia%2Fdownload_inteiro_teor&id_jurisprudencia=41789749459516495890278691697",
+      "court": "Tribunal Regional Federal da 4ª Região",
+      "courtCode": "TRF4",
+      "judicialBranch": "FEDERAL",
+      "jurisdiction": "TRF4",
+      "courtOrgan": "1ª Turma",
+      "processClass": "AC",
+      "rawCaseNumber": "5000871-13.2026.4.04.7201",
+      "normalizedCnjNumber": "5000871-13.2026.4.04.7201",
+      "rapporteur": "MARCELO DE NARDI",
+      "judgmentDate": "2026-09-18",
+      "publicationDate": "2026-09-18",
+      "availabilityDate": "2026-09-18",
+      "officialHeadnote": "PREVIDENCIÁRIO. BENEFÍCIO PREVIDENCIÁRIO. REQUISITOS PREENCHIDOS. MANUTENÇÃO DA SENTENÇA.",
+      "dispositiveSnippet": "Negado provimento à apelação por unanimidade.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "a1d9d6496744c461c4593b7418ff129f3eef4de712372251512cc7b58dd1d6ed",
+      "collectedAt": "2026-09-22T22:33:45.995Z",
+      "lastVerifiedAt": "2026-09-22T22:33:45.995Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "trf4-eproc-html-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisprudencia.trf4.jus.br/eproc2trf4/externo_controlador.php?acao=jurisprudencia%40jurisprudencia%2Fdownload_inteiro_teor&id_jurisprudencia=41789749459516495890278691697",
+            "httpStatus": 200,
+            "contentSha256": "a1d9d6496744c461c4593b7418ff129f3eef4de712372251512cc7b58dd1d6ed",
+            "bytes": 4144,
+            "fetchedAt": "2026-09-22T22:33:45.995Z"
+          },
+          "originatingQuery": {
+            "id": "trf4-query-6a3bd11dfd17660666bc0101",
+            "endpoint": "https://jurisprudencia.trf4.jus.br/eproc2trf4/externo_controlador.php?acao=jurisprudencia@jurisprudencia/listar_resultados",
+            "querySha256": "6a3bd11dfd17660666bc0101c4d5c497f05c97623965ba56218f9dea7da00164",
+            "responseRecordSha256": "ab5a4e058be15dd11c0b47c276f1f1d39e5b5465ad21bea4f6e07fb8af13a85c",
+            "executedAt": "2026-09-22T22:33:45.995Z"
+          }
+        },
+        "parsed": {
+          "rawCaseNumber": "5000871-13.2026.4.04.7201",
+          "processClass": "AC - Apelação Cível",
+          "courtOrgan": "1ª Turma",
+          "rapporteur": "MARCELO DE NARDI",
+          "judgmentDate": "2026-09-18",
+          "publicationDate": "2026-09-18"
+        }
+      },
+      "verificationBadge": "[OFICIAL TRF4 - VERIFICADO]"
+    },
+    {
+      "id": "falcao-trt3-429c771074dfb8a9adfe",
+      "sourceId": "falcao-jurisprudencia",
+      "officialUrl": "https://jurisprudencia.jt.jus.br/jurisprudencia-nacional-backend/api/no-auth/pesquisa/acordaos/TRT3/10712368?sessionId=_21a9c1f&latitude=&longitude=",
+      "fullTextUrl": "https://jurisprudencia.jt.jus.br/jurisprudencia-nacional-backend/api/no-auth/pesquisa/acordaos/TRT3/10712368?sessionId=_21a9c1f&latitude=&longitude=",
+      "court": "Tribunal Regional do Trabalho da 3ª Região",
+      "courtCode": "TRT3",
+      "judicialBranch": "TRABALHO",
+      "jurisdiction": "TRT3",
+      "courtOrgan": "11ª Turma",
+      "processClass": "ROT",
+      "rawCaseNumber": "0011087-14.2015.5.03.0035",
+      "normalizedCnjNumber": "0011087-14.2015.5.03.0035",
+      "alternativeNumber": "10712368",
+      "rapporteur": "JULIANA VIGNOLI CORDEIRO",
+      "judgmentDate": "2016-12-06",
+      "availabilityDate": "2016-12-08",
+      "officialHeadnote": "PREVIDENCIÁRIO TRABALHISTA. BENEFÍCIO. RECURSO ORDINÁRIO. FUNDAMENTAÇÃO OFICIAL SUFICIENTE PARA TESTE.",
+      "fullText": "Inteiro teor oficial do acórdão trabalhista.",
+      "citedLegislation": [
+        "art_476_clt"
+      ],
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "429c771074dfb8a9adfe2be345d8392af1f958500b6364c752be6fc0af5c3050",
+      "collectedAt": "2026-09-22T22:33:46.004Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.004Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "falcao-json-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisprudencia.jt.jus.br/jurisprudencia-nacional-backend/api/no-auth/pesquisa/acordaos/TRT3/10712368?sessionId=_21a9c1f&latitude=&longitude=",
+            "httpStatus": 200,
+            "contentSha256": "429c771074dfb8a9adfe2be345d8392af1f958500b6364c752be6fc0af5c3050",
+            "bytes": 562,
+            "fetchedAt": "2026-09-22T22:33:46.004Z"
+          },
+          "originatingQuery": {
+            "id": "falcao-query-ecae45ebeb243e8eedf60d69",
+            "endpoint": "https://jurisprudencia.jt.jus.br/jurisprudencia-nacional-backend/api/no-auth/pesquisa?sessionId=_9cef4c5&latitude=&longitude=&texto=beneficio+previdenciario&tribunais=TRT3&colecao=acordaos&page=0&size=5",
+            "querySha256": "ecae45ebeb243e8eedf60d694dcef68a13402f6c895dba7e3ab5e2294c29d794",
+            "responseRecordSha256": "fec4fd674a7ca9ef47a83cd4fc7478363fac46f09298db527e42ef471237c133",
+            "executedAt": "2026-09-22T22:33:46.004Z"
+          }
+        },
+        "documentId": "10712368",
+        "tribunal": "TRT3"
+      },
+      "verificationBadge": "[OFICIAL FALCÃO/TRT3 - VERIFICADO]"
+    },
+    {
+      "id": "tjdft-4adcc003dde2d12e52cc",
+      "sourceId": "tjdft-jurisprudencia",
+      "officialUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+      "court": "Tribunal de Justiça do Distrito Federal e dos Territórios",
+      "courtCode": "TJDFT",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "DF",
+      "courtOrgan": "5ª TURMA CÍVEL",
+      "processClass": "acordaos",
+      "rawCaseNumber": "0706024-88.2024.8.07.0002",
+      "normalizedCnjNumber": "0706024-88.2024.8.07.0002",
+      "alternativeNumber": "2171324",
+      "rapporteur": "LUCIMEIRE MARIA DA SILVA",
+      "judgmentDate": "2026-09-10",
+      "publicationDate": "2026-09-21",
+      "officialHeadnote": "DIREITO CIVIL. RESPONSABILIDADE CIVIL. DANO MORAL. ACORDAO OFICIAL COM EMENTA SUFICIENTE PARA VALIDACAO DETERMINISTICA.",
+      "fullText": "",
+      "dispositiveSnippet": "CONHECER E NEGAR PROVIMENTO. UNANIME.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "4adcc003dde2d12e52cc400e03f624c2838e32848aed151d87e598b28d5fd22f",
+      "collectedAt": "2026-09-22T22:33:46.017Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.018Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjdft-public-api-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "uuid": "519feb95-b08f-456e-a5e3-07e4132b9a3a",
+        "identifier": "2171324",
+        "segredoJustica": false,
+        "possuiInteiroTeor": true,
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+            "httpStatus": 200,
+            "contentSha256": "4adcc003dde2d12e52cc400e03f624c2838e32848aed151d87e598b28d5fd22f",
+            "bytes": 617,
+            "fetchedAt": "2026-09-22T22:33:46.017Z"
+          },
+          "individualRequest": {
+            "uuid": "519feb95-b08f-456e-a5e3-07e4132b9a3a",
+            "hits": 1,
+            "bodySha256": "46acdfb500514d021d41de8db6b9f9ea8665770ee6dadaf68c1266efe33d05b3"
+          },
+          "originatingQuery": {
+            "id": "tjdft-query-981bd2ae3cc6c03c117fd651",
+            "endpoint": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+            "querySha256": "981bd2ae3cc6c03c117fd6516e15c62bf758a2af3f7afb84777621d47d95147e",
+            "responseRecordSha256": "7eeac577d692c247cf868fed5bd0288f8010fa334bd8f8007ea6fb0cb937d0ce",
+            "requestBodySha256": "981bd2ae3cc6c03c117fd6516e15c62bf758a2af3f7afb84777621d47d95147e",
+            "executedAt": "2026-09-22T22:33:46.017Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJDFT - VERIFICADO]"
+    },
+    {
+      "id": "trf4-380ef81b8bf951b3ff77",
+      "sourceId": "tjsc-jurisprudencia",
+      "officialUrl": "https://eprocwebcon.tjsc.jus.br/consulta1g/externo_controlador.php?acao=jurisprudencia%40jurisprudencia%2Fdownload_inteiro_teor&id_jurisprudencia=321789736688770221598299935477",
+      "fullTextUrl": "https://eprocwebcon.tjsc.jus.br/consulta1g/externo_controlador.php?acao=jurisprudencia%40jurisprudencia%2Fdownload_inteiro_teor&id_jurisprudencia=321789736688770221598299935477",
+      "court": "Tribunal de Justiça do Estado de Santa Catarina",
+      "courtCode": "TJSC",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "SC",
+      "courtOrgan": "1ª Câmara de Direito Civil",
+      "processClass": "AC",
+      "rawCaseNumber": "5052506-02.2023.8.24.0038",
+      "normalizedCnjNumber": "5052506-02.2023.8.24.0038",
+      "rapporteur": "VITORALDO BRIDI",
+      "judgmentDate": "2026-09-18",
+      "publicationDate": "2026-09-18",
+      "availabilityDate": "2026-09-18",
+      "officialHeadnote": "DIREITO CIVIL. DANO MORAL. APELAÇÃO. EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO DETERMINÍSTICA.",
+      "dispositiveSnippet": "Embargos rejeitados por unanimidade.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "380ef81b8bf951b3ff77d453c1d503cddad7aa5736f476c6a7572b668304739d",
+      "collectedAt": "2026-09-22T22:33:46.035Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.035Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjsc-eproc-html-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://eprocwebcon.tjsc.jus.br/consulta1g/externo_controlador.php?acao=jurisprudencia%40jurisprudencia%2Fdownload_inteiro_teor&id_jurisprudencia=321789736688770221598299935477",
+            "httpStatus": 200,
+            "contentSha256": "380ef81b8bf951b3ff77d453c1d503cddad7aa5736f476c6a7572b668304739d",
+            "bytes": 3504,
+            "fetchedAt": "2026-09-22T22:33:46.035Z"
+          },
+          "originatingQuery": {
+            "id": "trf4-query-dac24150664a3b0a24a42081",
+            "endpoint": "https://eprocwebcon.tjsc.jus.br/consulta1g/externo_controlador.php?acao=jurisprudencia@jurisprudencia/listar_resultados",
+            "querySha256": "dac24150664a3b0a24a42081935095c0c3bf293facf3694366f2637f64de9f12",
+            "responseRecordSha256": "0cf592e66dc8702a6170e7c1de426a6f00957723b8c09d174a542ad566a21104",
+            "executedAt": "2026-09-22T22:33:46.035Z"
+          }
+        },
+        "parsed": {
+          "rawCaseNumber": "5052506-02.2023.8.24.0038",
+          "processClass": "AC - Apelação Cível",
+          "courtOrgan": "1ª Câmara de Direito Civil",
+          "rapporteur": "VITORALDO BRIDI",
+          "judgmentDate": "2026-09-18",
+          "publicationDate": "2026-09-18"
+        }
+      },
+      "verificationBadge": "[OFICIAL TJSC - VERIFICADO]"
+    },
+    {
+      "id": "tjba-fd53c5577242fb7f3d62",
+      "sourceId": "tjba-jurisprudencia",
+      "officialUrl": "https://jurisprudenciaws.tjba.jus.br/inteiroTeor/77bf1556-ae37-3070-a6a9-f339f81a0480",
+      "fullTextUrl": "https://jurisprudenciaws.tjba.jus.br/inteiroTeor/77bf1556-ae37-3070-a6a9-f339f81a0480",
+      "court": "Tribunal de Justiça do Estado da Bahia",
+      "courtCode": "TJBA",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "BA",
+      "courtOrgan": "PRIMEIRA CAMARA CÍVEL",
+      "processClass": "Apelação",
+      "rawCaseNumber": "0575531-27.2017.8.05.0001",
+      "normalizedCnjNumber": "0575531-27.2017.8.05.0001",
+      "alternativeNumber": "77bf1556-ae37-3070-a6a9-f339f81a0480",
+      "rapporteur": "RELATOR OFICIAL TJBA",
+      "publicationDate": "2026-09-02",
+      "officialHeadnote": "DIREITO CIVIL. DANO MORAL. APELAÇÃO. EMENTA OFICIAL SUFICIENTE PARA TESTE DETERMINÍSTICO.",
+      "fullText": "Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA. Inteiro teor oficial TJBA.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "fd53c5577242fb7f3d62506b42b703e2e46d47e37332fa40b8dbbb946818b979",
+      "collectedAt": "2026-09-22T22:33:46.045Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.046Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjba-graphql-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "hash": "77bf1556-ae37-3070-a6a9-f339f81a0480",
+        "tipoDecisao": "ACORDAO",
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisprudenciaws.tjba.jus.br/inteiroTeor/77bf1556-ae37-3070-a6a9-f339f81a0480",
+            "httpStatus": 200,
+            "contentSha256": "fd53c5577242fb7f3d62506b42b703e2e46d47e37332fa40b8dbbb946818b979",
+            "bytes": 2726,
+            "fetchedAt": "2026-09-22T22:33:46.045Z"
+          },
+          "originatingQuery": {
+            "id": "tjba-query-9bd0c0efb5efb2e92cc82748",
+            "endpoint": "https://jurisprudenciaws.tjba.jus.br/graphql",
+            "querySha256": "9bd0c0efb5efb2e92cc82748fbd92e4994c7c188c164c23d46e88bc59a945dd5",
+            "responseRecordSha256": "f342e8a48de0ed0da30f897351db29431c739f3981a7103e0e20fcd678ef01aa",
+            "requestBodySha256": "9bd0c0efb5efb2e92cc82748fbd92e4994c7c188c164c23d46e88bc59a945dd5",
+            "executedAt": "2026-09-22T22:33:46.045Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJBA - VERIFICADO]"
+    },
+    {
+      "id": "tjce-f0ff5d75c11fdf7c553a",
+      "sourceId": "tjce-jurisprudencia",
+      "officialUrl": "https://gateway.tjce.jus.br/sjuris/api/v1/jurisprudencia/30006187120258060066_33703967/AC%C3%93RD%C3%83O/2%C2%BA%20GRAU",
+      "fullTextUrl": "https://gateway.tjce.jus.br/sjuris/api/v1/jurisprudencia/30006187120258060066_33703967/AC%C3%93RD%C3%83O/2%C2%BA%20GRAU",
+      "court": "Tribunal de Justiça do Estado do Ceará",
+      "courtCode": "TJCE",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "CE",
+      "courtOrgan": "6ª Câmara de Direito Privado",
+      "processClass": "APELAÇÃO CÍVEL",
+      "rawCaseNumber": "3000618-71.2025.8.06.0066",
+      "normalizedCnjNumber": "3000618-71.2025.8.06.0066",
+      "alternativeNumber": "33703967",
+      "rapporteur": "JOSE TARCILIO SOUZA DA SILVA",
+      "judgmentDate": "2026-02-11",
+      "officialHeadnote": "DIREITO CIVIL. DANO MORAL. APELAÇÃO. EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO DETERMINÍSTICA.",
+      "fullText": "Conteúdo integral oficial suficiente para validação do precedente.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "f0ff5d75c11fdf7c553a6b58d1cca34acee6fde91cfa3d284048fe803b0008b9",
+      "collectedAt": "2026-09-22T22:33:46.067Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.068Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjce-sjuris-api-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "id": "30006187120258060066_33703967",
+        "idDocumento": 33703967,
+        "origem": "PJE",
+        "carrierResponseSha256": "c210cffbadc7a076f34e8af4ec6351a1deffb49d95186ae51592422ea91f6f96",
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://gateway.tjce.jus.br/sjuris/api/v1/jurisprudencia/30006187120258060066_33703967/AC%C3%93RD%C3%83O/2%C2%BA%20GRAU",
+            "httpStatus": 200,
+            "contentSha256": "f0ff5d75c11fdf7c553a6b58d1cca34acee6fde91cfa3d284048fe803b0008b9",
+            "bytes": 1809,
+            "fetchedAt": "2026-09-22T22:33:46.067Z"
+          },
+          "originatingQuery": {
+            "id": "tjce-query-aefcbd3d26941a29b1bdc929",
+            "endpoint": "https://gateway.tjce.jus.br/sjuris/api/v1/jurisprudencia/?page=0&size=1",
+            "querySha256": "aefcbd3d26941a29b1bdc9298b3b751acd76d6e72b6763b5f766448d1ce5fd02",
+            "responseRecordSha256": "5bd7b66787a10f07afb77719cc544b23b29977ffca93a756ca67e209e8a70916",
+            "executedAt": "2026-09-22T22:33:46.067Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJCE - VERIFICADO]"
+    },
+    {
+      "id": "tjpi-3d2aac48a27395599fa3",
+      "sourceId": "tjpi-jurisprudencia",
+      "officialUrl": "https://jurisprudencia.tjpi.jus.br/jurisprudences/36378193/public",
+      "fullTextUrl": "https://jurisprudencia.tjpi.jus.br/jurisprudences/36378193/public",
+      "court": "Tribunal de Justiça do Estado do Piauí",
+      "courtCode": "TJPI",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "PI",
+      "courtOrgan": "3ª Câmara Especializada Cível",
+      "processClass": "AGRAVO INTERNO CÍVEL",
+      "rawCaseNumber": "0800669-70.2025.8.18.0065",
+      "normalizedCnjNumber": "0800669-70.2025.8.18.0065",
+      "alternativeNumber": "36378193",
+      "rapporteur": "LUCICLEIDE PEREIRA BELO",
+      "publicationDate": "2026-09-14",
+      "officialHeadnote": "DIREITO PROCESSUAL CIVIL. DANO MORAL. EMENTA OFICIAL SUFICIENTE PARA VALIDAÇÃO.",
+      "fullText": "Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Inteiro teor oficial do acórdão TJPI. Processo 0800669-70.2025.8.18.0065 Órgão Julgador Colegiado 3ª Câmara Especializada Cível Relator(a) LUCICLEIDE PEREIRA BELO Classe Judicial AGRAVO INTERNO CÍVEL Publicação 14/09/2026",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "3d2aac48a27395599fa30da648d9a956509d3453a4aa8afe8f9f1f8daece38d1",
+      "collectedAt": "2026-09-22T22:33:46.094Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.095Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjpi-juspi-html-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "jurisprudenceId": "36378193",
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisprudencia.tjpi.jus.br/jurisprudences/36378193/public",
+            "httpStatus": 200,
+            "contentSha256": "3d2aac48a27395599fa30da648d9a956509d3453a4aa8afe8f9f1f8daece38d1",
+            "bytes": 3759,
+            "fetchedAt": "2026-09-22T22:33:46.094Z"
+          },
+          "originatingQuery": {
+            "id": "tjpi-query-f2cd2ee46b3f6819263cb031",
+            "endpoint": "https://jurisprudencia.tjpi.jus.br/jurisprudences/search?q=dano+moral&tipo=Ac%C3%B3rd%C3%A3o",
+            "querySha256": "f2cd2ee46b3f6819263cb031321d943dc5346e9986d445d8c71719bfcdb365e5",
+            "responseRecordSha256": "dd85b62e69eed73a67a1deac4c0a44556560238206455a7165e69d06e1f72196",
+            "executedAt": "2026-09-22T22:33:46.094Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJPI - VERIFICADO]"
+    },
+    {
+      "id": "tjpa-ab0e3742a0126c65dc88",
+      "sourceId": "tjpa-jurisprudencia",
+      "officialUrl": "https://jurisprudencia.tjpa.jus.br/documento/36027620",
+      "fullTextUrl": "https://jurisprudencia.tjpa.jus.br/documento/36027620",
+      "court": "Tribunal de Justiça do Estado do Pará",
+      "courtCode": "TJPA",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "PA",
+      "courtOrgan": "3ª Turma de Direito Público",
+      "processClass": "APELAÇÃO CÍVEL",
+      "rawCaseNumber": "0800462-53.2022.8.14.0044",
+      "normalizedCnjNumber": "0800462-53.2022.8.14.0044",
+      "alternativeNumber": "36027620",
+      "rapporteur": "ROSILEIDE MARIA DA COSTA CUNHA",
+      "judgmentDate": "2026-04-23",
+      "publicationDate": "2026-05-07",
+      "officialHeadnote": "EMENTA OFICIAL TJPA SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA VALIDAÇÃO.",
+      "fullText": "Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA. Inteiro teor oficial do acórdão TJPA.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "ab0e3742a0126c65dc88e5636ceaa4f7a2a48026f9a3212d9a3433dd6f895a4f",
+      "collectedAt": "2026-09-22T22:33:46.103Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.104Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjpa-bff-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "id": 36027620,
+        "origem": "Tribunal de Justiça do Estado do Pará",
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisprudencia.tjpa.jus.br/documento/36027620",
+            "httpStatus": 200,
+            "contentSha256": "ab0e3742a0126c65dc88e5636ceaa4f7a2a48026f9a3212d9a3433dd6f895a4f",
+            "bytes": 7461,
+            "fetchedAt": "2026-09-22T22:33:46.103Z"
+          },
+          "originatingQuery": {
+            "id": "tjpa-query-4a0b80c6f33f36ebc60be76e",
+            "endpoint": "https://jurisprudencia.tjpa.jus.br/bff/api/decisoes/buscar",
+            "querySha256": "4a0b80c6f33f36ebc60be76e371ba1da2010950590d155912e0f8610117b065d",
+            "responseRecordSha256": "23e942ad49f3a2dffbeaa1c1d787a0d7bdce2029cfc67851382fed062a8ecfe5",
+            "requestBodySha256": "4a0b80c6f33f36ebc60be76e371ba1da2010950590d155912e0f8610117b065d",
+            "executedAt": "2026-09-22T22:33:46.103Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJPA - VERIFICADO]"
+    },
+    {
+      "id": "tjrr-db849d0567769f19da77",
+      "sourceId": "tjrr-jurisprudencia",
+      "officialUrl": "https://jurisprudencia.tjrr.jus.br/pdf?id=132193",
+      "fullTextUrl": "https://jurisprudencia.tjrr.jus.br/pdf?id=132193",
+      "court": "Tribunal de Justiça do Estado de Roraima",
+      "courtCode": "TJRR",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "RR",
+      "courtOrgan": "Câmara Cível",
+      "processClass": "AC - Apelação Cível",
+      "rawCaseNumber": "0851702-32.2025.8.23.0010",
+      "normalizedCnjNumber": "0851702-32.2025.8.23.0010",
+      "alternativeNumber": "132193",
+      "rapporteur": "ALMIRO PADILHA",
+      "judgmentDate": "2026-09-18",
+      "publicationDate": "2026-09-18",
+      "officialHeadnote": "EMENTA OFICIAL TJRR SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA VERIFICAÇÃO DETERMINÍSTICA.",
+      "fullText": "PODER JUDICIÁRIO DO ESTADO DE RORAIMA. APELAÇÃO CÍVEL N. 0851702-32.2025.8.23.0010. RELATOR: DES. ALMIRO PADILHA. INTEIRO TEOR OFICIAL.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "db849d0567769f19da777514837d112c9c6bb6284ef18b9c085ff3003adc1f70",
+      "collectedAt": "2026-09-22T22:33:46.116Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.116Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjrr-primefaces-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "id": "132193",
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://jurisprudencia.tjrr.jus.br/pdf?id=132193",
+            "httpStatus": 200,
+            "contentSha256": "db849d0567769f19da777514837d112c9c6bb6284ef18b9c085ff3003adc1f70",
+            "bytes": 62,
+            "fetchedAt": "2026-09-22T22:33:46.116Z"
+          },
+          "originatingQuery": {
+            "id": "tjrr-query-eabb72b159ecd57ef02f4dbb",
+            "endpoint": "https://jurisprudencia.tjrr.jus.br/index.xhtml",
+            "querySha256": "eabb72b159ecd57ef02f4dbb3fed494f85b3241083bd734e850f365daad6a1bc",
+            "responseRecordSha256": "86cb0588064b619a7bb53a01c503d16c9518788c3f778b3ce6a0c5f0ce3beb61",
+            "executedAt": "2026-09-22T22:33:46.116Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJRR - VERIFICADO]"
+    },
+    {
+      "id": "tjes-2b0bed8c5f24866de412",
+      "sourceId": "tjes-jurisprudencia",
+      "officialUrl": "https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search?core=pje2g&q=*%3A*&page=1&per_page=1&id=19231193",
+      "fullTextUrl": "https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search?core=pje2g&q=*%3A*&page=1&per_page=1&id=19231193",
+      "court": "Tribunal de Justiça do Estado do Espírito Santo",
+      "courtCode": "TJES",
+      "judicialBranch": "ESTADUAL",
+      "jurisdiction": "ES",
+      "courtOrgan": "4ª Câmara Cível",
+      "processClass": "APELAÇÃO CÍVEL",
+      "rawCaseNumber": "0009613-14.2020.8.08.0012",
+      "normalizedCnjNumber": "0009613-14.2020.8.08.0012",
+      "alternativeNumber": "19231193",
+      "rapporteur": "ROBSON LUIZ ALBANEZ",
+      "publicationDate": "2026-05-15",
+      "officialHeadnote": "EMENTA OFICIAL TJES SOBRE DANO MORAL COM CONTEÚDO SUFICIENTE PARA VERIFICAÇÃO.",
+      "fullText": "ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ. ESTADO DO ESPÍRITO SANTO PODER JUDICIÁRIO. PROCESSO Nº 0009613-14.2020.8.08.0012. RELATOR DES. ROBSON LUIZ ALBANEZ.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "2b0bed8c5f24866de41224c43fff1bae683272fe4544bc6065d947fea8104b17",
+      "collectedAt": "2026-09-22T22:33:46.156Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.157Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "tjes-solr-api-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "core": "pje2g",
+        "id": "19231193",
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search?core=pje2g&q=*%3A*&page=1&per_page=1&id=19231193",
+            "httpStatus": 200,
+            "contentSha256": "2b0bed8c5f24866de41224c43fff1bae683272fe4544bc6065d947fea8104b17",
+            "bytes": 3983,
+            "fetchedAt": "2026-09-22T22:33:46.156Z",
+            "hits": 1
+          },
+          "originatingQuery": {
+            "id": "tjes-query-187675d59efda1dd26dad73a",
+            "endpoint": "https://sistemas.tjes.jus.br/consulta-jurisprudencia/api/search?core=pje2g&q=dano+moral&page=1&per_page=1",
+            "querySha256": "187675d59efda1dd26dad73a4cd49903752f4d1de892d27163033ecdb449cf3b",
+            "responseRecordSha256": "47251570bcca6459b1a56798762cb74defada2c56566f320b8b2b0d1cfd7e965",
+            "executedAt": "2026-09-22T22:33:46.156Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL TJES - VERIFICADO]"
+    },
+    {
+      "id": "carf-ad4bc0755ccdac392847",
+      "sourceId": "carf-jurisprudencia",
+      "officialUrl": "https://acordaos.economia.gov.br/acordaos2/pdfs/processados/13656720067201081_6380164.pdf",
+      "fullTextUrl": "https://acordaos.economia.gov.br/acordaos2/pdfs/processados/13656720067201081_6380164.pdf",
+      "court": "Conselho Administrativo de Recursos Fiscais",
+      "courtCode": "CARF",
+      "judicialBranch": "ADMINISTRATIVO",
+      "jurisdiction": "BRASIL",
+      "courtOrgan": "Primeira Turma Ordinária da Terceira Câmara da Terceira Seção",
+      "processClass": "ACÓRDÃO CARF",
+      "rawCaseNumber": "13656.720067/2010-81",
+      "alternativeNumber": "3301-009.853",
+      "rapporteur": "Semíramis de Oliveira Duro",
+      "judgmentDate": "2021-03-23",
+      "publicationDate": "2021-05-11",
+      "officialHeadnote": "CONTRIBUIÇÃO PARA O PIS/PASEP E COFINS. CRÉDITO PRESUMIDO. EMENTA OFICIAL CARF SUFICIENTE PARA VERIFICAÇÃO.",
+      "fullText": "Processo nº 13656.720067/2010-81. Acórdão nº 3301-009.853. Inteiro teor oficial CARF.",
+      "dispositiveSnippet": "Acordam os membros do colegiado, por unanimidade, dar provimento ao recurso voluntário.",
+      "documentType": "ACORDAO",
+      "precedentSituation": "JULGADO",
+      "precedentStrength": "PERSUASIVO_REGIONAL",
+      "language": "pt-BR",
+      "contentSha256": "ad4bc0755ccdac392847f8dc15be58a309b9094bbe65f552cdcfd6dd6a0e3c5c",
+      "collectedAt": "2026-09-22T22:33:46.172Z",
+      "lastVerifiedAt": "2026-09-22T22:33:46.173Z",
+      "verificationStatus": "VERIFIED_OFFICIAL",
+      "parserVersion": "carf-solr-2026.1",
+      "documentVersion": 1,
+      "rawPayloadPreserved": {
+        "id": "8796773",
+        "conteudoId": "6380164",
+        "nomeArquivoPdf": "13656720067201081_6380164.pdf",
+        "rawResponseSha256": "c8226047c0bdec0d4062308525d3270e9db4dc499da79f3fb63071bb5698bd64",
+        "rawResponseBytes": 101,
+        "extractedPdfSha256": "ad4bc0755ccdac392847f8dc15be58a309b9094bbe65f552cdcfd6dd6a0e3c5c",
+        "extractedPdfBytes": 74,
+        "pgCopyEnvelope": true,
+        "verificationEvidence": {
+          "individualDocument": {
+            "confirmed": true,
+            "url": "https://acordaos.economia.gov.br/acordaos2/pdfs/processados/13656720067201081_6380164.pdf",
+            "httpStatus": 200,
+            "contentSha256": "ad4bc0755ccdac392847f8dc15be58a309b9094bbe65f552cdcfd6dd6a0e3c5c",
+            "bytes": 74,
+            "rawContentSha256": "c8226047c0bdec0d4062308525d3270e9db4dc499da79f3fb63071bb5698bd64",
+            "rawBytes": 101,
+            "fetchedAt": "2026-09-22T22:33:46.172Z"
+          },
+          "individualRecord": {
+            "endpoint": "https://acordaos.economia.gov.br/solr/acordaos2_shard1_replica_n2/browse?q=id%3A8796773&wt=json",
+            "id": "8796773",
+            "hits": 1,
+            "responseSha256": "cafc8be7784f27b14d4fd799fa7116b0802ec862d4dfd3b4e7543531767a412d"
+          },
+          "originatingQuery": {
+            "id": "carf-query-c90bb7be313c73f339acb201",
+            "endpoint": "https://acordaos.economia.gov.br/solr/acordaos2_shard1_replica_n2/browse?q=PIS+COFINS&wt=json",
+            "querySha256": "c90bb7be313c73f339acb20142dadc6047c4171f0a53509a9e1b783d29e98c83",
+            "responseRecordSha256": "aedd6fb70e265a749cca08abb519f9e46ba13ffff64b308250f1ae0ba08893f1",
+            "executedAt": "2026-09-22T22:33:46.172Z"
+          }
+        }
+      },
+      "verificationBadge": "[OFICIAL CARF - VERIFICADO]"
     }
   ],
   "qualifiedPrecedents": [
