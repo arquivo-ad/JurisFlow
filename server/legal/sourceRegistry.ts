@@ -298,7 +298,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
     { code: 'TJES', name: 'Tribunal de Justiça do Estado do Espírito Santo', url: 'https://www.tjes.jus.br/portal-transparencia/audiencias-e-sessoes/jurisprudencia/' },
     { code: 'TJMA', name: 'Tribunal de Justiça do Estado do Maranhão', url: 'https://jurisconsult.tjma.jus.br/' },
     { code: 'TJAP', name: 'Tribunal de Justiça do Estado do Amapá', url: 'https://tucujuris.tjap.jus.br/' },
-    { code: 'TJSE', name: 'Tribunal de Justiça do Estado de Sergipe', url: 'https://www.tjse.jus.br/portal/servicos/judiciais/eproc' },
+    { code: 'TJSE', name: 'Tribunal de Justiça do Estado de Sergipe', url: 'https://www.tjse.jus.br/Dgorg/paginas/jurisprudencia/consultarJurisprudencia.tjse' },
     { code: 'TJSP', name: 'Tribunal de Justiça de São Paulo', url: 'https://esaj.tjsp.jus.br/cjsg/' },
     { code: 'TJRJ', name: 'Tribunal de Justiça do Rio de Janeiro', url: 'https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx' },
     { code: 'TJMG', name: 'Tribunal de Justiça de Minas Gerais', url: 'https://www.tjmg.jus.br/jurisprudencia/' },
@@ -345,7 +345,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
               ? 'https://jurisprudencia.tjpa.jus.br/bff/api/decisoes/buscar'
               : tj.code === 'TJRN'
                 ? 'https://jurisprudencia.tjrn.jus.br/api/pesquisar'
-                : tj.code === 'TJPE'
+                : tj.code === 'TJSE'
+                  ? 'https://www.tjse.jus.br/Dgorg/paginas/jurisprudencia/consultarJurisprudencia.tjse'
+                  : tj.code === 'TJPE'
               ? 'https://consultajurisprudencia.app.tjpe.jus.br/api/v1/jurisprudencias'
               : tj.url,
     documentationUrl: tj.code === 'TJES'
@@ -371,9 +373,9 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
       ? 'DEGRADED' as const
       : tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJES'
         ? 'READY' as const
-        : tj.code === 'TJMA'
+        : tj.code === 'TJMA' || tj.code === 'TJSE'
           ? 'DEGRADED' as const
-          : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJAP' || tj.code === 'TJSE'
+          : tj.code === 'TJPR' || tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJGO' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJTO' || tj.code === 'TJRN' || tj.code === 'TJPB' || tj.code === 'TJMT' || tj.code === 'TJRO' || tj.code === 'TJAP'
             ? 'PARTIAL' as const
           : tj.code === 'TJRJ' || tj.code === 'TJMG'
             ? 'DEGRADED' as const
@@ -427,7 +429,7 @@ export const INITIAL_LEGAL_SOURCE_REGISTRY: LegalSourceRegistryItem[] = [
                                         : tj.code === 'TJAP'
                                           ? 'Tucujuris oficial identificado, porém o acesso automatizado atual recebe Cloudflare HTTP 403. Fail-closed, sem bypass.'
                                           : tj.code === 'TJSE'
-                                            ? 'eproc público expõe formulário de jurisprudência, porém as origens atuais estão configuradas como TRF4/TRU4/Justiça Federal; JurisFlow não atribui esses dados ao TJSE.'
+                                            ? 'Pesquisa Judicial oficial PrimeFaces/JSF confirmada em /Dgorg/paginas/jurisprudencia/consultarJurisprudencia.tjse. O formulário carrega Cloudflare Turnstile; automação permanece fail-closed e não gera nem contorna token.'
                                             : 'Justiça Estadual Comum - Conferência Humana Obrigatória',
     verificationMethod: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJES' ? 'OPEN_DATA_DIGEST' as const : 'HUMAN_VERIFICATION_LINK' as const,
     termsStatus: tj.code === 'TJRS' || tj.code === 'TJPE' || tj.code === 'TJDFT' || tj.code === 'TJSC' || tj.code === 'TJBA' || tj.code === 'TJCE' || tj.code === 'TJMS' || tj.code === 'TJPI' || tj.code === 'TJPA' || tj.code === 'TJRR' || tj.code === 'TJES' || tj.code === 'TJAC' || tj.code === 'TJAL' || tj.code === 'TJAM' || tj.code === 'TJRN' ? 'COMPLIANT_PUBLIC_ACCESS' as const : 'MANUAL_ONLY' as const,

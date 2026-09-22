@@ -19,6 +19,7 @@ const OFFICIAL_HOSTS_BY_COURT: Record<string, ReadonlySet<string>> = {
   TJRO: new Set(['liame.tjro.jus.br']),
   TJMA: new Set(['apijuris.tjma.jus.br', 'jurisconsult.tjma.jus.br']),
   TJES: new Set(['sistemas.tjes.jus.br']),
+  TJSE: new Set(['www.tjse.jus.br']),
   TJTO: new Set(['jurisprudencia.tjto.jus.br', 'eproc2.tjto.jus.br']),
   TJPI: new Set(['jurisprudencia.tjpi.jus.br']),
   TJAM: new Set(['consultasaj.tjam.jus.br']),
@@ -665,6 +666,19 @@ export function isExactTjesSearchUrl(value: string, expectedCore?: 'pje2g' | 'le
         && perPage === '1';
     }
     return !url.searchParams.has('id');
+  } catch {
+    return false;
+  }
+}
+
+export function isExactTjseSearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'www.tjse.jus.br'
+      && url.pathname === '/Dgorg/paginas/jurisprudencia/consultarJurisprudencia.tjse'
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }

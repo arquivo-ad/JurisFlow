@@ -33,6 +33,7 @@ import { TjrnJurisprudenciaAdapter } from './adapters/TjrnJurisprudenciaAdapter.
 import { TjroPrecedentesAdapter } from './adapters/TjroPrecedentesAdapter.ts';
 import { TjmaJurisprudenciaAdapter } from './adapters/TjmaJurisprudenciaAdapter.ts';
 import { TjesJurisprudenciaAdapter } from './adapters/TjesJurisprudenciaAdapter.ts';
+import { TjseJurisprudenciaAdapter } from './adapters/TjseJurisprudenciaAdapter.ts';
 import { LegalSearchEngine } from './searchEngine.ts';
 import { legalStorage } from './storage.ts';
 import { CanonicalLegalDecision, LegalSearchQuery, LegalSearchResultItem } from './types.ts';
@@ -236,6 +237,7 @@ export class JudicialSearchService {
   private tjroAdapter: TjroPrecedentesAdapter;
   private tjmaAdapter: TjmaJurisprudenciaAdapter;
   private tjesAdapter: TjesJurisprudenciaAdapter;
+  private tjseAdapter: TjseJurisprudenciaAdapter;
   private searchCache: Map<string, { result: any; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
 
@@ -271,6 +273,7 @@ export class JudicialSearchService {
     this.tjroAdapter = new TjroPrecedentesAdapter();
     this.tjmaAdapter = new TjmaJurisprudenciaAdapter();
     this.tjesAdapter = new TjesJurisprudenciaAdapter();
+    this.tjseAdapter = new TjseJurisprudenciaAdapter();
   }
 
   /**
@@ -308,6 +311,7 @@ export class JudicialSearchService {
     const requestsTjro = params.courtCodes?.includes('TJRO') === true;
     const requestsTjma = params.courtCodes?.includes('TJMA') === true;
     const requestsTjes = params.courtCodes?.includes('TJES') === true;
+    const requestsTjse = params.courtCodes?.includes('TJSE') === true;
     const requestedEsajCodes = (params.courtCodes || []).filter(
       (code): code is 'TJAC' | 'TJAL' | 'TJAM' | 'TJMS' => ['TJAC', 'TJAL', 'TJAM', 'TJMS'].includes(code)
     );
@@ -343,6 +347,7 @@ export class JudicialSearchService {
     let activeTjroDecisions: CanonicalLegalDecision[] | undefined;
     let tjmaDiagnostic = undefined as Awaited<ReturnType<TjmaJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     let tjesDiagnostic = undefined as Awaited<ReturnType<TjesJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
+    let tjseDiagnostic = undefined as Awaited<ReturnType<TjseJurisprudenciaAdapter['searchOfficialJurisprudence']>>['diagnostic'] | undefined;
     const activeEsajPartialDecisions: CanonicalLegalDecision[] = [];
 
     if (requestsTst) {
@@ -466,6 +471,12 @@ export class JudicialSearchService {
       for (const decision of tjesResult.decisions) {
         if (decision.verificationStatus === 'VERIFIED_OFFICIAL') legalStorage.upsertDecision(decision);
       }
+    }
+
+    if (requestsTjse) {
+      const tjseResult = await this.tjseAdapter.searchOfficialJurisprudence(params.query || params.caseNumber || '');
+      tjseDiagnostic = tjseResult.diagnostic;
+      regionalSourcesConsulted.push('tjse-jurisprudencia');
     }
 
     if (requestsTjma) {
@@ -616,7 +627,7 @@ export class JudicialSearchService {
         : response.sourcesConsulted,
       executionTimeMs: Date.now() - start,
       timestamp: new Date().toISOString(),
-      diagnostic: tjesDiagnostic ?? tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
+      diagnostic: tjseDiagnostic ?? tjesDiagnostic ?? tjmaDiagnostic ?? tjroDiagnostic ?? tjrnDiagnostic ?? tjtoDiagnostic ?? tjrrDiagnostic ?? tjpaDiagnostic ?? tjpiDiagnostic ?? esajDiagnostic ?? tjpeDiagnostic ?? tjceDiagnostic ?? tjbaDiagnostic ?? tjscDiagnostic ?? tjdftDiagnostic ?? tjrsDiagnostic ?? falcaoDiagnostic ?? trf4Diagnostic ?? trf3Diagnostic ?? tjspDiagnostic ?? trt2Diagnostic ?? tstNormativeDiagnostic ?? tstDiagnostic,
     };
 
     this.setCache(cacheKey, payload);
@@ -804,11 +815,11 @@ export class JudicialSearchService {
         notes: 'Portal oficial identificado; acesso automatizado atual recebe Cloudflare HTTP 403. Fail-closed, sem bypass.',
       },
       {
-        courtCode: 'TJSE', courtName: 'TJSE - eproc Jurisprudência', jurisdiction: 'SE',
+        courtCode: 'TJSE', courtName: 'TJSE - Pesquisa de Jurisprudência Judicial', jurisdiction: 'SE',
         jurisprudenceStatus: 'DISPONIVEL_PARCIAL', processStatus: 'DISPONIVEL_PUBLICO',
-        authenticationMethod: 'DADOS_ABERTOS', officialUrl: 'https://eproc2g.tjse.jus.br/eproc/externo_controlador.php?acao=jurisprudencia@jurisprudencia/pesquisar',
+        authenticationMethod: 'PARCERIA_OFICIAL', officialUrl: 'https://www.tjse.jus.br/Dgorg/paginas/jurisprudencia/consultarJurisprudencia.tjse',
         latencyMs: 0, lastCheckedAt: checkedAt, status: 'PARTIAL',
-        notes: 'Formulário eproc público existe, mas as origens retornadas são TRF4/TRU4/Justiça Federal; JurisFlow não atribui esses resultados ao TJSE.',
+        notes: 'Portal judicial oficial PrimeFaces/JSF confirmado. O formulário exige Cloudflare Turnstile; JurisFlow permanece fail-closed e não gera nem contorna token.',
       },
       {
         courtCode: 'TJSP', courtName: 'TJSP - Consulta de Jurisprudência e-SAJ', jurisdiction: 'SP',
